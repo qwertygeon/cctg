@@ -19,6 +19,7 @@
 #   ./install.sh --dev            # 심볼릭 링크 설치 (개발)
 #   ./install.sh --no-completions # 자동완성 설치 생략
 #   ./install.sh --no-shell-setup # 셸 rc 자동 설정 생략
+#   ./install.sh --lang en|ko     # CLI 출력 언어 시드(미지정 시 로케일 자동 감지)
 #   BINDIR=~/bin ./install.sh     # 설치 위치 변경
 #
 # 재실행해도 안전하다(idempotent). 기존 cctg 는 갱신된다.
@@ -42,18 +43,24 @@ SHELL_SETUP=1
 MARK_BEGIN="# >>> cctg >>>"
 MARK_END="# <<< cctg <<<"
 
+LANG_OPT=""
+_expect_lang=0
 for arg in "$@"; do
+  if [ "$_expect_lang" = 1 ]; then LANG_OPT="$arg"; _expect_lang=0; continue; fi
   case "$arg" in
     --dev|--link)      MODE="link" ;;
     --copy)            MODE="copy" ;;
     --no-completions)  COMPLETIONS=0 ;;
     --no-shell-setup)  SHELL_SETUP=0 ;;
+    --lang)            _expect_lang=1 ;;
+    --lang=*)          LANG_OPT="${arg#--lang=}" ;;
     -h|--help)
       awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"
       exit 0 ;;
     *) printf 'ERROR: 알 수 없는 옵션: %s\n' "$arg" >&2; exit 1 ;;
   esac
 done
+[ "$_expect_lang" = 1 ] && { printf 'ERROR: --lang 뒤에 값(en|ko)이 필요합니다\n' >&2; exit 1; }
 
 # rc 파일에 cctg 관리 블록을 멱등하게 기록한다. 기존 블록은 교체, 최초 1회 .cctg-bak 백업.
 ensure_block() {
@@ -194,6 +201,26 @@ mkdir -p "$CONFIG_DIR"
   printf 'zshcomp=%s\n'   "$ZSHCOMP"
   printf 'shellrc=%s\n'   "$SHELLRC"
 } > "$MANIFEST"
+
+# 3-4) CLI 출력 언어 시드 — 매니페스트와 분리된 사용자 설정 파일(update 가 보존).
+#   --lang 지정 시 그 값으로(검증), 미지정 시 파일에 lang 이 없을 때만 로케일 자동 감지값으로 시드.
+CFG_FILE="$CONFIG_DIR/config"
+if [ -n "$LANG_OPT" ]; then
+  case "$LANG_OPT" in
+    en|ko) ;;
+    *) err "지원하지 않는 언어: $LANG_OPT (en|ko)"; exit 1 ;;
+  esac
+  if [ -f "$CFG_FILE" ] && grep -qE '^lang=' "$CFG_FILE"; then
+    ltmp="$(mktemp)"; awk -F= -v v="$LANG_OPT" '$1=="lang"{print "lang="v;next}{print}' "$CFG_FILE" > "$ltmp" && mv "$ltmp" "$CFG_FILE"
+  else
+    printf 'lang=%s\n' "$LANG_OPT" >> "$CFG_FILE"
+  fi
+  ok "언어 설정: $LANG_OPT ($CFG_FILE)"
+elif [ ! -f "$CFG_FILE" ] || ! grep -qE '^lang=' "$CFG_FILE"; then
+  case "${LC_ALL:-${LANG:-}}" in ko*|*_KR*) seed_lang=ko ;; *) seed_lang=en ;; esac
+  printf 'lang=%s\n' "$seed_lang" >> "$CFG_FILE"
+  ok "언어 자동 설정: $seed_lang ($CFG_FILE) — 'cctg lang <en|ko>' 로 변경 가능"
+fi
 ok "매니페스트 기록: $MANIFEST (v$VER)"
 
 echo
