@@ -28,6 +28,7 @@
 | `claude` | Claude Code CLI | 필수 |
 | `tmux` | 봇을 detached 세션으로 구동 | 필수 |
 | `caffeinate` | 구동 중 시스템 sleep 방지 | macOS 기본 제공 |
+| `jq` | `cctg common` 의 구조화된 권한 정책 수정 | 선택(없으면 `common edit` 로 직접 편집) |
 | telegram 플러그인 | Telegram 채널 연동 | 전역 설치 필요: `/plugin install telegram@claude-plugins-official` |
 
 ## 설치
@@ -73,6 +74,7 @@ cctg status
 ```
 cctg <command> [args]
   add <name> <cwd>      rm <name> [--purge]   rename <old> <new> [--keep-dir]
+  config <name> [...]   common [...]          (권한·옵션 — 아래 「권한·옵션」 절)
   up <name|all>         down <name|all>       restart <name|all>
   status                logs <name> [N]       attach <name>
   doctor                update                version           help
@@ -131,19 +133,56 @@ cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리
 ### 4. 진단 (doctor)
 
 ```bash
-cctg doctor              # 의존성(tmux/claude/caffeinate)·PATH·레지스트리 점검
+cctg doctor              # 의존성(tmux/claude/caffeinate/jq)·PATH·레지스트리·공통 권한 정책 점검
 ```
 
-## 프로젝트별 claude 옵션
+## 권한·옵션 (config / common)
 
-봇마다 다른 `claude` 인자(모델·권한 모드 등)를 주려면 해당 봇의 상태 디렉터리에 있는 `launch.env` 를 편집한다. `add` 시 주석 처리된 템플릿이 함께 생성된다.
+봇은 tmux 안에서 **대화형 TUI**로 도는데 운영자는 그 TUI 앞에 없고 텔레그램으로만 상호작용한다. 그래서 권한 프롬프트가 뜨면 아무도 응답할 수 없어 봇이 멈춘다. CCTG는 이를 "**위험하지 않은 건 자동승인하고, 위험한 건 deny로 차단**"하는 모델로 푼다 — 프롬프트가 뜨는 회색지대를 없앤다.
+
+두 계층으로 설정한다.
+
+| 계층 | 저장 위치 | 주입 방식 | 수정 명령 |
+|---|---|---|---|
+| **공통**(모든 봇) | `~/.claude/channels/cctg-shared.settings.json` | `claude --settings <file>` | `cctg common ...` |
+| **봇별**(우선) | `~/.claude/channels/<name>/launch.env` | `claude --permission-mode <m>` + `$CLAUDE_EXTRA_ARGS` | `cctg config <name> ...` |
+
+봇별 `CCTG_PERMISSION_MODE` 가 있으면 공통 `defaultMode` 를 덮어쓴다. 비우면 공통값을 따른다.
+
+### 공통 권한 정책 (common)
+
+처음 `add`/`up` 시 공통 설정 파일이 자동 생성된다. 기본값은 `defaultMode: bypassPermissions` + dangerous 패턴 deny 안전망이다(전역 `~/.claude/settings.json` 의 deny·PreToolUse 훅과 **merge**되며, deny는 union·deny가 allow보다 우선).
 
 ```bash
-# ~/.claude/channels/<name>/launch.env
-CLAUDE_EXTRA_ARGS="--model opus"
+cctg common                          # 현재 공통 설정 출력 (= common show)
+cctg common edit                     # $EDITOR 로 직접 편집
+cctg common mode acceptEdits         # 공통 defaultMode 변경
+cctg common deny add 'Bash(sudo *)'  # deny 규칙 추가
+cctg common deny rm  'Bash(sudo *)'  # deny 규칙 제거
+cctg common allow add 'Read(/data/**)'   # allow 규칙 추가/제거
 ```
 
-`up`(및 `restart`) 시 `launch.env` 가 로드되어 `CLAUDE_EXTRA_ARGS` 가 `claude` 인자로 단어 단위로 전달된다. 비워 두거나 파일이 없으면 기본 동작과 동일하다.
+> `mode`/`deny`/`allow` 같은 구조화된 수정은 `jq` 가 필요하다(없으면 `common edit` 로 직접 편집). `show`/`edit` 는 `jq` 없이도 동작한다.
+
+### 봇별 옵션 (config)
+
+```bash
+cctg config myproject                       # 봇 옵션 출력 (= config ... show)
+cctg config myproject mode bypassPermissions   # 이 봇 권한 모드 설정
+cctg config myproject mode clear            # 공통값을 따르도록 비움
+cctg config myproject args "--model opus"   # 이 봇 전용 claude 추가 인자
+cctg config myproject edit                  # launch.env 직접 편집
+```
+
+권한 모드 값: `acceptEdits | auto | bypassPermissions | default | dontAsk | plan`.
+
+| 모드 | 봇 맥락 동작 |
+|---|---|
+| `bypassPermissions` | 전부 자동승인. **deny 규칙·PreToolUse 훅(git-guard 등)은 그대로 작동** → 위험 차단은 여기에 의존 |
+| `acceptEdits` | 편집·안전 fs명령만 자동, 그 외 Bash/네트워크는 프롬프트(헤드리스에선 멈출 수 있음) |
+| `dontAsk` | 회색지대를 프롬프트 대신 자동 거부(안전하지만 allow에 없으면 조용히 실패) |
+
+설정 변경은 `up`/`restart` 시 적용된다(실행 중이면 `cctg restart <name>`). 현재 적용 모드는 `cctg status`·`cctg doctor` 에서 확인한다.
 
 ## 업데이트
 
@@ -161,7 +200,8 @@ cctg update
 ## 동작 방식
 
 - 등록 정보는 레지스트리(`~/.claude/channels/projects.conf`)에 `name | working_dir | state_dir` 형식으로 저장된다.
-- 봇별 상태는 `~/.claude/channels/<name>/` 에 격리된다 (`.env` 토큰, `access.json` allowlist, `launch.env` 봇별 claude 옵션, `inbox/`).
+- 봇별 상태는 `~/.claude/channels/<name>/` 에 격리된다 (`.env` 토큰, `access.json` allowlist, `launch.env` 봇별 옵션, `inbox/`).
+- 공통 권한 정책은 `~/.claude/channels/cctg-shared.settings.json` 에 두고 모든 봇에 `--settings` 로 주입된다.
 - 각 봇은 `TELEGRAM_STATE_DIR` 를 분리 주입받아 전역 봇 및 다른 프로젝트 봇과 섞이지 않는다.
 - tmux 세션 이름은 `cctg-<name>` 규칙을 따른다.
 
@@ -171,6 +211,7 @@ cctg update
 |---|---|---|
 | `CC_CHANNELS_DIR` | `~/.claude/channels` | 채널 상태 루트 |
 | `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | 레지스트리 파일 |
+| `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | 공통 권한 정책 파일 |
 
 ## 제거
 

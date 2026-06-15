@@ -8,6 +8,8 @@ _cctg() {
     'add:프로젝트 봇 등록'
     'rm:등록 해제'
     'rename:이름 변경'
+    'config:봇별 옵션 보기·수정'
+    'common:공통 권한 정책 보기·수정'
     'up:기동'
     'down:정지'
     'restart:재기동'
@@ -42,6 +44,23 @@ _cctg() {
       if (( CURRENT == 3 )); then
         compadd -- all
         _cctg_names
+      fi ;;
+    config)
+      # config <name> <action> — 3번째=봇명, 4번째=동작
+      if (( CURRENT == 3 )); then
+        _cctg_names
+      elif (( CURRENT == 4 )); then
+        compadd -- show edit mode args
+      fi ;;
+    common)
+      # common <action> [...]
+      if (( CURRENT == 3 )); then
+        compadd -- show edit mode deny allow
+      elif (( CURRENT == 4 )); then
+        case "${words[3]}" in
+          deny|allow) compadd -- add rm ;;
+          mode) compadd -- acceptEdits auto bypassPermissions default dontAsk plan ;;
+        esac
       fi ;;
     add)
       (( CURRENT == 4 )) && _files -/ ;;
