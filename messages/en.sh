@@ -103,6 +103,7 @@ CCTG_MSG_STATUS_NONE="  (no project bots registered)\n"
 
 # logs / attach
 CCTG_MSG_LOGS_STOPPED="Stopped: %s (no logs). Run '%s up %s' then try again.\n"
+CCTG_MSG_LOGS_SNAPSHOT="# %s is stopped — showing the last saved session log (from the most recent 'down').\n"
 CCTG_MSG_ERR_NOT_RUNNING="ERROR: not running: %s (run '%s up %s' first)\n"
 CCTG_MSG_ATTACH_DETACH_HINT="(to detach, press Ctrl-b then d)\n"
 

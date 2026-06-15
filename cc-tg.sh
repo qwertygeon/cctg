@@ -324,8 +324,17 @@ up_one() {
 }
 
 down_one() {
-  local name="$1"
+  local name="$1" row sd
   if is_running "$name"; then
+    # 종료 전 마지막 세션 출력(렌더된 텍스트, 스크롤백 2000줄)을 상태 디렉터리에 보존한다.
+    # 종료 후에도 `cctg logs` 로 조회 가능. capture-pane 의 렌더 텍스트라 ANSI 잡음이 없다.
+    if row="$(lookup "$name")"; then
+      sd="$(expand "$(cut -f2 <<<"$row")")"
+      if [ -d "$sd" ]; then
+        tmux capture-pane -p -S -2000 -t "$(sess_of "$name")" > "$sd/last-session.log" 2>/dev/null \
+          && chmod 600 "$sd/last-session.log" 2>/dev/null || true
+      fi
+    fi
     tmux kill-session -t "$(sess_of "$name")"
     t DOWN_OK "$name"
   else
@@ -638,8 +647,21 @@ cmd_status() {
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
-    is_running "$NAME" || die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
-    tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+    if is_running "$NAME"; then
+      tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+      return
+    fi
+    # 정지 상태: down 시 저장한 마지막 세션 스냅샷이 있으면 보여준다.
+    local row sd snap
+    if row="$(lookup "$NAME")"; then
+      sd="$(expand "$(cut -f2 <<<"$row")")"; snap="$sd/last-session.log"
+      if [ -f "$snap" ]; then
+        t LOGS_SNAPSHOT "$NAME"
+        tail -n "$N" "$snap"
+        return
+      fi
+    fi
+    die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
 }
 
 cmd_attach() {

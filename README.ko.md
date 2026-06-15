@@ -193,7 +193,11 @@ cctg logs myproject 200  # 최근 200줄
 cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리: Ctrl-b d)
 ```
 
-`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우다. `logs` 와 `attach` 는 봇이 정지 상태면 친절한 안내와 함께 중단한다.
+`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우다.
+
+`logs` 는 봇이 실행 중이면 tmux 페인을 실시간으로 읽는다. `down` 시 CCTG 가 페인 스냅샷(렌더된 텍스트, 최대 ~2000줄)을 `<state>/last-session.log` 에 저장하므로, 봇을 **정지한 뒤에도** `logs` 가 그 스냅샷으로 폴백해 동작한다. `attach` 는 여전히 실행 중인 세션이 필요하다.
+
+> 스냅샷은 `down` 마다 덮어쓴다(마지막 세션 1개). 0700 상태 디렉터리 안에 600 권한으로 저장되며 대화 내용이 포함될 수 있으므로 상태 디렉터리와 동일하게 취급한다. `down` 을 거치지 않는 크래시·재부팅은 스냅샷을 갱신하지 못한다.
 
 ```console
 $ cctg status
