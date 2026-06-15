@@ -6,7 +6,19 @@
 
 전역 봇(`~/.claude/channels/telegram/`)은 건드리지 않는다. 프로젝트 봇은 각자 상태 디렉터리·토큰·작업 디렉터리를 갖고 격리된 tmux 세션에서 돈다.
 
-> **지원 채널 범위** — CCTG의 상태 디렉터리는 Claude Code의 **channels**(`~/.claude/channels/`) 구조를 따른다. **현재 연동 가능한 게이트웨이는 Telegram 하나뿐**이다. Claude Code가 channels 기능으로 제공하는 다른 게이트웨이(예: Slack·Discord 등)는 **추후 모두 지원할 예정**이다. 그때까지 `cctg`의 `add`/`up` 등 명령은 Telegram 봇만 대상으로 한다.
+> **지원 채널 범위** — CCTG의 상태 디렉터리는 Claude Code의 **channels**(`~/.claude/channels/`) 구조를 따른다. 채널 플러그인은 각자의 전역 봇을 `~/.claude/channels/<채널>/`(`.env`·`access.json`·`approved/`·`inbox/`)에 두며, 프로세스별로는 그 플러그인의 `<CHANNEL>_STATE_DIR` 로 덮어쓸 수 있다. CCTG는 현재 **Telegram 만** 구동하며 나머지는 아직 연동 불가다.
+
+**지원 게이트웨이:**
+
+| 게이트웨이 | Claude Code 플러그인 | 전역 상태 디렉터리 | 프로세스별 상태 override | CCTG 지원 |
+|---|---|---|---|---|
+| **Telegram** | `telegram@claude-plugins-official` | `~/.claude/channels/telegram/` | `TELEGRAM_STATE_DIR` | ✅ **지원** — `add`/`up` 으로 프로젝트별 격리 봇 기동 |
+| Discord | `discord@claude-plugins-official` | `~/.claude/channels/discord/` | `DISCORD_STATE_DIR` | ⛔ 예정 — 전역 봇 덮어쓰기 방지를 위해 이름 **예약** |
+| iMessage | `imessage@claude-plugins-official` | `~/.claude/channels/imessage/` | `IMESSAGE_STATE_DIR` | ⛔ 예정 — 이름 **예약** |
+| fakechat (로컬 테스트) | `fakechat@claude-plugins-official` | `~/.claude/channels/fakechat/` | — (하드코딩) | ⛔ 비해당 — 이름 **예약** |
+| Slack | `slack@claude-plugins-official` | — (MCP 검색/조회, 봇 상태 디렉터리 없음) | — | ➖ 범위 외 — tmux 호스팅 메시지 브리지가 아님 |
+
+> 모든 채널 플러그인의 전역 봇이 `~/.claude/channels/<채널>/` 에 있으므로, CCTG는 `telegram`·`discord`·`imessage`·`fakechat` 이름을 **예약**한다: `cctg add <예약이름>` / `cctg rename ... <예약이름>` 은 거부되어 프로젝트 봇이 전역 채널 봇의 토큰·allowlist 를 덮어쓸 수 없다. 또한 CCTG의 `launch.env` 가 없는 채널 봇 상태(`.env`/`access.json`)가 이미 들어 있는 상태 디렉터리는 재사용을 거부하므로, 향후 추가될 채널 이름도 보호된다.
 
 > ⚠️ **프라이버시 — 데이터 흐름 고지** — CCTG는 텔레그램으로 받은 메시지를 봇의 작업 디렉터리에서 실행되는 Claude Code로 중계하며, Claude Code는 그 내용을 처리를 위해 **Anthropic API로 전송**한다. 즉 봇과 주고받는 대화·코드·파일 내용이 제3자(Anthropic) 및 텔레그램 인프라를 거친다. 민감 정보를 다루는 저장소에 봇을 붙일 때는 이 점을 고려하고, `access.json` allowlist로 접근 주체를 본인(또는 신뢰된 사용자)으로 엄격히 제한하라.
 
@@ -92,7 +104,7 @@ cctg <command> [args]
   doctor                update                version           help
 ```
 
-> 봇 이름은 영문/숫자/`_`/`-` 만 허용한다(tmux 세션명·레지스트리 구분자 충돌 방지). `telegram` 은 전역 봇 예약 이름이라 쓸 수 없다.
+> 봇 이름은 영문/숫자/`_`/`-` 만 허용한다(tmux 세션명·레지스트리 구분자 충돌 방지). 전역 채널 이름 `telegram`·`discord`·`imessage`·`fakechat` 은 **예약**되어 쓸 수 없다 — 이유는 상단 **지원 게이트웨이** 표 참조.
 
 ### 1. 봇 등록·해제 (add / rm)
 

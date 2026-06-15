@@ -7,7 +7,7 @@
 CCTG_MSG_SHARED_CREATED="공통 설정 생성: %s (defaultMode=bypassPermissions + deny 안전망)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: 이 동작은 jq가 필요합니다. 'cctg common edit'로 직접 편집하거나 jq를 설치하세요 (brew install jq).\n"
 
-CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd>       프로젝트 봇 등록\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         봇별 옵션(권한 모드·추가 인자) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status                 등록/실행 상태\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 'telegram'은 전역 봇 예약 이름.\n"
+CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd>       프로젝트 봇 등록\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         봇별 옵션(권한 모드·추가 인자) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status                 등록/실행 상태\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
 
 # 공용 조각
 CCTG_MSG_FOLLOW_SHARED="공통 따름"
@@ -20,7 +20,8 @@ CCTG_MSG_ISSUE_NO_TOKEN="토큰없음"
 # 공통 에러
 CCTG_MSG_ERR_NOT_REGISTERED="ERROR: 등록되지 않은 프로젝트: %s\n"
 CCTG_MSG_ERR_BADNAME="ERROR: 이름은 영문/숫자/_/- 만 허용합니다: '%s'\n"
-CCTG_MSG_ERR_RESERVED="ERROR: 'telegram'은 전역 봇 예약 이름입니다. 다른 이름을 쓰세요.\n"
+CCTG_MSG_ERR_RESERVED="ERROR: '%s'은(는) 예약된 전역 채널 이름입니다 (%s). 해당 채널 전역 봇의 상태 디렉터리와 충돌합니다. 다른 이름을 쓰세요.\n"
+CCTG_MSG_ERR_FOREIGN_STATEDIR="ERROR: %s 에 이미 다른 채널 봇의 상태(.env/access.json, cctg launch.env 없음)가 있습니다. 덮어쓰지 않습니다. 다른 이름을 쓰거나 해당 디렉터리를 옮기세요.\n"
 CCTG_MSG_ERR_ALREADY_REGISTERED="ERROR: 이미 등록됨: %s\n"
 CCTG_MSG_ERR_RUNNING_DOWN_FIRST="ERROR: 실행 중입니다. 먼저 '%s down %s' 후 다시 시도하세요.\n"
 CCTG_MSG_ERR_REGISTRY_UPDATE="ERROR: 레지스트리 갱신 실패\n"

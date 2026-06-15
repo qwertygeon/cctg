@@ -13,10 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Privacy / data-flow notice and an "unofficial tool" disclaimer in the README.
 - `.gitignore` for macOS, editor, and `*.cctg-bak` artifacts.
 - Project meta files: `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, and GitHub issue/PR templates.
+- "Supported gateways" table in both READMEs documenting Claude Code's channel plugins (Telegram/Discord/iMessage/fakechat/Slack), their `~/.claude/channels/<channel>/` state dirs, `<CHANNEL>_STATE_DIR` overrides, and CCTG support status.
 
 ### Changed
 - `install.sh` (copy mode) now installs the package into `~/.local/libexec/cctg/` (cc-tg.sh + VERSION + messages) and symlinks `~/.local/bin/cctg` to it, so companion files sit next to the launcher (Homebrew-style libexec layout). Dev installs (`--dev`) still symlink the repo directly.
 - Internal refactor: the monolithic command dispatcher was split into `cmd_*()` functions; error messages now go to stderr. No change to command behavior or output content.
+
+### Fixed
+- Reserved-name guard now covers every global channel name (`telegram`, `discord`, `imessage`, `fakechat`), not just `telegram`. `add`/`rename` to any of these is refused so a project bot can't clobber a global channel bot's `.env`/`access.json`; `rm --purge` likewise refuses to delete any global channel dir.
+- `add` refuses to reuse a state directory that already holds a non-CCTG channel bot's state (an `.env`/`access.json` with no CCTG `launch.env`), protecting future channel names beyond the reserved list.
 
 ## [0.1.0] - 2026-06-15
 
