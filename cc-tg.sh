@@ -10,12 +10,14 @@
 #   cc-tg.sh down <name|all>            # 봇 정지
 #   cc-tg.sh status                     # 등록/실행 상태 보기
 #   cc-tg.sh attach <name>              # 해당 세션에 붙어서 로그 확인
+#   cc-tg.sh update                     # git pull 후 cctg 재설치(설치 매니페스트 기반)
 #
 # 의존성: tmux, claude(CLI), caffeinate(macOS). 플러그인은 전역 설치되어 있어야 함:
 #   /plugin install telegram@claude-plugins-official
 
 set -uo pipefail
 
+PROG="$(basename "$0")"
 CHANNELS_DIR="${CC_CHANNELS_DIR:-$HOME/.claude/channels}"
 REGISTRY="${CC_TG_REGISTRY:-$CHANNELS_DIR/projects.conf}"
 PLUGIN="plugin:telegram@claude-plugins-official"
@@ -113,7 +115,7 @@ JSON
 
     echo "등록 완료: $NAME → cwd=$CWD, state=$SD"
     echo "  allowlist에 $TGID 시드함 (페어링 불필요)"
-    echo "다음: cc-tg.sh up $NAME  → 봇에 DM하면 바로 응답합니다."
+    echo "다음: $PROG up $NAME  → 봇에 DM하면 바로 응답합니다."
     ;;
   up)
     TARGET="${1:?name|all 필요}"
@@ -146,8 +148,43 @@ JSON
     NAME="${1:?name 필요}"
     tmux attach -t "$(sess_of "$NAME")"
     ;;
+  update)
+    # 설치 매니페스트에서 레포 위치·모드를 읽어 git pull 후 재설치한다.
+    CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
+    MANIFEST="$CONFIG_DIR/install.conf"
+    REPO="" MODE="copy" BINDIR=""
+    if [ -f "$MANIFEST" ]; then
+      REPO="$(awk -F= '$1=="repo"{print substr($0,index($0,"=")+1)}'   "$MANIFEST")"
+      MODE="$(awk -F= '$1=="mode"{print substr($0,index($0,"=")+1)}'   "$MANIFEST")"
+      BINDIR="$(awk -F= '$1=="bindir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+    fi
+    # 매니페스트가 없으면(구버전 설치 등) 심볼릭 설치인 경우 $0 링크로 레포를 역추적
+    if [ -z "$REPO" ] && [ -L "$0" ]; then
+      t="$(readlink "$0")"
+      case "$t" in
+        /*) REPO="$(cd "$(dirname "$t")" && pwd)" ;;
+        *)  REPO="$(cd "$(dirname "$0")/$(dirname "$t")" && pwd)" ;;
+      esac
+      MODE="link"
+    fi
+    if [ -z "$REPO" ] || [ ! -d "$REPO/.git" ]; then
+      echo "ERROR: cctg 레포 위치를 찾을 수 없습니다."
+      echo "  레포에서 install.sh 를 한 번 실행하면 매니페스트($MANIFEST)가 생성됩니다."
+      exit 1
+    fi
+    echo "업데이트: $REPO  (mode=$MODE)"
+    if ! git -C "$REPO" pull --ff-only; then
+      echo "ERROR: git pull 실패 (로컬 변경이 있거나 fast-forward 불가). 레포에서 직접 확인하세요."
+      exit 1
+    fi
+    if [ "$MODE" = "link" ]; then
+      echo "심볼릭 설치이므로 cctg 가 이미 최신입니다."
+    else
+      BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh"
+    fi
+    ;;
   *)
-    echo "사용법: cc-tg.sh {add <name> <cwd>|up <name|all>|down <name|all>|status|attach <name>}"
+    echo "사용법: $PROG {add <name> <cwd>|up <name|all>|down <name|all>|status|attach <name>|update}"
     exit 1
     ;;
 esac
