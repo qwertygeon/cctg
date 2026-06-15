@@ -22,8 +22,33 @@
 
 set -uo pipefail
 
-CCTG_VERSION="0.1.0"
+# VERSION 파일이 SoT. 아래는 파일을 못 찾을 때의 폴백.
+CCTG_VERSION_FALLBACK="0.1.0"
 PROG="$(basename "$0")"
+
+# 스크립트 실제 위치 해석 (심볼릭 링크 1단계 추적). VERSION 파일 탐색에 사용.
+_self="$0"
+case "$_self" in */*) ;; *) _self="$(command -v "$_self" 2>/dev/null || printf '%s' "$_self")";; esac
+if [ -L "$_self" ]; then
+  _t="$(readlink "$_self")"
+  case "$_t" in /*) _self="$_t";; *) _self="$(dirname "$_self")/$_t";; esac
+fi
+SCRIPT_DIR="$(cd "$(dirname "$_self")" 2>/dev/null && pwd)"
+
+# 버전 결정: (1) 스크립트 옆 VERSION(레포/dev) → (2) 매니페스트 version=(copy) → (3) 폴백
+cctg_version() {
+  local mf v
+  if [ -n "${SCRIPT_DIR:-}" ] && [ -f "$SCRIPT_DIR/VERSION" ]; then
+    head -n1 "$SCRIPT_DIR/VERSION"; return
+  fi
+  mf="${XDG_CONFIG_HOME:-$HOME/.config}/cctg/install.conf"
+  if [ -f "$mf" ]; then
+    v="$(awk -F= '$1=="version"{print substr($0,index($0,"=")+1)}' "$mf")"
+    [ -n "$v" ] && { printf '%s\n' "$v"; return; }
+  fi
+  printf '%s\n' "$CCTG_VERSION_FALLBACK"
+}
+
 CHANNELS_DIR="${CC_CHANNELS_DIR:-$HOME/.claude/channels}"
 REGISTRY="${CC_TG_REGISTRY:-$CHANNELS_DIR/projects.conf}"
 PLUGIN="plugin:telegram@claude-plugins-official"
@@ -293,7 +318,8 @@ ENV
       echo "  레포에서 install.sh 를 한 번 실행하면 매니페스트($MANIFEST)가 생성됩니다."
       exit 1
     fi
-    echo "업데이트: $REPO  (mode=$MODE)"
+    OLDVER="$(cctg_version)"
+    echo "업데이트: $REPO  (mode=$MODE, 현재 v$OLDVER)"
     if ! git -C "$REPO" pull --ff-only; then
       echo "ERROR: git pull 실패 (로컬 변경이 있거나 fast-forward 불가). 레포에서 직접 확인하세요."
       exit 1
@@ -303,9 +329,11 @@ ENV
     else
       BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh"
     fi
+    NEWVER="$(head -n1 "$REPO/VERSION" 2>/dev/null || printf '%s' "$OLDVER")"
+    echo "버전: v$OLDVER → v$NEWVER"
     ;;
   doctor)
-    echo "cctg doctor (v$CCTG_VERSION)"
+    echo "cctg doctor (v$(cctg_version))"
     echo "--- 의존성 ---"
     for d in tmux claude caffeinate; do
       if command -v "$d" >/dev/null 2>&1; then
@@ -329,7 +357,7 @@ ENV
     echo "  (telegram 플러그인은 전역 설치 필요: /plugin install telegram@claude-plugins-official)"
     ;;
   version|--version|-v)
-    echo "$PROG $CCTG_VERSION"
+    echo "$PROG $(cctg_version)"
     ;;
   help|--help|-h|"")
     usage
