@@ -1,0 +1,47 @@
+#compdef cctg
+# zsh 자동완성 — cctg
+# 설치: install.sh 가 fpath 디렉터리(~/.local/share/zsh/site-functions/_cctg)로 복사한다.
+
+_cctg() {
+  local -a cmds
+  cmds=(
+    'add:프로젝트 봇 등록'
+    'rm:등록 해제'
+    'up:기동'
+    'down:정지'
+    'restart:재기동'
+    'status:등록/실행 상태'
+    'logs:최근 로그 출력'
+    'attach:tmux 세션 attach'
+    'doctor:환경 진단'
+    'update:git pull 후 재설치'
+    'version:버전 출력'
+    'help:도움말'
+  )
+
+  _cctg_names() {
+    local reg="${CC_TG_REGISTRY:-${CC_CHANNELS_DIR:-$HOME/.claude/channels}/projects.conf}"
+    local -a names
+    names=(${(f)"$(awk -F'|' '/^[[:space:]]*#/{next}/^[[:space:]]*$/{next}{gsub(/^[ \t]+|[ \t]+$/,"",$1);print $1}' "$reg" 2>/dev/null)"})
+    _describe -t bots '봇' names
+  }
+
+  if (( CURRENT == 2 )); then
+    _describe -t commands '명령' cmds
+    return
+  fi
+
+  case "${words[2]}" in
+    rm|logs|attach)
+      (( CURRENT == 3 )) && _cctg_names ;;
+    up|down|restart)
+      if (( CURRENT == 3 )); then
+        compadd -- all
+        _cctg_names
+      fi ;;
+    add)
+      (( CURRENT == 4 )) && _files -/ ;;
+  esac
+}
+
+_cctg "$@"

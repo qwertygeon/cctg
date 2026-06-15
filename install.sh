@@ -4,7 +4,7 @@
 # git clone 후 이 스크립트를 실행하면:
 #   1) 의존성(tmux, claude, caffeinate)을 점검하고
 #   2) cc-tg.sh 를 설치 위치에 배치한 뒤
-#   3) cctg 명령으로 호출할 수 있게 한다.
+#   3) 셸 자동완성(bash/zsh)을 설치하고 cctg 명령으로 호출할 수 있게 한다.
 #
 # 두 가지 설치 모드:
 #   copy (기본) — cc-tg.sh 를 ~/.local/bin/cctg 로 "복사"한다.
@@ -14,9 +14,10 @@
 #                 레포를 수정하면 즉시 반영된다(개발 방식). 레포 위치 고정 필요.
 #
 # 사용법:
-#   ./install.sh              # 복사 설치 (릴리스)
-#   ./install.sh --dev        # 심볼릭 링크 설치 (개발)
-#   BINDIR=~/bin ./install.sh # 설치 위치 변경
+#   ./install.sh                 # 복사 설치 (릴리스)
+#   ./install.sh --dev           # 심볼릭 링크 설치 (개발)
+#   ./install.sh --no-completions # 자동완성 설치 생략
+#   BINDIR=~/bin ./install.sh    # 설치 위치 변경
 #
 # 재실행해도 안전하다(idempotent). 기존 cctg 는 갱신된다.
 
@@ -29,14 +30,17 @@ BINDIR="${BINDIR:-$HOME/.local/bin}"
 DEST="$BINDIR/cctg"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
 MANIFEST="$CONFIG_DIR/install.conf"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
 MODE="copy"
+COMPLETIONS=1
 
 for arg in "$@"; do
   case "$arg" in
-    --dev|--link) MODE="link" ;;
-    --copy)       MODE="copy" ;;
+    --dev|--link)     MODE="link" ;;
+    --copy)           MODE="copy" ;;
+    --no-completions) COMPLETIONS=0 ;;
     -h|--help)
-      sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'
+      awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"
       exit 0 ;;
     *) printf 'ERROR: 알 수 없는 옵션: %s\n' "$arg" >&2; exit 1 ;;
   esac
@@ -82,12 +86,34 @@ else
   ok "복사(릴리스): $DEST  (소스: $SRC)"
 fi
 
-# 3-1) 설치 매니페스트 기록 — `cctg update` 가 레포 위치·모드를 찾는 데 쓴다
+# 3-1) 셸 자동완성 설치 (bash/zsh). 실패해도 설치 전체는 중단하지 않는다.
+BASHCOMP=""; ZSHCOMP=""
+if [ "$COMPLETIONS" = 1 ]; then
+  bash_src="$REPO_DIR/completions/cctg.bash"
+  zsh_src="$REPO_DIR/completions/_cctg"
+  bash_dir="$DATA_DIR/bash-completion/completions"
+  zsh_dir="$DATA_DIR/zsh/site-functions"
+  if [ -f "$bash_src" ] && mkdir -p "$bash_dir" 2>/dev/null && cp "$bash_src" "$bash_dir/cctg" 2>/dev/null; then
+    BASHCOMP="$bash_dir/cctg"; ok "bash 자동완성: $BASHCOMP"
+  fi
+  if [ -f "$zsh_src" ] && mkdir -p "$zsh_dir" 2>/dev/null && cp "$zsh_src" "$zsh_dir/_cctg" 2>/dev/null; then
+    ZSHCOMP="$zsh_dir/_cctg"; ok "zsh 자동완성: $ZSHCOMP"
+    case ":$FPATH:" in
+      *":$zsh_dir:"*) : ;;
+      *) warn "zsh 에서 자동완성을 쓰려면 ~/.zshrc 에 다음을 추가하세요:"
+         echo "    fpath=($zsh_dir \$fpath); autoload -Uz compinit && compinit" ;;
+    esac
+  fi
+fi
+
+# 3-2) 설치 매니페스트 기록 — `cctg update`/uninstall 이 위치·모드·설치물을 찾는 데 쓴다
 mkdir -p "$CONFIG_DIR"
 {
-  printf 'repo=%s\n'   "$REPO_DIR"
-  printf 'mode=%s\n'   "$MODE"
-  printf 'bindir=%s\n' "$BINDIR"
+  printf 'repo=%s\n'     "$REPO_DIR"
+  printf 'mode=%s\n'     "$MODE"
+  printf 'bindir=%s\n'   "$BINDIR"
+  printf 'bashcomp=%s\n' "$BASHCOMP"
+  printf 'zshcomp=%s\n'  "$ZSHCOMP"
 } > "$MANIFEST"
 ok "매니페스트 기록: $MANIFEST"
 
@@ -107,5 +133,5 @@ case ":$PATH:" in
 esac
 
 echo
-echo "설치 완료($MODE). 새 터미널에서 다음을 실행해 확인하세요:"
-echo "    cctg status"
+echo "설치 완료($MODE). 새 터미널을 열거나 셸을 다시 로드한 뒤 확인하세요:"
+echo "    cctg doctor"

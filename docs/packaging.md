@@ -18,12 +18,20 @@
 
 ```
 레포/
-├── cc-tg.sh        # 런처 본체 (단일 자립)
-├── install.sh      # 설치 (copy 기본 / --dev 심볼릭) + 매니페스트 기록
-└── uninstall.sh    # 제거
+├── cc-tg.sh           # 런처 본체 (단일 자립)
+├── install.sh         # 설치 (copy 기본 / --dev 심볼릭) + 자동완성 설치 + 매니페스트 기록
+├── uninstall.sh       # 제거 (bin + 자동완성)
+└── completions/
+    ├── cctg.bash      # bash 자동완성
+    └── _cctg          # zsh 자동완성
 ```
 
-설치 시 `install.sh` 는 `~/.config/cctg/install.conf` 에 `repo` / `mode` / `bindir` 를 기록한다. `cctg update` 는 이 매니페스트로 레포 위치와 설치 모드를 찾아 `git pull` 후 재설치한다 (copy 모드는 레포와 분리돼 있어 매니페스트 없이는 출처를 알 수 없기 때문).
+설치 시 `install.sh` 는 매니페스트(`~/.config/cctg/install.conf`)에 `repo` / `mode` / `bindir` / `bashcomp` / `zshcomp` 를 기록한다.
+
+- `cctg update` 는 매니페스트로 레포 위치와 설치 모드를 찾아 `git pull` 후 재설치한다 (copy 모드는 레포와 분리돼 있어 매니페스트 없이는 출처를 알 수 없기 때문).
+- `uninstall.sh` 는 매니페스트의 `bashcomp` / `zshcomp` 경로를 보고 자동완성 파일까지 정리한다.
+
+> **자동완성은 libexec 승격을 강제하지 않는다.** 완성 파일은 `cc-tg.sh` 가 런타임에 source 하는 동반 파일이 아니라, 표준 완성 디렉터리(`~/.local/share/bash-completion/completions/`, zsh `fpath`)로 따로 설치되는 셸 통합물이다. `cc-tg.sh` 는 여전히 단일 자립 스크립트다. 아래 승격 트리거는 `cc-tg.sh` 가 *source 하는* `lib/*.sh` 가 생길 때를 가리킨다.
 
 ### 설치 모드
 
@@ -55,8 +63,9 @@
 다음 중 하나라도 발생하면 단일 파일 → libexec 구조로 전환을 검토한다.
 
 - 보조 라이브러리(`lib/*.sh`) 등 `cc-tg.sh` 가 source 하는 동반 파일이 생김
-- 셸 자동완성 스크립트(bash/zsh completion) 추가
 - 버전별 디렉터리 분리나 다중 진입점(여러 실행 명령)이 필요해짐
+
+셸 자동완성은 표준 완성 디렉터리로 따로 설치되는 별도 통합물이라 승격 트리거가 아니다(위 참고).
 
 ### 승격 후 레이아웃
 

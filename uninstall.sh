@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # uninstall.sh — cctg 제거
 #
-# copy/link 어느 모드로 설치했든 ~/.local/bin/cctg 를 제거한다.
+# copy/link 어느 모드로 설치했든 ~/.local/bin/cctg 와 자동완성 파일을 제거한다.
 # 레지스트리·상태 디렉터리(~/.claude/channels/)는 건드리지 않으므로
 # 데이터 손실 없이 재설치 가능하다.
 
@@ -11,6 +11,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$REPO_DIR/cc-tg.sh"
 BINDIR="${BINDIR:-$HOME/.local/bin}"
 DEST="$BINDIR/cctg"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
+MANIFEST="$CONFIG_DIR/install.conf"
 
 if [ -L "$DEST" ]; then
   # 링크(개발) 설치 — 이 레포가 만든 링크인지 확인 후 제거
@@ -29,4 +31,12 @@ elif [ -f "$DEST" ]; then
   fi
 else
   echo "설치된 cctg 없음: $DEST"
+fi
+
+# 자동완성 파일 제거 (매니페스트에 기록된 경로만)
+if [ -f "$MANIFEST" ]; then
+  for key in bashcomp zshcomp; do
+    p="$(awk -F= -v k="$key" '$1==k{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+    [ -n "$p" ] && [ -f "$p" ] && rm -f "$p" && echo "제거됨(자동완성): $p"
+  done
 fi

@@ -96,11 +96,15 @@ up_one() {
   [ -f "$sd/.env" ] || { echo "ERROR: 토큰 파일 없음: $sd/.env (먼저 add 하세요)"; return 1; }
   if is_running "$name"; then echo "이미 실행 중: $name"; return 0; fi
 
-  # 상태 디렉터리/토큰을 분리 주입하고 caffeinate로 sleep 방지하며 채널 세션 기동
+  # 상태 디렉터리/토큰을 분리 주입하고 caffeinate로 sleep 방지하며 채널 세션 기동.
+  # 봇별 launch.env(있으면)에서 CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
+  # CLAUDE_EXTRA_ARGS 는 \$ 를 이스케이프해 런타임(launch.env source 이후)에 단어 분리되도록 한다.
   local launch="cd $(printf '%q' "$cwd") \
 && export TELEGRAM_STATE_DIR=$(printf '%q' "$sd") \
-&& set -a && source $(printf '%q' "$sd/.env") && set +a \
-&& caffeinate -is claude --channels $PLUGIN; exec bash"
+&& set -a && source $(printf '%q' "$sd/.env") \
+&& { [ -f $(printf '%q' "$sd/launch.env") ] && source $(printf '%q' "$sd/launch.env") || true; } \
+&& set +a \
+&& caffeinate -is claude --channels $PLUGIN \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"
   echo "UP   $name  (cwd=$cwd, state=$sd, tmux=$(sess_of "$name"))"
@@ -153,7 +157,14 @@ case "$CMD" in
 { "dmPolicy": "allowlist", "allowFrom": ["$TGID"], "groups": {}, "pending": {} }
 JSON
 
-    # 5) 레지스트리 등록
+    # 5) launch.env 템플릿 (봇별 claude 추가 인자 — 기본 비활성, 주석만)
+    cat > "$SD/launch.env" <<'ENV'
+# 이 봇 전용 claude 추가 인자 (선택). 주석을 풀고 값을 채우면 up 시 적용된다.
+# 예: 모델 지정 / 권한 모드 등
+# CLAUDE_EXTRA_ARGS="--model opus"
+ENV
+
+    # 6) 레지스트리 등록
     printf '%s | %s | %s\n' "$NAME" "$CWD" "$SD" >> "$REGISTRY"
 
     echo "등록 완료: $NAME → cwd=$CWD, state=$SD"
