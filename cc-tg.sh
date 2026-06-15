@@ -87,6 +87,15 @@ all_names() {
 sess_of() { printf '%s%s' "$SESS_PREFIX" "$1"; }
 is_running() { tmux has-session -t "$(sess_of "$1")" 2>/dev/null; }
 
+# 초 → 사람이 읽는 기간 (예: 2d3h / 4h5m / 7m)
+fmt_dur() {
+  local s="$1" d h m
+  d=$(( s / 86400 )); h=$(( (s % 86400) / 3600 )); m=$(( (s % 3600) / 60 ))
+  if   [ "$d" -gt 0 ]; then printf '%dd%dh' "$d" "$h"
+  elif [ "$h" -gt 0 ]; then printf '%dh%dm' "$h" "$m"
+  else                      printf '%dm' "$m"; fi
+}
+
 up_one() {
   local name="$1" cwd sd row
   row="$(lookup "$name")" || { echo "ERROR: 등록되지 않은 프로젝트: $name"; return 1; }
@@ -226,8 +235,26 @@ ENV
     found=0
     while IFS= read -r n; do
       [ -z "$n" ] && continue; found=1
-      if is_running "$n"; then echo "  [RUNNING] $n  (tmux: $(sess_of "$n"))"
-      else echo "  [stopped] $n"; fi
+      row="$(lookup "$n")"
+      cwd="$(expand "$(cut -f1 <<<"$row")")"
+      sd="$(expand "$(cut -f2 <<<"$row")")"
+      # 깨진 상태 감지: 작업 디렉터리·토큰 파일 존재 여부
+      issues=""
+      [ -d "$cwd" ]      || issues="cwd없음"
+      [ -f "$sd/.env" ]  || issues="${issues:+$issues, }토큰없음"
+      if is_running "$n"; then
+        created="$(tmux display-message -p -t "$(sess_of "$n")" '#{session_created}' 2>/dev/null)"
+        up=""
+        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+          up="  up $(fmt_dur $(( $(date +%s) - created )))"
+        fi
+        printf '  [RUNNING] %s%s  (tmux=%s)\n' "$n" "$up" "$(sess_of "$n")"
+      elif [ -n "$issues" ]; then
+        printf '  [BROKEN ] %s  (%s)\n' "$n" "$issues"
+      else
+        printf '  [stopped] %s\n' "$n"
+      fi
+      printf '            cwd=%s  state=%s\n' "$cwd" "$sd"
     done < <(all_names)
     [ "$found" = 0 ] && echo "  (등록된 프로젝트 봇 없음)"
     ;;
