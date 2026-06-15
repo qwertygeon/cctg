@@ -9,6 +9,8 @@
 #   cc-tg.sh add <name> <working_dir>   # 새 프로젝트 봇 등록(상태 디렉터리·토큰 스캐폴딩·텔레그램ID 입력 → allowlist 자동 생성)
 #   cc-tg.sh rm  <name> [--purge]       # 등록 해제(--purge: 상태 디렉터리까지 삭제)
 #   cc-tg.sh rename <old> <new> [--keep-dir]  # 이름 변경(기본: 상태 디렉터리도 이동)
+#   cc-tg.sh config <name> [...]        # 봇별 옵션(권한 모드·추가 인자) 보기·수정
+#   cc-tg.sh common [...]               # 공통 권한 정책(--settings 주입) 보기·수정
 #   cc-tg.sh up  <name|all>             # 봇 기동(detached tmux + caffeinate)
 #   cc-tg.sh down <name|all>            # 봇 정지
 #   cc-tg.sh restart <name|all>         # 봇 재기동(down + up)
@@ -53,11 +55,83 @@ cctg_version() {
 
 CHANNELS_DIR="${CC_CHANNELS_DIR:-$HOME/.claude/channels}"
 REGISTRY="${CC_TG_REGISTRY:-$CHANNELS_DIR/projects.conf}"
+# 모든 CCTG 봇에 --settings 로 주입되는 공통 Claude 설정(권한 allow/deny/defaultMode).
+# 전역 ~/.claude/settings.json 과 merge 되며(deny 는 union, deny 가 allow 보다 우선),
+# 여기 defaultMode 가 봇의 기본 권한 모드가 된다. 봇별 launch.env 의 CCTG_PERMISSION_MODE 가 우선한다.
+SHARED_SETTINGS="${CC_TG_SHARED_SETTINGS:-$CHANNELS_DIR/cctg-shared.settings.json}"
 PLUGIN="plugin:telegram@claude-plugins-official"
 SESS_PREFIX="cctg-"
 
+# claude --permission-mode 가 받는 유효한 모드 (claude --help 기준)
+VALID_MODES="acceptEdits auto bypassPermissions default dontAsk plan"
+
 mkdir -p "$CHANNELS_DIR"
 [ -f "$REGISTRY" ] || printf '# name | working_dir | state_dir\n' > "$REGISTRY"
+
+# 공통 설정 파일 시드(없을 때만). 기본은 "위험하지 않은 건 자동승인"을 위해 bypassPermissions +
+# deny 안전망. deny 규칙·PreToolUse 훅(git-guard)은 bypassPermissions 에서도 그대로 작동한다.
+ensure_shared_settings() {
+  [ -f "$SHARED_SETTINGS" ] && return 0
+  cat > "$SHARED_SETTINGS" <<'JSON'
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(rm -rf .*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+      "Bash(git clean -fdx*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)"
+    ],
+    "allow": []
+  }
+}
+JSON
+  echo "공통 설정 생성: $SHARED_SETTINGS (defaultMode=bypassPermissions + deny 안전망)" >&2
+}
+
+# 모드 유효성 검사
+valid_mode() { case " $VALID_MODES " in *" $1 "*) return 0;; *) return 1;; esac; }
+
+# launch.env 에 KEY="value" upsert (있으면 치환, 없으면 추가). 값은 그대로 기록(셸 치환 주의는 호출측 책임).
+set_env_kv() {
+  local file="$1" key="$2" val="$3" tmp
+  [ -f "$file" ] || : > "$file"
+  tmp="$(mktemp)" || return 1
+  if grep -qE "^${key}=" "$file" 2>/dev/null; then
+    awk -v k="$key" -v v="$val" '$0 ~ "^"k"=" { print k"=\""v"\""; next } { print }' "$file" > "$tmp" && mv "$tmp" "$file"
+  else
+    cp "$file" "$tmp" && printf '%s="%s"\n' "$key" "$val" >> "$tmp" && mv "$tmp" "$file"
+  fi
+}
+
+# launch.env 에서 CCTG_PERMISSION_MODE 값만 추출(따옴표 제거). 없으면 빈 문자열.
+mode_of() {
+  local f="$1/launch.env"
+  [ -f "$f" ] || { printf ''; return; }
+  grep -E '^CCTG_PERMISSION_MODE=' "$f" | tail -1 \
+    | sed -E "s/^CCTG_PERMISSION_MODE=//; s/^\"//; s/\"$//; s/^'//; s/'$//"
+}
+
+# jq 필요 동작 가드
+need_jq() {
+  command -v jq >/dev/null 2>&1 && return 0
+  echo "ERROR: 이 동작은 jq가 필요합니다. 'cctg common edit'로 직접 편집하거나 jq를 설치하세요 (brew install jq)."
+  return 1
+}
+
+# jq in-place 편집
+jq_inplace() {
+  local f="$1"; shift; local tmp
+  tmp="$(mktemp)" || return 1
+  jq "$@" "$f" > "$tmp" && mv "$tmp" "$f"
+}
 
 usage() {
   cat <<EOF
@@ -67,6 +141,10 @@ usage() {
   rename <old> <new> [--keep-dir]
                          이름 변경 (기본: 상태 디렉터리도 함께 이동.
                          --keep-dir: 디렉터리 경로 유지하고 이름만 변경)
+  config <name> [show|edit|mode <m|clear>|args <str>]
+                         봇별 옵션(권한 모드·추가 인자) 보기·수정
+  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]
+                         공통 권한 정책(모든 봇에 적용) 보기·수정
   up   <name|all>        기동
   down <name|all>        정지
   restart <name|all>     재기동 (down + up)
@@ -155,15 +233,23 @@ up_one() {
   [ -f "$sd/.env" ] || { echo "ERROR: 토큰 파일 없음: $sd/.env (먼저 add 하세요)"; return 1; }
   if is_running "$name"; then echo "이미 실행 중: $name"; return 0; fi
 
+  # 공통 설정(권한 정책)을 --settings 로 주입. 없으면 시드.
+  ensure_shared_settings
+  local shared_arg=""
+  [ -f "$SHARED_SETTINGS" ] && shared_arg="--settings $(printf '%q' "$SHARED_SETTINGS")"
+
   # 상태 디렉터리/토큰을 분리 주입하고 caffeinate로 sleep 방지하며 채널 세션 기동.
-  # 봇별 launch.env(있으면)에서 CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
-  # CLAUDE_EXTRA_ARGS 는 \$ 를 이스케이프해 런타임(launch.env source 이후)에 단어 분리되도록 한다.
+  # 봇별 launch.env(있으면)에서 CCTG_PERMISSION_MODE / CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
+  #   - CCTG_PERMISSION_MODE 가 있으면 --permission-mode 로 공통 defaultMode 를 override (없으면 공통값 사용).
+  #   - \$ 이스케이프로 런타임(launch.env source 이후)에 단어 분리되도록 한다.
   local launch="cd $(printf '%q' "$cwd") \
 && export TELEGRAM_STATE_DIR=$(printf '%q' "$sd") \
 && set -a && source $(printf '%q' "$sd/.env") \
 && { [ -f $(printf '%q' "$sd/launch.env") ] && source $(printf '%q' "$sd/launch.env") || true; } \
 && set +a \
-&& caffeinate -is claude --channels $PLUGIN \${CLAUDE_EXTRA_ARGS:-}; exec bash"
+&& MODE_ARG=\"\" \
+&& { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
+&& caffeinate -is claude --channels $PLUGIN $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"
   echo "UP   $name  (cwd=$cwd, state=$sd, tmux=$(sess_of "$name"))"
@@ -216,18 +302,35 @@ case "$CMD" in
 { "dmPolicy": "allowlist", "allowFrom": ["$TGID"], "groups": {}, "pending": {} }
 JSON
 
-    # 5) launch.env 템플릿 (봇별 claude 추가 인자 — 기본 비활성, 주석만)
+    # 4.5) 권한 모드 선택 (선택). 비우면 공통 설정(cctg common 의 defaultMode)을 따른다.
+    printf '권한 모드 [엔터=공통 따름 | %s]: ' "$VALID_MODES"
+    read -r PMODE
+    if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
+      echo "ERROR: 잘못된 권한 모드: '$PMODE' (유효: $VALID_MODES)"; exit 1
+    fi
+
+    # 4.6) 공통 설정 파일 시드 (없으면)
+    ensure_shared_settings
+
+    # 5) launch.env 템플릿 (봇 전용 옵션 — cctg config <name> 로 수정)
     cat > "$SD/launch.env" <<'ENV'
-# 이 봇 전용 claude 추가 인자 (선택). 주석을 풀고 값을 채우면 up 시 적용된다.
-# 예: 모델 지정 / 권한 모드 등
-# CLAUDE_EXTRA_ARGS="--model opus"
+# 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
+
+# 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
+# 비우면 공통 설정(cctg common 의 defaultMode)을 따른다.
+CCTG_PERMISSION_MODE=
+
+# 이 봇 전용 claude 추가 인자(선택). 예: CLAUDE_EXTRA_ARGS="--model opus"
+CLAUDE_EXTRA_ARGS=
 ENV
+    [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
 
     # 6) 레지스트리 등록
     printf '%s | %s | %s\n' "$NAME" "$CWD" "$SD" >> "$REGISTRY"
 
     echo "등록 완료: $NAME → cwd=$CWD, state=$SD"
     echo "  allowlist에 $TGID 시드함 (페어링 불필요)"
+    echo "  권한 모드: ${PMODE:-공통 따름}  (공통: $PROG common / 봇별: $PROG config $NAME)"
     echo "다음: $PROG up $NAME  → 봇에 DM하면 바로 응답합니다."
     ;;
   rm|remove)
@@ -290,6 +393,91 @@ ENV
     echo "이름 변경: $OLD → $NEW"
     echo "다음: $PROG up $NEW"
     ;;
+  config)
+    # 봇별 옵션(launch.env) 보기·수정
+    NAME="${1:?name 필요}"; ACTION="${2:-show}"
+    row="$(lookup "$NAME")" || { echo "ERROR: 등록되지 않은 프로젝트: $NAME"; exit 1; }
+    sd="$(expand "$(cut -f2 <<<"$row")")"
+    LE="$sd/launch.env"
+    # 이 기능 도입 전 등록된 봇엔 키가 없을 수 있으므로 템플릿 보강
+    if [ ! -f "$LE" ]; then
+      cat > "$LE" <<'ENV'
+# 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
+
+# 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
+# 비우면 공통 설정(cctg common 의 defaultMode)을 따른다.
+CCTG_PERMISSION_MODE=
+
+# 이 봇 전용 claude 추가 인자(선택). 예: CLAUDE_EXTRA_ARGS="--model opus"
+CLAUDE_EXTRA_ARGS=
+ENV
+    fi
+    case "$ACTION" in
+      show)
+        echo "# $NAME 봇 옵션 ($LE)"
+        echo "  권한 모드: $(mode_of "$sd" | sed 's/^$/(공통 따름)/')"
+        echo "--- launch.env ---"
+        cat "$LE" ;;
+      edit)
+        "${EDITOR:-vi}" "$LE" ;;
+      mode)
+        M="${3-}"
+        [ -z "$M" ] && { echo "사용법: $PROG config $NAME mode <mode|clear>  (모드: $VALID_MODES)"; exit 1; }
+        if [ "$M" = clear ]; then
+          set_env_kv "$LE" CCTG_PERMISSION_MODE ""
+          echo "$NAME 권한 모드: (공통 따름)"
+        else
+          valid_mode "$M" || { echo "ERROR: 잘못된 모드: '$M' (유효: $VALID_MODES)"; exit 1; }
+          set_env_kv "$LE" CCTG_PERMISSION_MODE "$M"
+          echo "$NAME 권한 모드: $M"
+        fi
+        is_running "$NAME" && echo "  적용하려면: $PROG restart $NAME" ;;
+      args)
+        ARGS="${3-}"
+        set_env_kv "$LE" CLAUDE_EXTRA_ARGS "$ARGS"
+        echo "$NAME CLAUDE_EXTRA_ARGS: ${ARGS:-(비움)}"
+        is_running "$NAME" && echo "  적용하려면: $PROG restart $NAME" ;;
+      *)
+        echo "ERROR: 알 수 없는 config 동작: $ACTION"
+        echo "사용법: $PROG config <name> [show | edit | mode <mode|clear> | args <string>]"
+        exit 1 ;;
+    esac
+    ;;
+  common)
+    # 공통 옵션(모든 봇에 --settings 로 주입되는 권한 정책) 보기·수정
+    ensure_shared_settings
+    ACTION="${1:-show}"
+    case "$ACTION" in
+      show)
+        echo "# 공통 설정 ($SHARED_SETTINGS)"
+        cat "$SHARED_SETTINGS" ;;
+      edit)
+        "${EDITOR:-vi}" "$SHARED_SETTINGS" ;;
+      mode)
+        M="${2-}"
+        [ -z "$M" ] && { echo "사용법: $PROG common mode <mode>  (모드: $VALID_MODES)"; exit 1; }
+        valid_mode "$M" || { echo "ERROR: 잘못된 모드: '$M' (유효: $VALID_MODES)"; exit 1; }
+        need_jq || exit 1
+        jq_inplace "$SHARED_SETTINGS" --arg m "$M" '.permissions.defaultMode=$m' \
+          && echo "공통 defaultMode: $M  (모든 봇 restart 후 적용)" ;;
+      deny|allow)
+        OP="${2:?add|rm 필요}"; RULE="${3:?규칙 필요 (예: Bash(sudo *))}"
+        need_jq || exit 1
+        case "$OP" in
+          add) jq_inplace "$SHARED_SETTINGS" --arg k "$ACTION" --arg r "$RULE" \
+                 '.permissions[$k] = ((.permissions[$k] // []) + [$r] | unique)' \
+                 && echo "$ACTION += $RULE  (모든 봇 restart 후 적용)" ;;
+          rm)  jq_inplace "$SHARED_SETTINGS" --arg k "$ACTION" --arg r "$RULE" \
+                 '.permissions[$k] = ((.permissions[$k] // []) - [$r])' \
+                 && echo "$ACTION -= $RULE  (모든 봇 restart 후 적용)" ;;
+          *)   echo "ERROR: $ACTION 동작은 add|rm 만 지원"; exit 1 ;;
+        esac ;;
+      *)
+        echo "ERROR: 알 수 없는 common 동작: $ACTION"
+        echo "사용법: $PROG common [show | edit | mode <mode> | deny add|rm <rule> | allow add|rm <rule>]"
+        exit 1 ;;
+    esac
+    ;;
   up)
     TARGET="${1:?name|all 필요}"
     if [ "$TARGET" = "all" ]; then
@@ -339,7 +527,9 @@ ENV
       else
         printf '  [stopped] %s\n' "$n"
       fi
+      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="공통"
       printf '            cwd=%s  state=%s\n' "$cwd" "$sd"
+      printf '            권한모드=%s\n' "$pm"
     done < <(all_names)
     [ "$found" = 0 ] && echo "  (등록된 프로젝트 봇 없음)"
     ;;
@@ -404,6 +594,11 @@ ENV
         echo "  MISS $d (필수)"
       fi
     done
+    if command -v jq >/dev/null 2>&1; then
+      echo "  ok   jq ($(command -v jq))"
+    else
+      echo "  warn jq 없음 (선택 — 'common mode/deny/allow'에 필요. 없어도 'common edit' 가능)"
+    fi
     echo "--- PATH ---"
     case ":$PATH:" in
       *":$HOME/.local/bin:"*) echo "  ok   ~/.local/bin 이 PATH에 있음" ;;
@@ -414,6 +609,18 @@ ENV
     cnt=0
     while IFS= read -r n; do [ -n "$n" ] && cnt=$((cnt+1)); done < <(all_names)
     echo "  등록된 프로젝트 봇: $cnt 개"
+    echo "--- 공통 설정(권한 정책) ---"
+    echo "  파일: $SHARED_SETTINGS"
+    if [ -f "$SHARED_SETTINGS" ]; then
+      if command -v jq >/dev/null 2>&1; then
+        echo "  defaultMode: $(jq -r '.permissions.defaultMode // "default"' "$SHARED_SETTINGS" 2>/dev/null)"
+        echo "  deny: $(jq -r '(.permissions.deny // []) | length' "$SHARED_SETTINGS" 2>/dev/null) 개 / allow: $(jq -r '(.permissions.allow // []) | length' "$SHARED_SETTINGS" 2>/dev/null) 개"
+      else
+        echo "  (jq 없음 — 'cctg common show' 로 확인)"
+      fi
+    else
+      echo "  (아직 없음 — 첫 add/up 시 생성)"
+    fi
     echo "  (telegram 플러그인은 전역 설치 필요: /plugin install telegram@claude-plugins-official)"
     ;;
   version|--version|-v)
