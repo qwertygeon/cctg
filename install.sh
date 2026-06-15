@@ -50,8 +50,10 @@ err() { printf '\033[31mERROR:\033[0m %s\n' "$1" >&2; }
 ok()  { printf '\033[32m  ok\033[0m  %s\n' "$1"; }
 warn(){ printf '\033[33m  warn\033[0m %s\n' "$1"; }
 
-# 0) 원본 스크립트 존재 확인
+# 0) 원본 스크립트·VERSION 확인
 [ -f "$SRC" ] || { err "cc-tg.sh 를 찾을 수 없습니다: $SRC"; exit 1; }
+VER="$(head -n1 "$REPO_DIR/VERSION" 2>/dev/null || true)"
+[ -n "$VER" ] || { err "VERSION 파일을 읽을 수 없습니다: $REPO_DIR/VERSION"; exit 1; }
 
 # 1) 의존성 점검 (claude/tmux 는 필수, caffeinate 는 macOS 전용)
 echo "의존성 점검:"
@@ -111,11 +113,12 @@ mkdir -p "$CONFIG_DIR"
 {
   printf 'repo=%s\n'     "$REPO_DIR"
   printf 'mode=%s\n'     "$MODE"
+  printf 'version=%s\n'  "$VER"
   printf 'bindir=%s\n'   "$BINDIR"
   printf 'bashcomp=%s\n' "$BASHCOMP"
   printf 'zshcomp=%s\n'  "$ZSHCOMP"
 } > "$MANIFEST"
-ok "매니페스트 기록: $MANIFEST"
+ok "매니페스트 기록: $MANIFEST (v$VER)"
 
 # 4) PATH 점검 및 안내
 case ":$PATH:" in
@@ -133,5 +136,5 @@ case ":$PATH:" in
 esac
 
 echo
-echo "설치 완료($MODE). 새 터미널을 열거나 셸을 다시 로드한 뒤 확인하세요:"
+echo "설치 완료(cctg v$VER, $MODE). 새 터미널을 열거나 셸을 다시 로드한 뒤 확인하세요:"
 echo "    cctg doctor"

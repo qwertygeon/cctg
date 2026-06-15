@@ -19,6 +19,7 @@
 ```
 레포/
 ├── cc-tg.sh           # 런처 본체 (단일 자립)
+├── VERSION            # 패키지 버전 SoT
 ├── install.sh         # 설치 (copy 기본 / --dev 심볼릭) + 자동완성 설치 + 매니페스트 기록
 ├── uninstall.sh       # 제거 (bin + 자동완성)
 └── completions/
@@ -26,7 +27,9 @@
     └── _cctg          # zsh 자동완성
 ```
 
-설치 시 `install.sh` 는 매니페스트(`~/.config/cctg/install.conf`)에 `repo` / `mode` / `bindir` / `bashcomp` / `zshcomp` 를 기록한다.
+설치 시 `install.sh` 는 매니페스트(`~/.config/cctg/install.conf`)에 `repo` / `mode` / `version` / `bindir` / `bashcomp` / `zshcomp` 를 기록한다.
+
+버전 결정 순서: (1) 스크립트 옆 `VERSION`(레포 직접 실행·`--dev` 심볼릭) → (2) 매니페스트 `version=`(copy 설치는 `VERSION` 이 옆에 없으므로) → (3) 임베디드 폴백. `cctg version` 과 `install.sh` / `cctg update` 가 이 값을 표시한다.
 
 - `cctg update` 는 매니페스트로 레포 위치와 설치 모드를 찾아 `git pull` 후 재설치한다 (copy 모드는 레포와 분리돼 있어 매니페스트 없이는 출처를 알 수 없기 때문).
 - `uninstall.sh` 는 매니페스트의 `bashcomp` / `zshcomp` 경로를 보고 자동완성 파일까지 정리한다.

@@ -168,3 +168,6 @@ cctg update
 ## 더 보기
 
 - [패키징 구조와 향후 승격 경로](docs/packaging.md)
+- [향후 작업 후보 (TODO)](docs/TODO.md)
+
+버전은 저장소 루트의 `VERSION` 파일이 기준(SoT)이다. `cctg version` 으로 확인하고, `cctg update` 는 업데이트 전후 버전을 함께 표시한다.
