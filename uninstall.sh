@@ -39,4 +39,21 @@ if [ -f "$MANIFEST" ]; then
     p="$(awk -F= -v k="$key" '$1==k{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
     [ -n "$p" ] && [ -f "$p" ] && rm -f "$p" && echo "제거됨(자동완성): $p"
   done
+
+  # 셸 rc 의 cctg 관리 블록 제거 (마커 사이만 삭제, 나머지는 보존)
+  MARK_BEGIN="# >>> cctg >>>"
+  MARK_END="# <<< cctg <<<"
+  rcs="$(awk -F= '$1=="shellrc"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+  if [ -n "$rcs" ]; then
+    IFS=','
+    for f in $rcs; do
+      [ -f "$f" ] || continue
+      if grep -qF "$MARK_BEGIN" "$f"; then
+        tmp="$(mktemp)"
+        awk -v b="$MARK_BEGIN" -v e="$MARK_END" 'BEGIN{s=0} $0==b{s=1;next} s&&$0==e{s=0;next} !s{print}' "$f" > "$tmp" && mv "$tmp" "$f"
+        echo "제거됨(셸 블록): $f"
+      fi
+    done
+    unset IFS
+  fi
 fi
