@@ -7,6 +7,7 @@ _cctg() {
   cmds=(
     'add:프로젝트 봇 등록'
     'rm:등록 해제'
+    'rename:이름 변경'
     'up:기동'
     'down:정지'
     'restart:재기동'
@@ -33,6 +34,9 @@ _cctg() {
 
   case "${words[2]}" in
     rm|logs|attach)
+      (( CURRENT == 3 )) && _cctg_names ;;
+    rename)
+      # 3번째 인자(old)만 보완. 4번째(new name)는 자유 입력.
       (( CURRENT == 3 )) && _cctg_names ;;
     up|down|restart)
       if (( CURRENT == 3 )); then
