@@ -23,6 +23,7 @@ It never touches the global bot (`~/.claude/channels/telegram/`). Each project b
   - [2. Start / stop / restart a bot (up / down / restart)](#2-start--stop--restart-a-bot-up--down--restart)
   - [3. Status / logs (status / logs / attach)](#3-status--logs-status--logs--attach)
   - [4. Diagnostics (doctor)](#4-diagnostics-doctor)
+- [Language](#language)
 - [Permissions & options (config / common)](#permissions--options-config--common)
 - [Updating](#updating)
 - [How it works](#how-it-works)
@@ -87,12 +88,13 @@ cctg <command> [args]
   config <name> [...]   common [...]          (permissions/options — see "Permissions & options")
   up <name|all>         down <name|all>       restart <name|all>
   status                logs <name> [N]       attach <name>
+  lang [show|en|ko|clear]                     (CLI output language — see "Language")
   doctor                update                version           help
 ```
 
 > Bot names may only contain letters, digits, `_`, and `-` (to avoid clashing with tmux session names and registry separators). `telegram` is reserved for the global bot and cannot be used.
 
-> **Note on sample output** — The CLI currently prints its status/diagnostic messages in Korean. The example output blocks below are shown **verbatim** (real program output), with paths/IDs replaced by placeholders.
+> **Sample output language** — The examples below show the **English** output. The CLI is bilingual (English/Korean); switch any time with `cctg lang` (see [Language](#language)). Paths/IDs are placeholders.
 
 ### 1. Register / remove a bot (add / rm)
 
@@ -111,11 +113,11 @@ Example session (token input is masked):
 
 ```console
 $ cctg add myproject ~/work/myproject
-봇 토큰 입력 (@BotFather 발급, 새 봇이어야 함): ********
-본인 텔레그램 숫자 ID (모르면 @userinfobot 에 DM): 123456789
-권한 모드 [엔터=공통 따름 | acceptEdits auto bypassPermissions default dontAsk plan]:
-등록 완료: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
-  allowlist에 123456789 시드함 (페어링 불필요)
+Bot token (issued by @BotFather, must be a NEW bot): ********
+Your numeric Telegram ID (DM @userinfobot if unknown): 123456789
+Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
+  seeded 123456789 into the allowlist (no pairing needed)
 ```
 
 By default `rm` **keeps** the state directory containing the token and allowlist (reusable on re-registration). A running bot must be stopped with `down` first. `--purge` also deletes the state directory, but for safety it never touches the global bot directory or paths outside `CHANNELS_DIR`.
@@ -160,17 +162,17 @@ cctg attach myproject    # attach to the tmux session for live view (detach: Ctr
 
 ```console
 $ cctg status
-전역 봇: /Users/you/.claude/channels/telegram (이 스크립트는 관리하지 않음)
---- 프로젝트 봇 ---
+Global bot: /Users/you/.claude/channels/telegram (not managed by this script)
+--- project bots ---
   [RUNNING] myproject  up 2h13m  (tmux=cctg-myproject)
             cwd=/Users/you/work/myproject  state=/Users/you/.claude/channels/myproject
-            권한모드=공통
+            mode=shared
   [stopped] sandbox
             cwd=/Users/you/work/sandbox  state=/Users/you/.claude/channels/sandbox
-            권한모드=bypassPermissions
-  [BROKEN ] oldbot  (cwd없음, 토큰없음)
+            mode=bypassPermissions
+  [BROKEN ] oldbot  (no-cwd, no-token)
             cwd=/Users/you/work/oldbot  state=/Users/you/.claude/channels/oldbot
-            권한모드=공통
+            mode=shared
 ```
 
 ### 4. Diagnostics (doctor)
@@ -182,22 +184,42 @@ cctg doctor              # check dependencies (tmux/claude/caffeinate/jq), PATH,
 ```console
 $ cctg doctor
 cctg doctor (v0.1.0)
---- 의존성 ---
+--- dependencies ---
   ok   tmux (/opt/homebrew/bin/tmux)
   ok   claude (/Users/you/.local/bin/claude)
   ok   caffeinate (/usr/bin/caffeinate)
   ok   jq (/opt/homebrew/bin/jq)
 --- PATH ---
-  ok   ~/.local/bin 이 PATH에 있음
---- 레지스트리 ---
-  파일: /Users/you/.claude/channels/projects.conf
-  등록된 프로젝트 봇: 2 개
---- 공통 설정(권한 정책) ---
-  파일: /Users/you/.claude/channels/cctg-shared.settings.json
+  ok   ~/.local/bin is on PATH
+--- registry ---
+  file: /Users/you/.claude/channels/projects.conf
+  registered project bots: 2
+--- shared settings (permission policy) ---
+  file: /Users/you/.claude/channels/cctg-shared.settings.json
   defaultMode: bypassPermissions
-  deny: 5 개 / allow: 0 개
-  (telegram 플러그인은 전역 설치 필요: /plugin install telegram@claude-plugins-official)
+  deny: 5 / allow: 0
+  (the telegram plugin must be installed globally: /plugin install telegram@claude-plugins-official)
 ```
+
+## Language
+
+The CLI prints its messages in **English** or **Korean**. The language is resolved in this order (first wins):
+
+1. `CCTG_LANG` environment variable — a one-off override, e.g. `CCTG_LANG=ko cctg status`
+2. The `lang` value in `~/.config/cctg/config` (set by `cctg lang`)
+3. Locale auto-detection (`$LC_ALL`/`$LANG`; `ko*` → Korean, otherwise English)
+4. Default: English
+
+```bash
+cctg lang            # show the current language and where it came from
+cctg lang ko         # switch to Korean permanently (writes ~/.config/cctg/config)
+cctg lang en         # switch to English permanently
+cctg lang clear      # remove the preference (fall back to auto-detection)
+```
+
+Pick the initial language at install time with `./install.sh --lang en|ko` (without it, the installer seeds from your locale). The language preference lives in `~/.config/cctg/config`, separate from the install manifest, so `cctg update` preserves it.
+
+> Message catalogs ship as `messages/en.sh` and `messages/ko.sh` next to the launcher. Some text remains language-neutral for now: the generated `launch.env` comments, missing-required-argument errors, and zsh completion descriptions.
 
 ## Permissions & options (config / common)
 

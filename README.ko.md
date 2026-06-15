@@ -23,6 +23,7 @@
   - [2. 봇 기동·정지·재기동 (up / down / restart)](#2-봇-기동정지재기동-up--down--restart)
   - [3. 상태 확인·로그 (status / logs / attach)](#3-상태-확인로그-status--logs--attach)
   - [4. 진단 (doctor)](#4-진단-doctor)
+- [언어](#언어)
 - [프로젝트별 claude 옵션](#프로젝트별-claude-옵션)
 - [업데이트](#업데이트)
 - [동작 방식](#동작-방식)
@@ -87,6 +88,7 @@ cctg <command> [args]
   config <name> [...]   common [...]          (권한·옵션 — 아래 「권한·옵션」 절)
   up <name|all>         down <name|all>       restart <name|all>
   status                logs <name> [N]       attach <name>
+  lang [show|en|ko|clear]                     (CLI 출력 언어 — 아래 「언어」 절)
   doctor                update                version           help
 ```
 
@@ -196,6 +198,26 @@ cctg doctor (v0.1.0)
   deny: 5 개 / allow: 0 개
   (telegram 플러그인은 전역 설치 필요: /plugin install telegram@claude-plugins-official)
 ```
+
+## 언어
+
+CLI 출력은 **영문** 또는 **한글**로 나온다. 언어는 다음 순서로 결정된다(위가 우선).
+
+1. `CCTG_LANG` 환경변수 — 1회성 오버라이드. 예: `CCTG_LANG=en cctg status`
+2. `~/.config/cctg/config` 의 `lang` 값 (`cctg lang` 으로 설정)
+3. 로케일 자동 감지(`$LC_ALL`/`$LANG`; `ko*` → 한글, 그 외 영문)
+4. 기본값: 영문
+
+```bash
+cctg lang            # 현재 언어와 출처 표시
+cctg lang ko         # 한글로 영구 전환 (~/.config/cctg/config 기록)
+cctg lang en         # 영문으로 영구 전환
+cctg lang clear      # 설정 제거 (자동 감지로 회귀)
+```
+
+설치 시 초기 언어는 `./install.sh --lang en|ko` 로 고를 수 있다(미지정 시 로케일로 시드). 언어 설정은 설치 매니페스트와 분리된 `~/.config/cctg/config` 에 저장되므로 `cctg update` 후에도 보존된다.
+
+> 메시지 카탈로그는 런처 옆 `messages/en.sh`·`messages/ko.sh` 로 배포된다. 일부 텍스트는 현재 언어 중립으로 둔다: 생성되는 `launch.env` 주석, 필수 인자 누락 에러, zsh 자동완성 설명.
 
 ## 권한·옵션 (config / common)
 
