@@ -95,12 +95,15 @@ cctg_lang() {
 _load_messages() {
   local lang base sel
   if base="$(find_companion messages/en.sh)"; then
+    # 런타임 결정 경로 — 정적 추적 불가
+    # shellcheck source=/dev/null
     . "$base"
   else
     printf 'cctg: warning: message catalog not found (messages/en.sh); output may show raw keys.\n' >&2
   fi
   lang="$(cctg_lang)"
   if [ "$lang" != "en" ]; then
+    # shellcheck source=/dev/null
     sel="$(find_companion "messages/$lang.sh")" && . "$sel"
   fi
 }
@@ -306,7 +309,8 @@ up_one() {
   # 봇별 launch.env(있으면)에서 CCTG_PERMISSION_MODE / CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
   #   - CCTG_PERMISSION_MODE 가 있으면 --permission-mode 로 공통 defaultMode 를 override (없으면 공통값 사용).
   #   - \$ 이스케이프로 런타임(launch.env source 이후)에 단어 분리되도록 한다.
-  local launch="cd $(printf '%q' "$cwd") \
+  local launch
+  launch="cd $(printf '%q' "$cwd") \
 && export TELEGRAM_STATE_DIR=$(printf '%q' "$sd") \
 && set -a && source $(printf '%q' "$sd/.env") \
 && { [ -f $(printf '%q' "$sd/launch.env") ] && source $(printf '%q' "$sd/launch.env") || true; } \
@@ -615,7 +619,7 @@ cmd_lang() {
       show)
         local l src
         if [ -n "${CCTG_LANG:-}" ]; then
-          l="$CCTG_LANG"; src=env
+          l="$CCTG_LANG"; src="env"
         elif [ -n "$(conf_get "$CCTG_CONFIG" lang)" ]; then
           l="$(conf_get "$CCTG_CONFIG" lang)"; src=config
         elif [ -n "${LC_ALL:-${LANG:-}}" ]; then

@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- GitHub Actions CI (`.github/workflows/ci.yml`): `bash -n` syntax check, `shellcheck -S warning` on logic scripts, and the `scripts/check-i18n-keys.sh` key-parity lint on every push/PR to `main`. Status badge added to both READMEs.
+- `docs/RELEASING.md` documenting the version-bump → tag → GitHub Release procedure (VERSION is the SoT, tags are `v{VERSION}`).
+
+### Fixed
+- `cc-tg.sh` is now `shellcheck -S warning` clean (SC1090 dynamic-source directives, SC2155 declare-before-assign, SC2209 string-quote).
+
 ## [0.1.1] - 2026-06-16
 
 ### Added

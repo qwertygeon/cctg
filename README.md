@@ -2,6 +2,8 @@
 
 # CCTG — Claude Code Tmux Gateway
 
+[![CI](https://github.com/qwertygeon/cctg/actions/workflows/ci.yml/badge.svg)](https://github.com/qwertygeon/cctg/actions/workflows/ci.yml)
+
 **CCTG** (Claude Code Tmux Gateway) is a launcher for macOS that ties together **tmux + Claude Code + the Telegram gateway**, making it easy to spin up and manage per-project Claude Code Telegram channel bots. The command is `cctg`.
 
 It never touches the global bot (`~/.claude/channels/telegram/`). Each project bot has its own state directory, token, and working directory, and runs in an isolated tmux session.

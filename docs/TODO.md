@@ -1,34 +1,28 @@
 # cctg TODO
 
 > 향후 작업 후보. 우선순위·근거를 함께 기록한다. 착수 시 해당 항목을 갱신한다.
+> 완료 항목의 상세는 `CHANGELOG.md` 가 SoT 이며, 여기에는 후속 작업의 전제로서만 짧게 남긴다.
 
 ## 목차
 
 - [구조 / 확장성](#구조--확장성)
-  - [거대 case문 → cmd_*() 함수 리팩터](#거대-case문--cmd_-함수-리팩터)
-  - [libexec 승격](#libexec-승격)
+  - [lib/ 분리 (libexec 본래 의도)](#lib-분리-libexec-본래-의도)
 - [기능 아이디어](#기능-아이디어)
   - [봇 로그 파일 영속화](#봇-로그-파일-영속화)
   - [add 비대화형 플래그](#add-비대화형-플래그)
   - [상태/관찰 추가 개선](#상태관찰-추가-개선)
-- [품질 / 릴리스](#품질--릴리스)
-  - [shellcheck CI](#shellcheck-ci)
-  - [CHANGELOG 및 버전 태깅](#changelog-및-버전-태깅)
+- [완료됨 (전제·이력)](#완료됨-전제이력)
 
 ## 구조 / 확장성
 
-### 거대 case문 → cmd_*() 함수 리팩터
+### lib/ 분리 (libexec 본래 의도)
 
-현재 `cc-tg.sh` 는 단일 `case "$CMD"` 디스패처에 모든 서브커맨드 본문이 인라인되어 있다. 명령이 늘면서(현재 약 13개) 점점 비대해진다.
+copy 설치의 libexec 레이아웃(`~/.local/libexec/cctg/` 에 `cc-tg.sh`·`VERSION`·`messages/`)과 `cmd_*()` 함수 분리는 이미 완료됐다([완료됨](#완료됨-전제이력) 참조). 남은 것은 `cc-tg.sh` 본체를 런타임 source 하는 `lib/*.sh` 모듈로 쪼개는 단계다.
 
-- **무엇**: 각 서브커맨드를 `cmd_add()` / `cmd_rm()` / `cmd_up()` … 함수로 분리하고, 디스패처는 `case "$CMD" in add) cmd_add "$@";; …` 로 얇게 만든다.
-- **이점**: 명령별 테스트 용이, 가독성, 추후 `lib/` 분리의 전제.
-- **주의**: 동작 변화 없는 내부 정리(churn)이므로 사용자 가치는 간접적. 회귀 위험은 기존 샌드박스 테스트 스위트로 방어 가능.
-- **착수 조건(권장)**: 명령이 더 늘거나, 아래 libexec 승격(=`lib/` 분리)과 함께 진행하면 churn을 한 번에 흡수할 수 있다.
-
-### libexec 승격
-
-`cc-tg.sh` 가 런타임에 source 하는 동반 파일(`lib/*.sh`)이 생기면 `~/.local/libexec/cctg/` 구조로 승격한다. 상세 트리거·레이아웃은 [packaging.md](packaging.md) 참조.
+- **무엇**: 공통 헬퍼(conf_*, set_env_kv, registry 조작 등)와 `cmd_*()` 군을 `lib/*.sh` 로 분리하고, `cc-tg.sh` 는 source + 디스패처만 남긴다. libexec 레이아웃은 이미 동반 파일을 같은 디렉터리에 두므로 `lib/` 도 그대로 수용한다.
+- **이점**: 파일별 책임 분리, 명령별 테스트 용이.
+- **착수 조건(권장)**: 명령 수가 더 늘거나 단일 파일(현재 ~730줄)이 유지보수에 부담이 될 때. **현재 규모에서는 단일 파일이 더 단순하므로 보류.**
+- **주의**: source 경로 해석(`SCRIPT_DIR`)이 copy/dev 양쪽에서 동작하도록 유지. shellcheck 의 SC1090(비상수 source)은 `# shellcheck source=` 디렉티브로 처리.
 
 ## 기능 아이디어
 
@@ -53,15 +47,11 @@
 - `status --json` 등 기계 판독 출력(다른 도구 연동용).
 - 깨진 봇 자동 복구 힌트(예: BROKEN 사유별 다음 조치 안내).
 
-## 품질 / 릴리스
+## 완료됨 (전제·이력)
 
-### shellcheck CI
+후속 작업의 전제가 되는 완료 항목만 짧게 남긴다. 상세는 `CHANGELOG.md`.
 
-- **무엇**: `shellcheck` 를 CI(GitHub Actions 등)에 추가해 `*.sh` 정적 검사를 자동화. 로컬 pre-commit 훅도 선택.
-- **이점**: 따옴표 누락·미사용 변수 등 셸 스크립트 흔한 결함을 조기 차단.
-
-### CHANGELOG 및 버전 태깅
-
-- **무엇**: `VERSION` 파일(SoT) 변경 시 `CHANGELOG.md` 갱신 + `git tag vX.Y.Z` 릴리스 흐름 정립.
-- **현재 상태**: `VERSION` 파일 + 매니페스트 `version=` + `cctg version` / `cctg update` 의 버전 표시는 구현됨. CHANGELOG·태깅 규약은 미정.
-- **이점**: 사용자가 `cctg update` 후 무엇이 바뀌었는지 추적 가능.
+- **`cmd_*()` 함수 분리** — 단일 `case` 디스패처에 인라인돼 있던 서브커맨드 본문을 16개 `cmd_*()` 함수로 분리. 위 [lib/ 분리](#lib-분리-libexec-본래-의도)의 전제.
+- **libexec 승격 (레이아웃)** — copy 설치가 패키지를 `~/.local/libexec/cctg/` 로 복사하고 `~/.local/bin/cctg` 심볼릭. 동반 파일(`VERSION`·`messages/`)이 런처 옆에 위치.
+- **CI 게이트** — `.github/workflows/ci.yml` 가 push/PR(main)에서 `bash -n` + `shellcheck -S warning`(로직 스크립트) + `scripts/check-i18n-keys.sh`(i18n 키 패리티)를 자동 실행. PR 템플릿의 수동 shellcheck 체크를 자동화로 승격.
+- **CHANGELOG·버전 태깅 규약** — `docs/RELEASING.md` 에 버전 올리기·태그·GitHub Release 절차를 정립. `VERSION` 파일이 SoT, 태그는 `v{VERSION}`.
