@@ -105,13 +105,13 @@ cctg restart all        # 전체 재기동
 ### 3. 상태 확인·로그 (status / logs / attach)
 
 ```bash
-cctg status              # 등록/실행(RUNNING/stopped) 상태 목록
+cctg status              # 봇별 상태(RUNNING+업타임 / stopped / BROKEN) + cwd·state 경로
 cctg logs myproject      # 최근 로그 50줄 출력 (attach 없이)
 cctg logs myproject 200  # 최근 200줄
 cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리: Ctrl-b d)
 ```
 
-`logs` 와 `attach` 는 봇이 정지 상태면 친절한 안내와 함께 중단한다.
+`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우다. `logs` 와 `attach` 는 봇이 정지 상태면 친절한 안내와 함께 중단한다.
 
 ### 4. 진단 (doctor)
 
