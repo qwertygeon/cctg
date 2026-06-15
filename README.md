@@ -1,229 +1,237 @@
+**English** | [한국어](README.ko.md)
+
 # CCTG — Claude Code Tmux Gateway
 
-**CCTG**(Claude Code Tmux Gateway)는 macOS에서 **tmux + Claude Code + Telegram 게이트웨이**를 묶어, 프로젝트별 Claude Code 텔레그램 채널 봇을 쉽게 띄우고 관리하는 런처다. 명령은 `cctg` 다.
+**CCTG** (Claude Code Tmux Gateway) is a launcher for macOS that ties together **tmux + Claude Code + the Telegram gateway**, making it easy to spin up and manage per-project Claude Code Telegram channel bots. The command is `cctg`.
 
-전역 봇(`~/.claude/channels/telegram/`)은 건드리지 않는다. 프로젝트 봇은 각자 상태 디렉터리·토큰·작업 디렉터리를 갖고 격리된 tmux 세션에서 돈다.
+It never touches the global bot (`~/.claude/channels/telegram/`). Each project bot has its own state directory, token, and working directory, and runs in an isolated tmux session.
 
-## 목차
+> **Supported channel scope** — CCTG's state directory follows Claude Code's **channels** (`~/.claude/channels/`) layout. **Telegram is currently the only connectable gateway.** Other gateways that Claude Code offers through its channels feature (e.g. Slack, Discord) are **planned to be fully supported later**. Until then, `cctg` commands such as `add`/`up` target Telegram bots only.
 
-- [요구 사항](#요구-사항)
-- [설치](#설치)
-  - [설치 모드](#설치-모드)
-  - [PATH 설정](#path-설정)
-- [사용법](#사용법)
-  - [1. 봇 등록·해제 (add / rm)](#1-봇-등록해제-add--rm)
-  - [2. 봇 기동·정지·재기동 (up / down / restart)](#2-봇-기동정지재기동-up--down--restart)
-  - [3. 상태 확인·로그 (status / logs / attach)](#3-상태-확인로그-status--logs--attach)
-  - [4. 진단 (doctor)](#4-진단-doctor)
-- [프로젝트별 claude 옵션](#프로젝트별-claude-옵션)
-- [업데이트](#업데이트)
-- [동작 방식](#동작-방식)
-- [제거](#제거)
-- [더 보기](#더-보기)
+> ⚠️ **Privacy — data flow notice** — CCTG relays messages received over Telegram to a Claude Code process running in the bot's working directory, and Claude Code **sends that content to the Anthropic API** for processing. In other words, the conversations, code, and file contents exchanged with the bot pass through a third party (Anthropic) and through Telegram's infrastructure. Keep this in mind before attaching a bot to a repository that handles sensitive data, and strictly limit who can reach the bot via the `access.json` allowlist (yourself, or trusted users only).
 
-## 요구 사항
+> ℹ️ **Unofficial tool** — CCTG is an **unofficial, third-party tool** not built or endorsed by Anthropic. "Claude Code" and "Claude" are trademarks of Anthropic; this project is not affiliated with Anthropic.
 
-| 의존성 | 용도 | 비고 |
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+  - [Install modes](#install-modes)
+  - [PATH setup](#path-setup)
+- [Usage](#usage)
+  - [1. Register / remove a bot (add / rm)](#1-register--remove-a-bot-add--rm)
+  - [2. Start / stop / restart a bot (up / down / restart)](#2-start--stop--restart-a-bot-up--down--restart)
+  - [3. Status / logs (status / logs / attach)](#3-status--logs-status--logs--attach)
+  - [4. Diagnostics (doctor)](#4-diagnostics-doctor)
+- [Permissions & options (config / common)](#permissions--options-config--common)
+- [Updating](#updating)
+- [How it works](#how-it-works)
+- [Uninstall](#uninstall)
+- [Further reading](#further-reading)
+
+## Requirements
+
+| Dependency | Purpose | Notes |
 |---|---|---|
-| `claude` | Claude Code CLI | 필수 |
-| `tmux` | 봇을 detached 세션으로 구동 | 필수 |
-| `caffeinate` | 구동 중 시스템 sleep 방지 | macOS 기본 제공 |
-| `jq` | `cctg common` 의 구조화된 권한 정책 수정 | 선택(없으면 `common edit` 로 직접 편집) |
-| telegram 플러그인 | Telegram 채널 연동 | 전역 설치 필요: `/plugin install telegram@claude-plugins-official` |
+| `claude` | Claude Code CLI | Required |
+| `tmux` | Runs the bot in a detached session | Required |
+| `caffeinate` | Prevents system sleep while running | Built into macOS |
+| `jq` | Structured edits of `cctg common` permission policy | Optional (without it, use `common edit` to edit directly) |
+| telegram plugin | Telegram channel integration | Must be installed globally: `/plugin install telegram@claude-plugins-official` |
 
-## 설치
+## Installation
 
 ```bash
-git clone <repo-url> cctg
+git clone https://github.com/qwertygeon/cctg.git
 cd cctg
 ./install.sh
 ```
 
-`install.sh` 는 의존성을 점검하고 `cc-tg.sh` 를 `~/.local/bin/cctg` 로 배치한다. 재실행해도 안전하다(idempotent).
+`install.sh` checks dependencies and places `cc-tg.sh` at `~/.local/bin/cctg`. It is safe to re-run (idempotent).
 
-### 설치 모드
+### Install modes
 
-| 명령 | 동작 | 용도 |
+| Command | Behavior | Use case |
 |---|---|---|
-| `./install.sh` | `cc-tg.sh` 를 `~/.local/bin/cctg` 로 **복사** | 릴리스. 레포를 지우거나 옮겨도 동작. 업데이트는 `git pull` 후 재설치 |
-| `./install.sh --dev` | `~/.local/bin/cctg` 를 레포의 `cc-tg.sh` 로 **심볼릭 링크** | 개발. 레포 수정 즉시 반영 |
+| `./install.sh` | **Copies** `cc-tg.sh` to `~/.local/bin/cctg` | Release. Works even if you delete or move the repo. Update with `git pull` then re-install |
+| `./install.sh --dev` | **Symlinks** `~/.local/bin/cctg` to the repo's `cc-tg.sh` | Development. Repo edits take effect immediately |
 
-설치 시 다음이 자동 처리된다.
+The installer also handles the following automatically:
 
-- **셸 자동완성(bash/zsh)** 설치 — `--no-completions` 로 생략
-- **셸 rc 자동 설정** — 현재 셸의 rc(`~/.zshrc` 또는 `~/.bashrc`·`~/.bash_profile`)에 PATH·자동완성 활성화를 담은 **관리 블록**(`# >>> cctg >>>` ~ `# <<< cctg <<<`)을 멱등하게 추가한다. 최초 1회 `.cctg-bak` 백업을 남기고, 재실행해도 중복되지 않으며, `uninstall.sh` 가 블록만 깔끔히 제거한다. `--no-shell-setup` 으로 생략 가능.
+- **Shell completions (bash/zsh)** — skip with `--no-completions`
+- **Shell rc auto-setup** — adds an idempotent **managed block** (`# >>> cctg >>>` ... `# <<< cctg <<<`) enabling PATH and completions to the current shell's rc (`~/.zshrc`, or `~/.bashrc`/`~/.bash_profile`). It leaves a one-time `.cctg-bak` backup, never duplicates on re-run, and `uninstall.sh` cleanly removes just the block. Skip with `--no-shell-setup`.
 
-적용하려면 새 터미널을 열거나 `source ~/.zshrc`(해당 rc) 한다. 설치 위치는 `BINDIR` 로 바꿀 수 있다: `BINDIR=~/bin ./install.sh`
+To apply, open a new terminal or `source ~/.zshrc` (the relevant rc). Change the install location with `BINDIR`: `BINDIR=~/bin ./install.sh`
 
-### PATH 설정
+### PATH setup
 
-`~/.local/bin` 이 PATH에 없으면 `install.sh` 가 셸에 맞는 추가 명령을 안내한다. 예 (zsh):
+If `~/.local/bin` is not on your PATH, `install.sh` prints the right command for your shell. Example (zsh):
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
 
-설치 후 확인:
+Verify after installing:
 
 ```bash
 cctg status
 ```
 
-## 사용법
+## Usage
 
 ```
 cctg <command> [args]
   add <name> <cwd>      rm <name> [--purge]   rename <old> <new> [--keep-dir]
-  config <name> [...]   common [...]          (권한·옵션 — 아래 「권한·옵션」 절)
+  config <name> [...]   common [...]          (permissions/options — see "Permissions & options")
   up <name|all>         down <name|all>       restart <name|all>
   status                logs <name> [N]       attach <name>
   doctor                update                version           help
 ```
 
-> 봇 이름은 영문/숫자/`_`/`-` 만 허용한다(tmux 세션명·레지스트리 구분자 충돌 방지). `telegram` 은 전역 봇 예약 이름이라 쓸 수 없다.
+> Bot names may only contain letters, digits, `_`, and `-` (to avoid clashing with tmux session names and registry separators). `telegram` is reserved for the global bot and cannot be used.
 
-### 1. 봇 등록·해제 (add / rm)
-
-```bash
-cctg add myproject ~/work/myproject   # 등록
-cctg rm  myproject                    # 등록 해제 (상태 디렉터리 보존)
-cctg rm  myproject --purge            # 등록 해제 + 상태 디렉터리 삭제
-```
-
-`add` 는 대화형으로 다음을 입력받아 상태 디렉터리(`~/.claude/channels/<name>/`)를 스캐폴딩한다.
-
-- **봇 토큰** — [@BotFather](https://t.me/BotFather)에서 발급한 **새 봇** 토큰 (가려서 입력, `.env` 600 권한으로 저장)
-- **본인 Telegram 숫자 ID** — 모르면 [@userinfobot](https://t.me/userinfobot)에 DM. 입력한 ID로 `access.json` allowlist를 자동 생성하므로 별도 페어링이 필요 없다.
-
-`rm` 은 기본적으로 토큰·allowlist가 든 상태 디렉터리를 **보존**한다(재등록 시 재사용 가능). 실행 중인 봇은 먼저 `down` 해야 한다. `--purge` 는 상태 디렉터리까지 삭제하되, 전역 봇 디렉터리나 `CHANNELS_DIR` 밖 경로는 안전을 위해 건드리지 않는다.
-
-### 1-1. 이름 변경 (rename)
+### 1. Register / remove a bot (add / rm)
 
 ```bash
-cctg rename myproject newname              # 이름 변경 + 상태 디렉터리도 함께 이동
-cctg rename myproject newname --keep-dir   # 이름만 변경, 디렉터리 경로 유지
+cctg add myproject ~/work/myproject   # register
+cctg rm  myproject                    # unregister (keeps state directory)
+cctg rm  myproject --purge            # unregister + delete state directory
 ```
 
-레지스트리에 상태 디렉터리 경로가 명시적으로 저장되므로 이름과 데이터 위치는 분리돼 있다. 기본 동작은 상태 디렉터리가 기본 경로(`~/.claude/channels/<old>/`)일 때만 `<new>` 로 이동하고 레지스트리를 갱신한다. 커스텀 경로이거나 `--keep-dir` 지정 시에는 디렉터리를 그대로 두고 이름(과 tmux 세션명 `cctg-<name>`)만 바꾼다. 세션명이 이름 기반이므로 **실행 중인 봇은 먼저 `down`** 해야 하며, `<new>` 가 이미 등록돼 있거나 대상 디렉터리가 이미 존재하면 거부한다.
+`add` interactively prompts for the following and scaffolds the state directory (`~/.claude/channels/<name>/`):
 
-### 2. 봇 기동·정지·재기동 (up / down / restart)
+- **Bot token** — a token for a **new bot** issued by [@BotFather](https://t.me/BotFather) (masked input, stored in `.env` with 600 permissions)
+- **Your numeric Telegram ID** — if you don't know it, DM [@userinfobot](https://t.me/userinfobot). The given ID is used to auto-generate the `access.json` allowlist, so no separate pairing is needed.
+
+By default `rm` **keeps** the state directory containing the token and allowlist (reusable on re-registration). A running bot must be stopped with `down` first. `--purge` also deletes the state directory, but for safety it never touches the global bot directory or paths outside `CHANNELS_DIR`.
+
+### 1-1. Rename (rename)
 
 ```bash
-cctg up myproject       # 특정 봇 기동
-cctg up all             # 등록된 모든 봇 기동
-cctg down myproject     # 정지
-cctg down all           # 전체 정지
-cctg restart myproject  # 재기동 (down + up)
-cctg restart all        # 전체 재기동
+cctg rename myproject newname              # rename + move the state directory too
+cctg rename myproject newname --keep-dir   # rename only, keep the directory path
 ```
 
-기동하면 `caffeinate -is` 로 sleep을 막으며 detached tmux 세션(`cctg-<name>`)에서 봇이 돈다. 이후 봇에 DM하면 바로 응답한다.
+Because the registry stores the state directory path explicitly, the name and the data location are decoupled. The default behavior moves the directory to `<new>` and updates the registry **only** when the state directory is at the default path (`~/.claude/channels/<old>/`). For a custom path, or when `--keep-dir` is given, the directory is left in place and only the name (and the tmux session name `cctg-<name>`) changes. Since the session name is name-based, **stop a running bot with `down` first**; the command refuses if `<new>` is already registered or the target directory already exists.
 
-### 3. 상태 확인·로그 (status / logs / attach)
+### 2. Start / stop / restart a bot (up / down / restart)
 
 ```bash
-cctg status              # 봇별 상태(RUNNING+업타임 / stopped / BROKEN) + cwd·state 경로
-cctg logs myproject      # 최근 로그 50줄 출력 (attach 없이)
-cctg logs myproject 200  # 최근 200줄
-cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리: Ctrl-b d)
+cctg up myproject       # start a specific bot
+cctg up all             # start all registered bots
+cctg down myproject     # stop
+cctg down all           # stop all
+cctg restart myproject  # restart (down + up)
+cctg restart all        # restart all
 ```
 
-`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우다. `logs` 와 `attach` 는 봇이 정지 상태면 친절한 안내와 함께 중단한다.
+On start, `caffeinate -is` prevents sleep while the bot runs in a detached tmux session (`cctg-<name>`). After that, DM the bot and it responds right away.
 
-### 4. 진단 (doctor)
+### 3. Status / logs (status / logs / attach)
 
 ```bash
-cctg doctor              # 의존성(tmux/claude/caffeinate/jq)·PATH·레지스트리·공통 권한 정책 점검
+cctg status              # per-bot status (RUNNING+uptime / stopped / BROKEN) + cwd/state paths
+cctg logs myproject      # print the last 50 log lines (without attaching)
+cctg logs myproject 200  # last 200 lines
+cctg attach myproject    # attach to the tmux session for live view (detach: Ctrl-b d)
 ```
 
-## 권한·옵션 (config / common)
+`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent. If the bot is stopped, `logs` and `attach` stop with a friendly message.
 
-봇은 tmux 안에서 **대화형 TUI**로 도는데 운영자는 그 TUI 앞에 없고 텔레그램으로만 상호작용한다. 그래서 권한 프롬프트가 뜨면 아무도 응답할 수 없어 봇이 멈춘다. CCTG는 이를 "**위험하지 않은 건 자동승인하고, 위험한 건 deny로 차단**"하는 모델로 푼다 — 프롬프트가 뜨는 회색지대를 없앤다.
+### 4. Diagnostics (doctor)
 
-두 계층으로 설정한다.
+```bash
+cctg doctor              # check dependencies (tmux/claude/caffeinate/jq), PATH, registry, shared permission policy
+```
 
-| 계층 | 저장 위치 | 주입 방식 | 수정 명령 |
+## Permissions & options (config / common)
+
+A bot runs as an **interactive TUI** inside tmux, but the operator is not in front of that TUI — they only interact over Telegram. So when a permission prompt appears, nobody can answer it and the bot stalls. CCTG solves this with an "**auto-approve what's harmless, block what's dangerous via deny**" model — eliminating the gray zone where prompts appear.
+
+It is configured in two layers.
+
+| Layer | Stored at | Injection | Edit command |
 |---|---|---|---|
-| **공통**(모든 봇) | `~/.claude/channels/cctg-shared.settings.json` | `claude --settings <file>` | `cctg common ...` |
-| **봇별**(우선) | `~/.claude/channels/<name>/launch.env` | `claude --permission-mode <m>` + `$CLAUDE_EXTRA_ARGS` | `cctg config <name> ...` |
+| **Shared** (all bots) | `~/.claude/channels/cctg-shared.settings.json` | `claude --settings <file>` | `cctg common ...` |
+| **Per-bot** (takes precedence) | `~/.claude/channels/<name>/launch.env` | `claude --permission-mode <m>` + `$CLAUDE_EXTRA_ARGS` | `cctg config <name> ...` |
 
-봇별 `CCTG_PERMISSION_MODE` 가 있으면 공통 `defaultMode` 를 덮어쓴다. 비우면 공통값을 따른다.
+If a per-bot `CCTG_PERMISSION_MODE` is set, it overrides the shared `defaultMode`. Leave it empty to follow the shared value.
 
-### 공통 권한 정책 (common)
+### Shared permission policy (common)
 
-처음 `add`/`up` 시 공통 설정 파일이 자동 생성된다. 기본값은 `defaultMode: bypassPermissions` + dangerous 패턴 deny 안전망이다(전역 `~/.claude/settings.json` 의 deny·PreToolUse 훅과 **merge**되며, deny는 union·deny가 allow보다 우선).
-
-```bash
-cctg common                          # 현재 공통 설정 출력 (= common show)
-cctg common edit                     # $EDITOR 로 직접 편집
-cctg common mode acceptEdits         # 공통 defaultMode 변경
-cctg common deny add 'Bash(sudo *)'  # deny 규칙 추가
-cctg common deny rm  'Bash(sudo *)'  # deny 규칙 제거
-cctg common allow add 'Read(/data/**)'   # allow 규칙 추가/제거
-```
-
-> `mode`/`deny`/`allow` 같은 구조화된 수정은 `jq` 가 필요하다(없으면 `common edit` 로 직접 편집). `show`/`edit` 는 `jq` 없이도 동작한다.
-
-### 봇별 옵션 (config)
+The shared settings file is auto-created on the first `add`/`up`. The defaults are `defaultMode: bypassPermissions` plus a dangerous-pattern deny safety net (it **merges** with the deny rules and PreToolUse hooks of the global `~/.claude/settings.json`; deny is a union and deny wins over allow).
 
 ```bash
-cctg config myproject                       # 봇 옵션 출력 (= config ... show)
-cctg config myproject mode bypassPermissions   # 이 봇 권한 모드 설정
-cctg config myproject mode clear            # 공통값을 따르도록 비움
-cctg config myproject args "--model opus"   # 이 봇 전용 claude 추가 인자
-cctg config myproject edit                  # launch.env 직접 편집
+cctg common                          # print current shared settings (= common show)
+cctg common edit                     # edit directly with $EDITOR
+cctg common mode acceptEdits         # change the shared defaultMode
+cctg common deny add 'Bash(sudo *)'  # add a deny rule
+cctg common deny rm  'Bash(sudo *)'  # remove a deny rule
+cctg common allow add 'Read(/data/**)'   # add/remove an allow rule
 ```
 
-권한 모드 값: `acceptEdits | auto | bypassPermissions | default | dontAsk | plan`.
+> Structured edits like `mode`/`deny`/`allow` require `jq` (without it, use `common edit` to edit directly). `show`/`edit` work without `jq`.
 
-| 모드 | 봇 맥락 동작 |
+### Per-bot options (config)
+
+```bash
+cctg config myproject                       # print bot options (= config ... show)
+cctg config myproject mode bypassPermissions   # set this bot's permission mode
+cctg config myproject mode clear            # clear it to follow the shared value
+cctg config myproject args "--model opus"   # extra claude args for this bot only
+cctg config myproject edit                  # edit launch.env directly
+```
+
+Permission mode values: `acceptEdits | auto | bypassPermissions | default | dontAsk | plan`.
+
+| Mode | Behavior in the bot context |
 |---|---|
-| `bypassPermissions` | 전부 자동승인. **deny 규칙·PreToolUse 훅(git-guard 등)은 그대로 작동** → 위험 차단은 여기에 의존 |
-| `acceptEdits` | 편집·안전 fs명령만 자동, 그 외 Bash/네트워크는 프롬프트(헤드리스에선 멈출 수 있음) |
-| `dontAsk` | 회색지대를 프롬프트 대신 자동 거부(안전하지만 allow에 없으면 조용히 실패) |
+| `bypassPermissions` | Auto-approve everything. **Deny rules and PreToolUse hooks (git-guard, etc.) still apply** → dangerous actions are blocked here |
+| `acceptEdits` | Only edits and safe fs commands are automatic; other Bash/network actions prompt (can stall when headless) |
+| `dontAsk` | Auto-rejects the gray zone instead of prompting (safe, but silently fails if not in allow) |
 
-설정 변경은 `up`/`restart` 시 적용된다(실행 중이면 `cctg restart <name>`). 현재 적용 모드는 `cctg status`·`cctg doctor` 에서 확인한다.
+Configuration changes take effect on `up`/`restart` (if running, `cctg restart <name>`). Check the currently applied mode with `cctg status` / `cctg doctor`.
 
-## 업데이트
+## Updating
 
 ```bash
 cctg update
 ```
 
-설치 시 기록된 매니페스트(`~/.config/cctg/install.conf`)에서 레포 위치·설치 모드를 읽어 `git pull --ff-only` 후 두 모드 모두 `install.sh` 를 재실행(멱등)한다.
+It reads the repo location and install mode from the manifest recorded at install time (`~/.config/cctg/install.conf`), runs `git pull --ff-only`, then re-runs `install.sh` (idempotent) for both modes.
 
-- **복사 설치**: `git pull` → `install.sh` 재실행으로 새 `cc-tg.sh` 를 `cctg` 에 다시 복사한다.
-- **심볼릭(`--dev`) 설치**: `cctg`(심볼릭)는 `git pull` 로 즉시 최신이 되지만, 자동완성은 `DATA_DIR` 로 *복사*되므로 `install.sh --dev` 재실행으로 함께 갱신한다.
+- **Copy install**: `git pull` → re-run `install.sh` to re-copy the new `cc-tg.sh` to `cctg`.
+- **Symlink (`--dev`) install**: `cctg` (the symlink) is up to date immediately after `git pull`, but completions are *copied* to `DATA_DIR`, so re-running `install.sh --dev` refreshes them too.
 
-> 로컬에 커밋되지 않은 변경이 있어 fast-forward가 불가하면 `update` 는 덮어쓰지 않고 중단한다. 이 경우 레포에서 직접 정리한다.
+> If there are uncommitted local changes that prevent a fast-forward, `update` stops without overwriting. In that case, clean things up directly in the repo.
 
-## 동작 방식
+## How it works
 
-- 등록 정보는 레지스트리(`~/.claude/channels/projects.conf`)에 `name | working_dir | state_dir` 형식으로 저장된다.
-- 봇별 상태는 `~/.claude/channels/<name>/` 에 격리된다 (`.env` 토큰, `access.json` allowlist, `launch.env` 봇별 옵션, `inbox/`).
-- 공통 권한 정책은 `~/.claude/channels/cctg-shared.settings.json` 에 두고 모든 봇에 `--settings` 로 주입된다.
-- 각 봇은 `TELEGRAM_STATE_DIR` 를 분리 주입받아 전역 봇 및 다른 프로젝트 봇과 섞이지 않는다.
-- tmux 세션 이름은 `cctg-<name>` 규칙을 따른다.
+- Registration info is stored in the registry (`~/.claude/channels/projects.conf`) as `name | working_dir | state_dir`.
+- Per-bot state is isolated under `~/.claude/channels/<name>/` (`.env` token, `access.json` allowlist, `launch.env` per-bot options, `inbox/`).
+- The shared permission policy lives in `~/.claude/channels/cctg-shared.settings.json` and is injected into every bot via `--settings`.
+- Each bot is given a separate `TELEGRAM_STATE_DIR` so it never mixes with the global bot or other project bots.
+- tmux session names follow the `cctg-<name>` convention.
 
-환경 변수로 경로를 바꿀 수 있다.
+You can change paths with environment variables.
 
-| 변수 | 기본값 | 의미 |
+| Variable | Default | Meaning |
 |---|---|---|
-| `CC_CHANNELS_DIR` | `~/.claude/channels` | 채널 상태 루트 |
-| `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | 레지스트리 파일 |
-| `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | 공통 권한 정책 파일 |
+| `CC_CHANNELS_DIR` | `~/.claude/channels` | Channel state root |
+| `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | Registry file |
+| `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | Shared permission policy file |
 
-## 제거
+## Uninstall
 
 ```bash
 ./uninstall.sh
 ```
 
-`~/.local/bin/cctg` 만 제거하며(우리가 설치한 것인지 확인 후), 레지스트리·상태 디렉터리(`~/.claude/channels/`)는 건드리지 않으므로 재설치 시 봇 등록이 유지된다.
+This removes only `~/.local/bin/cctg` (after verifying we installed it) and never touches the registry or state directories (`~/.claude/channels/`), so bot registrations survive a re-install.
 
-## 더 보기
+## Further reading
 
-- [패키징 구조와 향후 승격 경로](docs/packaging.md)
-- [향후 작업 후보 (TODO)](docs/TODO.md)
+- [Packaging structure and future promotion path](docs/packaging.md)
+- [Future work candidates (TODO)](docs/TODO.md)
 
-버전은 저장소 루트의 `VERSION` 파일이 기준(SoT)이다. `cctg version` 으로 확인하고, `cctg update` 는 업데이트 전후 버전을 함께 표시한다.
+The version is sourced from the `VERSION` file at the repository root (SoT). Check it with `cctg version`; `cctg update` shows the before/after versions together.
