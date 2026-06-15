@@ -102,6 +102,7 @@ CCTG_MSG_STATUS_NONE="  (등록된 프로젝트 봇 없음)\n"
 
 # logs / attach
 CCTG_MSG_LOGS_STOPPED="정지 상태: %s (로그 없음). '%s up %s' 후 다시 시도하세요.\n"
+CCTG_MSG_LOGS_SNAPSHOT="# %s 정지됨 — 마지막 세션 로그를 표시합니다(가장 최근 'down' 시점 저장).\n"
 CCTG_MSG_ERR_NOT_RUNNING="ERROR: 실행 중이 아닙니다: %s ('%s up %s' 먼저)\n"
 CCTG_MSG_ATTACH_DETACH_HINT="(분리하려면 Ctrl-b 누른 뒤 d)\n"
 

@@ -8,7 +8,6 @@
 - [구조 / 확장성](#구조--확장성)
   - [lib/ 분리 (libexec 본래 의도)](#lib-분리-libexec-본래-의도)
 - [기능 아이디어](#기능-아이디어)
-  - [봇 로그 파일 영속화](#봇-로그-파일-영속화)
   - [상태/관찰 추가 개선](#상태관찰-추가-개선)
 - [완료됨 (전제·이력)](#완료됨-전제이력)
 
@@ -25,14 +24,6 @@ copy 설치의 libexec 레이아웃(`~/.local/libexec/cctg/` 에 `cc-tg.sh`·`VE
 
 ## 기능 아이디어
 
-### 봇 로그 파일 영속화
-
-현재 봇 출력은 tmux 세션 안에만 있어 `attach`/`logs`(capture-pane)로만 볼 수 있고, 세션 종료 시 사라진다.
-
-- **무엇**: 봇 출력을 상태 디렉터리의 로그 파일(예: `<state>/cctg.log`)로도 영속화. tmux `pipe-pane` 또는 기동 명령에 `tee` 결합.
-- **이점**: 종료 후에도 로그 보존, 외부 도구로 분석 가능. `~/.claude/rules` 의 HTTP API E2E 로깅 설계와 유사한 방향.
-- **주의**: 로그 회전(날짜별/크기) 정책, 민감정보 노출 검토 필요.
-
 ### 상태/관찰 추가 개선
 
 - `status --json` 등 기계 판독 출력(다른 도구 연동용).
@@ -47,3 +38,4 @@ copy 설치의 libexec 레이아웃(`~/.local/libexec/cctg/` 에 `cc-tg.sh`·`VE
 - **CI 게이트** — `.github/workflows/ci.yml` 가 push/PR(main)에서 `bash -n` + `shellcheck -S warning`(로직 스크립트) + `scripts/check-i18n-keys.sh`(i18n 키 패리티)를 자동 실행. PR 템플릿의 수동 shellcheck 체크를 자동화로 승격.
 - **CHANGELOG·버전 태깅 규약** — `docs/RELEASING.md` 에 버전 올리기·태그·GitHub Release 절차를 정립. `VERSION` 파일이 SoT, 태그는 `v{VERSION}`.
 - **`add` 비대화형 플래그** — `--id`·`--token-env`·`--token-stdin`·`--mode`. 토큰 플래그가 있으면 비대화형으로 전환(–-id 필수, --mode 생략 시 공통 따름). 토큰은 argv 노출을 피해 env/stdin 경유. bash/zsh 자동완성 반영.
+- **봇 로그 영속화** — `down` 시 tmux 페인 스냅샷(렌더 텍스트, ~2000줄)을 `<state>/last-session.log`(600)에 저장, `logs` 가 정지 상태에서 그 스냅샷으로 폴백. TUI 의 ANSI 잡음·무한 증가를 피하려 연속 `pipe-pane` 대신 down-스냅샷 방식 채택. 한계: `down` 없는 크래시는 미갱신.

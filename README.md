@@ -195,7 +195,11 @@ cctg logs myproject 200  # last 200 lines
 cctg attach myproject    # attach to the tmux session for live view (detach: Ctrl-b d)
 ```
 
-`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent. If the bot is stopped, `logs` and `attach` stop with a friendly message.
+`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent.
+
+`logs` reads the live tmux pane while the bot is running. On `down`, CCTG saves a snapshot of the pane (the rendered text, up to ~2000 lines) to `<state>/last-session.log`, so `logs` keeps working **after** the bot is stopped — it falls back to that snapshot. `attach` still requires a running session.
+
+> The snapshot is overwritten on each `down` (last session only) and lives inside the 0700 state directory with 600 permissions. It can contain conversation content, so treat it like the rest of the state directory. A crash or reboot that never runs `down` won't refresh the snapshot.
 
 ```console
 $ cctg status
