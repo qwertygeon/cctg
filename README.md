@@ -6,7 +6,19 @@
 
 It never touches the global bot (`~/.claude/channels/telegram/`). Each project bot has its own state directory, token, and working directory, and runs in an isolated tmux session.
 
-> **Supported channel scope** — CCTG's state directory follows Claude Code's **channels** (`~/.claude/channels/`) layout. **Telegram is currently the only connectable gateway.** Other gateways that Claude Code offers through its channels feature (e.g. Slack, Discord) are **planned to be fully supported later**. Until then, `cctg` commands such as `add`/`up` target Telegram bots only.
+> **Supported channel scope** — CCTG's state directory follows Claude Code's **channels** (`~/.claude/channels/`) layout: each channel plugin keeps its global bot under `~/.claude/channels/<channel>/` (`.env`, `access.json`, `approved/`, `inbox/`), overridable per-process via that plugin's `<CHANNEL>_STATE_DIR`. CCTG drives **Telegram only** today; the others are not connectable yet.
+
+**Supported gateways:**
+
+| Gateway | Claude Code plugin | Global state dir | Per-process state override | CCTG support |
+|---|---|---|---|---|
+| **Telegram** | `telegram@claude-plugins-official` | `~/.claude/channels/telegram/` | `TELEGRAM_STATE_DIR` | ✅ **Supported** — `add`/`up` launch isolated per-project bots |
+| Discord | `discord@claude-plugins-official` | `~/.claude/channels/discord/` | `DISCORD_STATE_DIR` | ⛔ Planned — name **reserved** to avoid clobbering the global bot |
+| iMessage | `imessage@claude-plugins-official` | `~/.claude/channels/imessage/` | `IMESSAGE_STATE_DIR` | ⛔ Planned — name **reserved** |
+| fakechat (local test) | `fakechat@claude-plugins-official` | `~/.claude/channels/fakechat/` | — (hard-coded) | ⛔ Not applicable — name **reserved** |
+| Slack | `slack@claude-plugins-official` | — (MCP search/read, no bot state dir) | — | ➖ Out of scope — not a tmux-hosted message bridge |
+
+> Because every channel plugin's global bot lives at `~/.claude/channels/<channel>/`, CCTG **reserves** the names `telegram`, `discord`, `imessage`, and `fakechat`: `cctg add <reserved>` / `cctg rename ... <reserved>` are refused so a project bot can never overwrite a global channel bot's token or allowlist. CCTG also refuses to reuse any state directory that already holds a non-CCTG channel bot's state (an `.env`/`access.json` without a CCTG `launch.env`), so even a future channel name is protected.
 
 > ⚠️ **Privacy — data flow notice** — CCTG relays messages received over Telegram to a Claude Code process running in the bot's working directory, and Claude Code **sends that content to the Anthropic API** for processing. In other words, the conversations, code, and file contents exchanged with the bot pass through a third party (Anthropic) and through Telegram's infrastructure. Keep this in mind before attaching a bot to a repository that handles sensitive data, and strictly limit who can reach the bot via the `access.json` allowlist (yourself, or trusted users only).
 
@@ -92,7 +104,7 @@ cctg <command> [args]
   doctor                update                version           help
 ```
 
-> Bot names may only contain letters, digits, `_`, and `-` (to avoid clashing with tmux session names and registry separators). `telegram` is reserved for the global bot and cannot be used.
+> Bot names may only contain letters, digits, `_`, and `-` (to avoid clashing with tmux session names and registry separators). The global channel names `telegram`, `discord`, `imessage`, and `fakechat` are **reserved** and cannot be used — see the **Supported gateways** table near the top for why.
 
 > **Sample output language** — The examples below show the **English** output. The CLI is bilingual (English/Korean); switch any time with `cctg lang` (see [Language](#language)). Paths/IDs are placeholders.
 

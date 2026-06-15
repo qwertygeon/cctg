@@ -141,6 +141,11 @@ SESS_PREFIX="cctg-"
 # claude --permission-mode 가 받는 유효한 모드 (claude --help 기준)
 VALID_MODES="acceptEdits auto bypassPermissions default dontAsk plan"
 
+# 전역 채널 플러그인이 ~/.claude/channels/<name>/ 를 기본 상태 디렉터리로 쓰는 예약 이름.
+# 이 이름으로 봇을 만들면 전역 채널 봇의 .env·access.json 을 덮어쓰게 되므로 거부한다.
+# (각 플러그인의 server.ts: <CHANNEL>_STATE_DIR ?? ~/.claude/channels/<channel>)
+RESERVED_NAMES="telegram discord imessage fakechat"
+
 mkdir -p "$CHANNELS_DIR"
 [ -f "$REGISTRY" ] || printf '# name | working_dir | state_dir\n' > "$REGISTRY"
 
@@ -211,6 +216,16 @@ usage() { t USAGE "$PROG"; }
 
 # 봇 이름 검증 — tmux 세션명·레지스트리(|) 충돌 방지를 위해 영숫자/_/- 만 허용
 valid_name() { printf '%s' "$1" | grep -qE '^[A-Za-z0-9_-]+$'; }
+
+# 예약 이름(전역 채널) 여부
+is_reserved_name() { case " $RESERVED_NAMES " in *" $1 "*) return 0;; *) return 1;; esac; }
+
+# 경로가 전역 채널 디렉터리($CHANNELS_DIR/<reserved>)인지 — purge 보호용
+is_reserved_channel_dir() {
+  local d
+  for d in $RESERVED_NAMES; do [ "$1" = "$CHANNELS_DIR/$d" ] && return 0; done
+  return 1
+}
 
 # 레지스트리에서 name 줄 제거 (주석·빈 줄은 보존)
 remove_registry_line() {
@@ -317,9 +332,14 @@ down_one() {
 cmd_add() {
     NAME="${1:?name 필요}"; CWD="${2:?working_dir 필요}"
     valid_name "$NAME" || die ERR_BADNAME "$NAME"
+    is_reserved_name "$NAME" && die ERR_RESERVED "$NAME" "$RESERVED_NAMES"
     SD="$CHANNELS_DIR/$NAME"
-    [ "$SD" = "$CHANNELS_DIR/telegram" ] && die ERR_RESERVED
     if lookup "$NAME" >/dev/null 2>&1; then die ERR_ALREADY_REGISTERED "$NAME"; fi
+    # 외부(전역) 채널 디렉터리 보호: 우리가 만든 적 없는(launch.env 부재) 상태 디렉터리에
+    # .env/access.json 이 있으면 다른 채널 봇 디렉터리로 보고 덮어쓰지 않는다(예약 목록 밖 신규 채널 대비).
+    if [ -d "$SD" ] && [ ! -f "$SD/launch.env" ] && { [ -f "$SD/.env" ] || [ -f "$SD/access.json" ]; }; then
+      die ERR_FOREIGN_STATEDIR "$SD"
+    fi
     mkdir -p "$SD/inbox"
 
     # 1) 봇 토큰 (가려서 입력)
@@ -385,10 +405,10 @@ cmd_rm() {
     remove_registry_line "$NAME" || die ERR_REGISTRY_UPDATE
     t RM_DONE "$NAME"
     if [ "$PURGE" = 1 ]; then
-      # 안전장치: CHANNELS_DIR 하위이고 전역 봇 디렉터리가 아닐 때만 삭제
+      # 안전장치: CHANNELS_DIR 하위이고 전역 채널 봇 디렉터리가 아닐 때만 삭제
       case "$sd" in
         "$CHANNELS_DIR"/*)
-          if [ "$sd" = "$CHANNELS_DIR/telegram" ]; then
+          if is_reserved_channel_dir "$sd"; then
             t RM_PURGE_REFUSE_GLOBAL "$sd"
           else
             rm -rf "$sd" && t RM_PURGE_DELETED "$sd"
@@ -404,7 +424,7 @@ cmd_rename() {
     OLD="${1:?old name 필요}"; NEW="${2:?new name 필요}"
     KEEPDIR=0; [ "${3:-}" = "--keep-dir" ] && KEEPDIR=1
     valid_name "$NEW" || die ERR_BADNAME "$NEW"
-    [ "$NEW" = "telegram" ] && die ERR_RESERVED
+    is_reserved_name "$NEW" && die ERR_RESERVED "$NEW" "$RESERVED_NAMES"
     [ "$OLD" = "$NEW" ] && die ERR_SAME_NAME "$OLD"
     row="$(lookup "$OLD")" || die ERR_NOT_REGISTERED "$OLD"
     if lookup "$NEW" >/dev/null 2>&1; then die ERR_ALREADY_REGISTERED "$NEW"; fi
