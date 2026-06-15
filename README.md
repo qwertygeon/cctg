@@ -98,7 +98,8 @@ cctg status
 
 ```
 cctg <command> [args]
-  add <name> <cwd>      rm <name> [--purge]   rename <old> <new> [--keep-dir]
+  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+  rm <name> [--purge]   rename <old> <new> [--keep-dir]
   config <name> [...]   common [...]          (permissions/options — see "Permissions & options")
   up <name|all>         down <name|all>       restart <name|all>
   status                logs <name> [N]       attach <name>
@@ -132,6 +133,28 @@ Your numeric Telegram ID (DM @userinfobot if unknown): 123456789
 Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
+```
+
+#### Non-interactive registration (CI / scripting)
+
+Pass flags to skip the prompts. Supplying a **token flag** (`--token-env` or `--token-stdin`) switches `add` to non-interactive mode, which then **requires `--id`**; `--mode` is optional (omit to follow the shared policy).
+
+| Flag | Meaning |
+|---|---|
+| `--id <num>` | Numeric Telegram ID for the allowlist (required when non-interactive) |
+| `--token-env <VAR>` | Read the bot token from environment variable `VAR` |
+| `--token-stdin` | Read the bot token from stdin (one line) |
+| `--mode <m>` | Permission mode (`acceptEdits`/`auto`/`bypassPermissions`/`default`/`dontAsk`/`plan`) |
+
+> The token is **never taken as a command-line argument** (it would leak via the process list). Use `--token-env` or `--token-stdin`.
+
+```bash
+# from an environment variable
+BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
+  --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
+
+# from stdin (e.g. piped from a secrets manager)
+secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
 ```
 
 By default `rm` **keeps** the state directory containing the token and allowlist (reusable on re-registration). A running bot must be stopped with `down` first. `--purge` also deletes the state directory, but for safety it never touches the global bot directory or paths outside `CHANNELS_DIR`.

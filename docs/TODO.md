@@ -9,7 +9,6 @@
   - [lib/ 분리 (libexec 본래 의도)](#lib-분리-libexec-본래-의도)
 - [기능 아이디어](#기능-아이디어)
   - [봇 로그 파일 영속화](#봇-로그-파일-영속화)
-  - [add 비대화형 플래그](#add-비대화형-플래그)
   - [상태/관찰 추가 개선](#상태관찰-추가-개선)
 - [완료됨 (전제·이력)](#완료됨-전제이력)
 
@@ -34,14 +33,6 @@ copy 설치의 libexec 레이아웃(`~/.local/libexec/cctg/` 에 `cc-tg.sh`·`VE
 - **이점**: 종료 후에도 로그 보존, 외부 도구로 분석 가능. `~/.claude/rules` 의 HTTP API E2E 로깅 설계와 유사한 방향.
 - **주의**: 로그 회전(날짜별/크기) 정책, 민감정보 노출 검토 필요.
 
-### add 비대화형 플래그
-
-현재 `add` 는 토큰·텔레그램ID를 대화형으로만 입력받아 CI·스크립트 자동화가 불가능하다.
-
-- **무엇**: `--token-env VAR` / `--id <num>` 등 플래그로 비대화형 등록 지원. 토큰은 argv 노출을 피해 환경변수/stdin 경유.
-- **이점**: 프로비저닝 자동화, 다수 봇 일괄 등록.
-- **주의**: 토큰을 argv 에 직접 받지 않기(프로세스 목록 노출). 대화형 경로는 기본 유지.
-
 ### 상태/관찰 추가 개선
 
 - `status --json` 등 기계 판독 출력(다른 도구 연동용).
@@ -55,3 +46,4 @@ copy 설치의 libexec 레이아웃(`~/.local/libexec/cctg/` 에 `cc-tg.sh`·`VE
 - **libexec 승격 (레이아웃)** — copy 설치가 패키지를 `~/.local/libexec/cctg/` 로 복사하고 `~/.local/bin/cctg` 심볼릭. 동반 파일(`VERSION`·`messages/`)이 런처 옆에 위치.
 - **CI 게이트** — `.github/workflows/ci.yml` 가 push/PR(main)에서 `bash -n` + `shellcheck -S warning`(로직 스크립트) + `scripts/check-i18n-keys.sh`(i18n 키 패리티)를 자동 실행. PR 템플릿의 수동 shellcheck 체크를 자동화로 승격.
 - **CHANGELOG·버전 태깅 규약** — `docs/RELEASING.md` 에 버전 올리기·태그·GitHub Release 절차를 정립. `VERSION` 파일이 SoT, 태그는 `v{VERSION}`.
+- **`add` 비대화형 플래그** — `--id`·`--token-env`·`--token-stdin`·`--mode`. 토큰 플래그가 있으면 비대화형으로 전환(–-id 필수, --mode 생략 시 공통 따름). 토큰은 argv 노출을 피해 env/stdin 경유. bash/zsh 자동완성 반영.

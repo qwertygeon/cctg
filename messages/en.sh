@@ -8,7 +8,7 @@
 CCTG_MSG_SHARED_CREATED="Created shared settings: %s (defaultMode=bypassPermissions + deny safety net)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: this action requires jq. Edit directly with 'cctg common edit', or install jq (brew install jq).\n"
 
-CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd>       register a project bot\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         view/edit per-bot options (permission mode, extra args)\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status                 registration/run status\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
+CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]\n                         register a project bot (flags = non-interactive; needs --id)\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         view/edit per-bot options (permission mode, extra args)\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status                 registration/run status\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
 
 # Shared fragments
 CCTG_MSG_FOLLOW_SHARED="follow shared"
@@ -43,6 +43,10 @@ CCTG_MSG_ADD_PROMPT_TGID="Your numeric Telegram ID (DM @userinfobot if unknown):
 CCTG_MSG_ERR_NOT_NUMERIC_ID="ERROR: not a numeric ID: '%s'\n"
 CCTG_MSG_ADD_PROMPT_MODE="Permission mode [Enter=follow shared | %s]: "
 CCTG_MSG_ERR_BAD_MODE_ADD="ERROR: invalid permission mode: '%s' (valid: %s)\n"
+CCTG_MSG_ERR_ADD_UNKNOWN_FLAG="ERROR: unknown add flag: '%s' (valid: --id <num>, --token-env <VAR>, --token-stdin, --mode <m>)\n"
+CCTG_MSG_ERR_ADD_FLAG_VALUE="ERROR: %s requires a value\n"
+CCTG_MSG_ERR_ADD_BAD_ENVNAME="ERROR: '%s' is not a valid environment variable name\n"
+CCTG_MSG_ERR_ADD_NEED_ID="ERROR: non-interactive add (--token-env/--token-stdin) requires --id <num>\n"
 CCTG_MSG_ADD_DONE="Registered: %s → cwd=%s, state=%s\n"
 CCTG_MSG_ADD_DONE_ALLOWLIST="  seeded %s into the allowlist (no pairing needed)\n"
 CCTG_MSG_ADD_DONE_MODE="  permission mode: %s  (shared: %s common / per-bot: %s config %s)\n"

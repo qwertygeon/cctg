@@ -98,7 +98,8 @@ cctg status
 
 ```
 cctg <command> [args]
-  add <name> <cwd>      rm <name> [--purge]   rename <old> <new> [--keep-dir]
+  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+  rm <name> [--purge]   rename <old> <new> [--keep-dir]
   config <name> [...]   common [...]          (권한·옵션 — 아래 「권한·옵션」 절)
   up <name|all>         down <name|all>       restart <name|all>
   status                logs <name> [N]       attach <name>
@@ -130,6 +131,28 @@ $ cctg add myproject ~/work/myproject
 권한 모드 [엔터=공통 따름 | acceptEdits auto bypassPermissions default dontAsk plan]:
 등록 완료: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   allowlist에 123456789 시드함 (페어링 불필요)
+```
+
+#### 비대화형 등록 (CI / 스크립트)
+
+플래그로 프롬프트를 건너뛴다. **토큰 플래그**(`--token-env` 또는 `--token-stdin`)를 주면 `add` 가 비대화형 모드로 전환되며, 이때 **`--id` 가 필수**다. `--mode` 는 선택(생략 시 공통 정책을 따름).
+
+| 플래그 | 의미 |
+|---|---|
+| `--id <num>` | allowlist용 숫자 Telegram ID (비대화형 시 필수) |
+| `--token-env <VAR>` | 환경변수 `VAR` 에서 봇 토큰을 읽음 |
+| `--token-stdin` | stdin(한 줄)에서 봇 토큰을 읽음 |
+| `--mode <m>` | 권한 모드 (`acceptEdits`/`auto`/`bypassPermissions`/`default`/`dontAsk`/`plan`) |
+
+> 토큰은 **명령행 인자로 받지 않는다**(프로세스 목록에 노출되므로). `--token-env` 또는 `--token-stdin` 을 사용한다.
+
+```bash
+# 환경변수에서
+BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
+  --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
+
+# stdin 에서 (예: 시크릿 매니저 파이프)
+secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
 ```
 
 `rm` 은 기본적으로 토큰·allowlist가 든 상태 디렉터리를 **보존**한다(재등록 시 재사용 가능). 실행 중인 봇은 먼저 `down` 해야 한다. `--purge` 는 상태 디렉터리까지 삭제하되, 전역 봇 디렉터리나 `CHANNELS_DIR` 밖 경로는 안전을 위해 건드리지 않는다.
