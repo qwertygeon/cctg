@@ -14,10 +14,14 @@ DEST="$BINDIR/cctg"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
 MANIFEST="$CONFIG_DIR/install.conf"
 
+# 매니페스트에서 libexec 위치를 읽는다 (copy 설치는 bin 이 libexec/cc-tg.sh 로의 심볼릭).
+LIBEXECDIR_M=""
+[ -f "$MANIFEST" ] && LIBEXECDIR_M="$(awk -F= '$1=="libexecdir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+
 if [ -L "$DEST" ]; then
-  # 링크(개발) 설치 — 이 레포가 만든 링크인지 확인 후 제거
+  # 심볼릭 설치 — dev(레포 cc-tg.sh) 또는 copy(libexec/cc-tg.sh) 둘 다 우리 링크인지 확인 후 제거
   target="$(readlink "$DEST")"
-  if [ "$target" = "$SRC" ]; then
+  if [ "$target" = "$SRC" ] || { [ -n "$LIBEXECDIR_M" ] && [ "$target" = "$LIBEXECDIR_M/cc-tg.sh" ]; }; then
     rm "$DEST"; echo "제거됨(링크): $DEST"
   else
     echo "건너뜀: $DEST 는 다른 대상($target)을 가리킵니다. 직접 확인하세요."; exit 1
@@ -31,6 +35,15 @@ elif [ -f "$DEST" ]; then
   fi
 else
   echo "설치된 cctg 없음: $DEST"
+fi
+
+# libexec 패키지 디렉터리 제거 (copy 설치 — 우리 cc-tg.sh 가 든 디렉터리만)
+if [ -n "$LIBEXECDIR_M" ] && [ -d "$LIBEXECDIR_M" ]; then
+  if grep -q 'CCTG (Claude Code Tmux Gateway)' "$LIBEXECDIR_M/cc-tg.sh" 2>/dev/null; then
+    rm -rf "$LIBEXECDIR_M"; echo "제거됨(libexec): $LIBEXECDIR_M"
+  else
+    echo "건너뜀: $LIBEXECDIR_M 는 cctg libexec 가 아닌 것 같습니다. 직접 확인하세요."
+  fi
 fi
 
 # 자동완성 파일 제거 (매니페스트에 기록된 경로만)

@@ -13,16 +13,16 @@
 #   cc-tg.sh common [...]               # 공통 권한 정책(--settings 주입) 보기·수정
 #   cc-tg.sh up  <name|all>             # 봇 기동(detached tmux + caffeinate)
 #   cc-tg.sh down <name|all>            # 봇 정지
-#   cc-tg.sh restart <name|all>         # 봇 재기동(down + up)
-#   cc-tg.sh status                     # 등록/실행 상태 보기
-#   cc-tg.sh logs <name> [N]            # 최근 로그 N줄 출력(기본 50, attach 없이)
-#   cc-tg.sh attach <name>              # 해당 세션에 붙어서 로그 확인
-#   cc-tg.sh doctor                     # 의존성·PATH·레지스트리 환경 진단
-#   cc-tg.sh update                     # git pull 후 cctg 재설치(설치 매니페스트 기반)
+#   cc-tg.sh restart <name|all>         # 재기동
+#   cc-tg.sh status                     # 등록/실행 상태
+#   cc-tg.sh logs <name> [N]            # 최근 로그 N줄
+#   cc-tg.sh attach <name>              # tmux 세션 attach
+#   cc-tg.sh doctor                     # 환경 진단
+#   cc-tg.sh update                     # git pull 후 재설치
 #   cc-tg.sh version                    # 버전 출력
+#   cc-tg.sh help                       # 도움말
 #
-# 의존성: tmux, claude(CLI), caffeinate(macOS). 플러그인은 전역 설치되어 있어야 함:
-#   /plugin install telegram@claude-plugins-official
+# 명령 구현은 cmd_*() 함수로 분리되어 있고, 하단의 얇은 디스패처가 라우팅한다.
 
 set -uo pipefail
 
@@ -39,17 +39,32 @@ if [ -L "$_self" ]; then
 fi
 SCRIPT_DIR="$(cd "$(dirname "$_self")" 2>/dev/null && pwd)"
 
-# 버전 결정: (1) 스크립트 옆 VERSION(레포/dev) → (2) 매니페스트 version=(copy) → (3) 폴백
+# key=value 설정 파일에서 키 값을 읽는다(마지막 매치, '=' 뒤 전체). 없거나 빈 값이면 빈 문자열.
+# 매니페스트(install.conf)·사용자 설정·launch.env 등 단순 key=value 파일 공용 리더.
+conf_get() {
+  local file="$1" key="$2"
+  [ -f "$file" ] || return 0
+  awk -F= -v k="$key" '$1==k{v=substr($0,index($0,"=")+1)} END{if(v!="")print v}' "$file"
+}
+
+# 에러/경고는 stderr로. die 는 출력 후 종료(exit 1).
+err() { printf '%s\n' "$*" >&2; }
+die() { err "$*"; exit 1; }
+
+# 패키지 동반 파일(VERSION·messages/* 등)을 cc-tg.sh 옆에서 찾는다.
+# copy 설치: ~/.local/libexec/cctg/ 안, dev(symlink) 설치: 레포 안 — 둘 다 cc-tg.sh 와 같은
+# 디렉터리(SCRIPT_DIR)에 동반 파일이 놓이므로 한 경로 해석으로 양쪽을 모두 처리한다.
+find_companion() {
+  [ -n "${SCRIPT_DIR:-}" ] && [ -f "$SCRIPT_DIR/$1" ] && { printf '%s' "$SCRIPT_DIR/$1"; return 0; }
+  return 1
+}
+
+# 버전 결정: (1) 동반 VERSION(레포/dev·libexec/copy) → (2) 매니페스트 version= → (3) 폴백
 cctg_version() {
-  local mf v
-  if [ -n "${SCRIPT_DIR:-}" ] && [ -f "$SCRIPT_DIR/VERSION" ]; then
-    head -n1 "$SCRIPT_DIR/VERSION"; return
-  fi
-  mf="${XDG_CONFIG_HOME:-$HOME/.config}/cctg/install.conf"
-  if [ -f "$mf" ]; then
-    v="$(awk -F= '$1=="version"{print substr($0,index($0,"=")+1)}' "$mf")"
-    [ -n "$v" ] && { printf '%s\n' "$v"; return; }
-  fi
+  local vf v
+  vf="$(find_companion VERSION)" && { head -n1 "$vf"; return; }
+  v="$(conf_get "${XDG_CONFIG_HOME:-$HOME/.config}/cctg/install.conf" version)"
+  [ -n "$v" ] && { printf '%s\n' "$v"; return; }
   printf '%s\n' "$CCTG_VERSION_FALLBACK"
 }
 
@@ -113,10 +128,8 @@ set_env_kv() {
 
 # launch.env 에서 CCTG_PERMISSION_MODE 값만 추출(따옴표 제거). 없으면 빈 문자열.
 mode_of() {
-  local f="$1/launch.env"
-  [ -f "$f" ] || { printf ''; return; }
-  grep -E '^CCTG_PERMISSION_MODE=' "$f" | tail -1 \
-    | sed -E "s/^CCTG_PERMISSION_MODE=//; s/^\"//; s/\"$//; s/^'//; s/'$//"
+  conf_get "$1/launch.env" CCTG_PERMISSION_MODE \
+    | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
 }
 
 # jq 필요 동작 가드
@@ -265,10 +278,7 @@ down_one() {
   fi
 }
 
-CMD="${1:-}"
-shift || true
-case "$CMD" in
-  add)
+cmd_add() {
     NAME="${1:?name 필요}"; CWD="${2:?working_dir 필요}"
     if ! valid_name "$NAME"; then
       echo "ERROR: 이름은 영문/숫자/_/- 만 허용합니다: '$NAME'"; exit 1
@@ -332,8 +342,9 @@ ENV
     echo "  allowlist에 $TGID 시드함 (페어링 불필요)"
     echo "  권한 모드: ${PMODE:-공통 따름}  (공통: $PROG common / 봇별: $PROG config $NAME)"
     echo "다음: $PROG up $NAME  → 봇에 DM하면 바로 응답합니다."
-    ;;
-  rm|remove)
+}
+
+cmd_rm() {
     NAME="${1:?name 필요}"
     PURGE=0; [ "${2:-}" = "--purge" ] && PURGE=1
     row="$(lookup "$NAME")" || { echo "ERROR: 등록되지 않은 프로젝트: $NAME"; exit 1; }
@@ -357,8 +368,9 @@ ENV
     else
       echo "  상태 디렉터리 보존: $sd (토큰/allowlist 포함). 완전 삭제하려면 --purge"
     fi
-    ;;
-  rename|mv)
+}
+
+cmd_rename() {
     OLD="${1:?old name 필요}"; NEW="${2:?new name 필요}"
     KEEPDIR=0; [ "${3:-}" = "--keep-dir" ] && KEEPDIR=1
     if ! valid_name "$NEW"; then
@@ -392,8 +404,9 @@ ENV
     rename_registry_line "$OLD" "$NEW" "$new_sd" || { echo "ERROR: 레지스트리 갱신 실패"; exit 1; }
     echo "이름 변경: $OLD → $NEW"
     echo "다음: $PROG up $NEW"
-    ;;
-  config)
+}
+
+cmd_config() {
     # 봇별 옵션(launch.env) 보기·수정
     NAME="${1:?name 필요}"; ACTION="${2:-show}"
     row="$(lookup "$NAME")" || { echo "ERROR: 등록되지 않은 프로젝트: $NAME"; exit 1; }
@@ -442,8 +455,9 @@ ENV
         echo "사용법: $PROG config <name> [show | edit | mode <mode|clear> | args <string>]"
         exit 1 ;;
     esac
-    ;;
-  common)
+}
+
+cmd_common() {
     # 공통 옵션(모든 봇에 --settings 로 주입되는 권한 정책) 보기·수정
     ensure_shared_settings
     ACTION="${1:-show}"
@@ -477,32 +491,36 @@ ENV
         echo "사용법: $PROG common [show | edit | mode <mode> | deny add|rm <rule> | allow add|rm <rule>]"
         exit 1 ;;
     esac
-    ;;
-  up)
+}
+
+cmd_up() {
     TARGET="${1:?name|all 필요}"
     if [ "$TARGET" = "all" ]; then
       while IFS= read -r n; do [ -n "$n" ] && up_one "$n"; done < <(all_names)
     else
       up_one "$TARGET"
     fi
-    ;;
-  down)
+}
+
+cmd_down() {
     TARGET="${1:?name|all 필요}"
     if [ "$TARGET" = "all" ]; then
       while IFS= read -r n; do [ -n "$n" ] && down_one "$n"; done < <(all_names)
     else
       down_one "$TARGET"
     fi
-    ;;
-  restart)
+}
+
+cmd_restart() {
     TARGET="${1:?name|all 필요}"
     if [ "$TARGET" = "all" ]; then
       while IFS= read -r n; do [ -n "$n" ] && { down_one "$n"; up_one "$n"; }; done < <(all_names)
     else
       down_one "$TARGET"; up_one "$TARGET"
     fi
-    ;;
-  status)
+}
+
+cmd_status() {
     echo "전역 봇: $CHANNELS_DIR/telegram (이 스크립트는 관리하지 않음)"
     echo "--- 프로젝트 봇 ---"
     found=0
@@ -532,19 +550,22 @@ ENV
       printf '            권한모드=%s\n' "$pm"
     done < <(all_names)
     [ "$found" = 0 ] && echo "  (등록된 프로젝트 봇 없음)"
-    ;;
-  logs)
+}
+
+cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
     is_running "$NAME" || { echo "정지 상태: $NAME (로그 없음). '$PROG up $NAME' 후 다시 시도하세요."; exit 1; }
     tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
-    ;;
-  attach)
+}
+
+cmd_attach() {
     NAME="${1:?name 필요}"
     is_running "$NAME" || { echo "ERROR: 실행 중이 아닙니다: $NAME ('$PROG up $NAME' 먼저)"; exit 1; }
     echo "(분리하려면 Ctrl-b 누른 뒤 d)"
     tmux attach -t "$(sess_of "$NAME")"
-    ;;
-  update)
+}
+
+cmd_update() {
     # 설치 매니페스트에서 레포 위치·모드를 읽어 git pull 후 재설치한다.
     CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
     MANIFEST="$CONFIG_DIR/install.conf"
@@ -583,8 +604,9 @@ ENV
     echo "버전: v$OLDVER → v$NEWVER"
     # 자동완성은 현재 셸 세션에 캐싱되어 있어 즉시 반영되지 않는다(zsh: ~/.zcompdump + 로드된 _cctg).
     echo "자동완성을 반영하려면 새 터미널을 여세요 (zsh 즉시 적용: rm -f ~/.zcompdump*; exec zsh)."
-    ;;
-  doctor)
+}
+
+cmd_doctor() {
     echo "cctg doctor (v$(cctg_version))"
     echo "--- 의존성 ---"
     for d in tmux claude caffeinate; do
@@ -624,13 +646,34 @@ ENV
       echo "  (아직 없음 — 첫 add/up 시 생성)"
     fi
     echo "  (telegram 플러그인은 전역 설치 필요: /plugin install telegram@claude-plugins-official)"
-    ;;
-  version|--version|-v)
+}
+
+cmd_version() {
     echo "$PROG $(cctg_version)"
-    ;;
-  help|--help|-h|"")
+}
+
+cmd_help() {
     usage
-    ;;
+}
+
+CMD="${1:-}"
+shift || true
+case "$CMD" in
+  add)                  cmd_add "$@" ;;
+  rm|remove)            cmd_rm "$@" ;;
+  rename|mv)            cmd_rename "$@" ;;
+  config)               cmd_config "$@" ;;
+  common)               cmd_common "$@" ;;
+  up)                   cmd_up "$@" ;;
+  down)                 cmd_down "$@" ;;
+  restart)              cmd_restart "$@" ;;
+  status)               cmd_status "$@" ;;
+  logs)                 cmd_logs "$@" ;;
+  attach)               cmd_attach "$@" ;;
+  update)               cmd_update "$@" ;;
+  doctor)               cmd_doctor "$@" ;;
+  version|--version|-v) cmd_version "$@" ;;
+  help|--help|-h|"")    cmd_help "$@" ;;
   *)
     echo "ERROR: 알 수 없는 명령: $CMD"
     echo

@@ -33,6 +33,9 @@ DEST="$BINDIR/cctg"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
 MANIFEST="$CONFIG_DIR/install.conf"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
+# copy 설치 시 패키지 본체(cc-tg.sh·VERSION·messages/)를 두는 libexec 디렉터리.
+# bin 에는 이 안의 cc-tg.sh 로 향하는 심볼릭만 노출한다(Homebrew식). dev 설치는 사용하지 않는다.
+LIBEXECDIR="${CCTG_LIBEXEC:-$HOME/.local/libexec/cctg}"
 MODE="copy"
 COMPLETIONS=1
 SHELL_SETUP=1
@@ -105,13 +108,26 @@ chmod +x "$SRC"
 rm -f "$DEST"
 
 # 3) 모드별 배치
+#   link(dev): bin → 레포의 cc-tg.sh 직접 심볼릭. 동반 파일은 레포에서 읽힌다.
+#   copy(릴리스): 패키지를 libexec 로 복사하고 bin → libexec/cc-tg.sh 심볼릭.
+#                 동반 파일(VERSION·messages/)이 cc-tg.sh 옆에 함께 복사되어, 레포를 지워도 동작한다.
+LIBEXEC_INSTALLED=""
 if [ "$MODE" = "link" ]; then
   ln -sfn "$SRC" "$DEST"
   ok "심볼릭 링크(개발): $DEST -> $SRC"
 else
-  cp "$SRC" "$DEST"
-  chmod +x "$DEST"
-  ok "복사(릴리스): $DEST  (소스: $SRC)"
+  mkdir -p "$LIBEXECDIR"
+  cp "$SRC" "$LIBEXECDIR/cc-tg.sh"
+  chmod +x "$LIBEXECDIR/cc-tg.sh"
+  cp "$REPO_DIR/VERSION" "$LIBEXECDIR/VERSION"
+  # i18n 메시지 카탈로그(있으면) 동반 복사 — cc-tg.sh 가 SCRIPT_DIR 기준으로 source 한다.
+  if [ -d "$REPO_DIR/messages" ]; then
+    rm -rf "$LIBEXECDIR/messages"
+    cp -R "$REPO_DIR/messages" "$LIBEXECDIR/messages"
+  fi
+  ln -sfn "$LIBEXECDIR/cc-tg.sh" "$DEST"
+  LIBEXEC_INSTALLED="$LIBEXECDIR"
+  ok "복사(릴리스): $LIBEXECDIR  (bin 심볼릭: $DEST)"
 fi
 
 # 3-1) 셸 자동완성 설치 (bash/zsh). 실패해도 설치 전체는 중단하지 않는다.
@@ -169,13 +185,14 @@ fi
 # 3-3) 설치 매니페스트 기록 — `cctg update`/uninstall 이 위치·모드·설치물을 찾는 데 쓴다
 mkdir -p "$CONFIG_DIR"
 {
-  printf 'repo=%s\n'     "$REPO_DIR"
-  printf 'mode=%s\n'     "$MODE"
-  printf 'version=%s\n'  "$VER"
-  printf 'bindir=%s\n'   "$BINDIR"
-  printf 'bashcomp=%s\n' "$BASHCOMP"
-  printf 'zshcomp=%s\n'  "$ZSHCOMP"
-  printf 'shellrc=%s\n'  "$SHELLRC"
+  printf 'repo=%s\n'      "$REPO_DIR"
+  printf 'mode=%s\n'      "$MODE"
+  printf 'version=%s\n'   "$VER"
+  printf 'bindir=%s\n'    "$BINDIR"
+  printf 'libexecdir=%s\n' "$LIBEXEC_INSTALLED"
+  printf 'bashcomp=%s\n'  "$BASHCOMP"
+  printf 'zshcomp=%s\n'   "$ZSHCOMP"
+  printf 'shellrc=%s\n'   "$SHELLRC"
 } > "$MANIFEST"
 ok "매니페스트 기록: $MANIFEST (v$VER)"
 
