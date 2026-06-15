@@ -581,6 +581,8 @@ ENV
     BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh" $inst_args
     NEWVER="$(head -n1 "$REPO/VERSION" 2>/dev/null || printf '%s' "$OLDVER")"
     echo "버전: v$OLDVER → v$NEWVER"
+    # 자동완성은 현재 셸 세션에 캐싱되어 있어 즉시 반영되지 않는다(zsh: ~/.zcompdump + 로드된 _cctg).
+    echo "자동완성을 반영하려면 새 터미널을 여세요 (zsh 즉시 적용: rm -f ~/.zcompdump*; exec zsh)."
     ;;
   doctor)
     echo "cctg doctor (v$(cctg_version))"
