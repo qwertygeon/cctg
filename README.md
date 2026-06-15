@@ -1,6 +1,6 @@
-# cctg
+# CCTG — Claude Code Tmux Gateway
 
-macOS에서 **tmux + Claude Code + Telegram 게이트웨이**를 묶어, 프로젝트별 Claude Code Telegram 봇을 쉽게 띄우고 관리하는 런처.
+**CCTG**(Claude Code Tmux Gateway)는 macOS에서 **tmux + Claude Code + Telegram 게이트웨이**를 묶어, 프로젝트별 Claude Code 텔레그램 채널 봇을 쉽게 띄우고 관리하는 런처다. 명령은 `cctg` 다.
 
 전역 봇(`~/.claude/channels/telegram/`)은 건드리지 않는다. 프로젝트 봇은 각자 상태 디렉터리·토큰·작업 디렉터리를 갖고 격리된 tmux 세션에서 돈다.
 

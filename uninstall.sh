@@ -23,8 +23,8 @@ if [ -L "$DEST" ]; then
     echo "건너뜀: $DEST 는 다른 대상($target)을 가리킵니다. 직접 확인하세요."; exit 1
   fi
 elif [ -f "$DEST" ]; then
-  # 복사(릴리스) 설치 — cc-tg.sh 헤더 시그니처로 우리 파일인지 확인 후 제거
-  if grep -q 'cc-tg.sh — 프로젝트별 Claude Code Telegram 채널 봇 런처' "$DEST" 2>/dev/null; then
+  # 복사(릴리스) 설치 — cc-tg.sh 헤더의 프로젝트 정체성 문자열로 우리 파일인지 확인 후 제거
+  if grep -q 'CCTG (Claude Code Tmux Gateway)' "$DEST" 2>/dev/null; then
     rm "$DEST"; echo "제거됨(복사본): $DEST"
   else
     echo "건너뜀: $DEST 는 cctg 가 설치한 파일이 아닌 것 같습니다. 직접 확인하세요."; exit 1

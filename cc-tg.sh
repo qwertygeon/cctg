@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# cc-tg.sh — 프로젝트별 Claude Code Telegram 채널 봇 런처
+# cc-tg.sh — CCTG (Claude Code Tmux Gateway)
 #
+# 프로젝트별 Claude Code 텔레그램 채널 봇을 각자의 tmux 세션으로 띄우고 관리하는 런처.
 # 전역 봇(기본 상태 디렉터리 ~/.claude/channels/telegram/)은 건드리지 않는다.
 # 프로젝트 봇은 각자 TELEGRAM_STATE_DIR(상태 디렉터리) + 토큰 + 작업 디렉터리를 갖는다.
 #
