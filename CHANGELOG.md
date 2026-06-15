@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-16
+
 ### Added
 - Bilingual CLI output (English/Korean) via `messages/en.sh` and `messages/ko.sh` catalogs.
 - `cctg lang [show|en|ko|clear]` to view/change the output language at runtime, plus the `CCTG_LANG` environment override and `install.sh --lang en|ko` to seed the initial language. The preference lives in `~/.config/cctg/config`, separate from the install manifest, so `cctg update` preserves it.
@@ -35,5 +37,6 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/qwertygeon/cctg/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/qwertygeon/cctg/releases/tag/v0.1.0
