@@ -47,7 +47,12 @@ cd cctg
 | `./install.sh` | `cc-tg.sh` 를 `~/.local/bin/cctg` 로 **복사** | 릴리스. 레포를 지우거나 옮겨도 동작. 업데이트는 `git pull` 후 재설치 |
 | `./install.sh --dev` | `~/.local/bin/cctg` 를 레포의 `cc-tg.sh` 로 **심볼릭 링크** | 개발. 레포 수정 즉시 반영 |
 
-설치 시 셸 자동완성(bash/zsh)도 함께 설치된다(`--no-completions` 로 생략 가능). zsh는 안내에 따라 `fpath` 추가가 필요할 수 있다. 설치 위치는 `BINDIR` 로 바꿀 수 있다: `BINDIR=~/bin ./install.sh`
+설치 시 다음이 자동 처리된다.
+
+- **셸 자동완성(bash/zsh)** 설치 — `--no-completions` 로 생략
+- **셸 rc 자동 설정** — 현재 셸의 rc(`~/.zshrc` 또는 `~/.bashrc`·`~/.bash_profile`)에 PATH·자동완성 활성화를 담은 **관리 블록**(`# >>> cctg >>>` ~ `# <<< cctg <<<`)을 멱등하게 추가한다. 최초 1회 `.cctg-bak` 백업을 남기고, 재실행해도 중복되지 않으며, `uninstall.sh` 가 블록만 깔끔히 제거한다. `--no-shell-setup` 으로 생략 가능.
+
+적용하려면 새 터미널을 열거나 `source ~/.zshrc`(해당 rc) 한다. 설치 위치는 `BINDIR` 로 바꿀 수 있다: `BINDIR=~/bin ./install.sh`
 
 ### PATH 설정
 
