@@ -190,10 +190,10 @@ cctg config myproject edit                  # launch.env 직접 편집
 cctg update
 ```
 
-설치 시 기록된 매니페스트(`~/.config/cctg/install.conf`)에서 레포 위치·설치 모드를 읽어 `git pull --ff-only` 후 자동으로 재설치한다.
+설치 시 기록된 매니페스트(`~/.config/cctg/install.conf`)에서 레포 위치·설치 모드를 읽어 `git pull --ff-only` 후 두 모드 모두 `install.sh` 를 재실행(멱등)한다.
 
 - **복사 설치**: `git pull` → `install.sh` 재실행으로 새 `cc-tg.sh` 를 `cctg` 에 다시 복사한다.
-- **심볼릭(`--dev`) 설치**: `git pull` 만 하면 `cctg` 가 레포를 가리키므로 즉시 최신이 된다.
+- **심볼릭(`--dev`) 설치**: `cctg`(심볼릭)는 `git pull` 로 즉시 최신이 되지만, 자동완성은 `DATA_DIR` 로 *복사*되므로 `install.sh --dev` 재실행으로 함께 갱신한다.
 
 > 로컬에 커밋되지 않은 변경이 있어 fast-forward가 불가하면 `update` 는 덮어쓰지 않고 중단한다. 이 경우 레포에서 직접 정리한다.
 

@@ -574,11 +574,11 @@ ENV
       echo "ERROR: git pull 실패 (로컬 변경이 있거나 fast-forward 불가). 레포에서 직접 확인하세요."
       exit 1
     fi
-    if [ "$MODE" = "link" ]; then
-      echo "심볼릭 설치이므로 cctg 가 이미 최신입니다."
-    else
-      BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh"
-    fi
+    # 두 모드 모두 install.sh 재실행(멱등). link 모드라도 자동완성은 DATA_DIR 로 "복사"되므로
+    # git pull 만으로는 갱신되지 않는다 — 재실행으로 자동완성 재복사·재링크·매니페스트 갱신을 일괄 처리.
+    inst_args=""
+    [ "$MODE" = "link" ] && inst_args="--dev"
+    BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh" $inst_args
     NEWVER="$(head -n1 "$REPO/VERSION" 2>/dev/null || printf '%s' "$OLDVER")"
     echo "버전: v$OLDVER → v$NEWVER"
     ;;
