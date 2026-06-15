@@ -16,6 +16,7 @@ _cctg() {
     'status:등록/실행 상태'
     'logs:최근 로그 출력'
     'attach:tmux 세션 attach'
+    'lang:CLI 출력 언어 보기·변경'
     'doctor:환경 진단'
     'update:git pull 후 재설치'
     'version:버전 출력'
@@ -64,6 +65,8 @@ _cctg() {
       fi ;;
     add)
       (( CURRENT == 4 )) && _files -/ ;;
+    lang)
+      (( CURRENT == 3 )) && compadd -- show en ko clear ;;
   esac
 }
 

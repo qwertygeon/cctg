@@ -5,7 +5,7 @@
 _cctg() {
   local cur prev cmd cmds names extra reg
   cur="${COMP_WORDS[COMP_CWORD]}"
-  cmds="add rm rename config common up down restart status logs attach doctor update version help"
+  cmds="add rm rename config common up down restart status logs attach lang doctor update version help"
   reg="${CC_TG_REGISTRY:-${CC_CHANNELS_DIR:-$HOME/.claude/channels}/projects.conf}"
 
   # 첫 인자: 서브커맨드
@@ -42,6 +42,12 @@ _cctg() {
       # add <name> <cwd> — 세 번째 인자는 디렉터리
       if [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -d -- "$cur") )
+      fi
+      ;;
+    lang)
+      # lang [show|en|ko|clear]
+      if [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=( $(compgen -W "show en ko clear" -- "$cur") )
       fi
       ;;
   esac
