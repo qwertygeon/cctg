@@ -8,6 +8,7 @@
 # 사용법:
 #   cc-tg.sh add <name> <working_dir>   # 새 프로젝트 봇 등록(상태 디렉터리·토큰 스캐폴딩·텔레그램ID 입력 → allowlist 자동 생성)
 #   cc-tg.sh rm  <name> [--purge]       # 등록 해제(--purge: 상태 디렉터리까지 삭제)
+#   cc-tg.sh rename <old> <new> [--keep-dir]  # 이름 변경(기본: 상태 디렉터리도 이동)
 #   cc-tg.sh up  <name|all>             # 봇 기동(detached tmux + caffeinate)
 #   cc-tg.sh down <name|all>            # 봇 정지
 #   cc-tg.sh restart <name|all>         # 봇 재기동(down + up)
@@ -63,6 +64,9 @@ usage() {
 사용법: $PROG <command> [args]
   add <name> <cwd>       프로젝트 봇 등록
   rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)
+  rename <old> <new> [--keep-dir]
+                         이름 변경 (기본: 상태 디렉터리도 함께 이동.
+                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)
   up   <name|all>        기동
   down <name|all>        정지
   restart <name|all>     재기동 (down + up)
@@ -89,6 +93,26 @@ remove_registry_line() {
     /^[[:space:]]*#/ {print; next}
     /^[[:space:]]*$/ {print; next}
     { c1=$1; gsub(/^[ \t]+|[ \t]+$/,"",c1); if (c1==n) next; print }
+  ' "$REGISTRY" > "$tmp" && mv "$tmp" "$REGISTRY"
+}
+
+# 레지스트리에서 name 줄의 1번 컬럼(이름)·3번 컬럼(상태 디렉터리)을 갱신.
+# working_dir(2번 컬럼)는 보존한다. 주석·빈 줄도 보존.
+rename_registry_line() {
+  local old="$1" new="$2" newsd="$3" tmp
+  tmp="$(mktemp)" || return 1
+  awk -F'|' -v o="$old" -v nn="$new" -v ns="$newsd" '
+    /^[[:space:]]*#/ {print; next}
+    /^[[:space:]]*$/ {print; next}
+    {
+      c1=$1; gsub(/^[ \t]+|[ \t]+$/,"",c1)
+      if (c1==o) {
+        c2=$2; gsub(/^[ \t]+|[ \t]+$/,"",c2)
+        printf "%s | %s | %s\n", nn, c2, ns
+        next
+      }
+      print
+    }
   ' "$REGISTRY" > "$tmp" && mv "$tmp" "$REGISTRY"
 }
 
@@ -230,6 +254,41 @@ ENV
     else
       echo "  상태 디렉터리 보존: $sd (토큰/allowlist 포함). 완전 삭제하려면 --purge"
     fi
+    ;;
+  rename|mv)
+    OLD="${1:?old name 필요}"; NEW="${2:?new name 필요}"
+    KEEPDIR=0; [ "${3:-}" = "--keep-dir" ] && KEEPDIR=1
+    if ! valid_name "$NEW"; then
+      echo "ERROR: 이름은 영문/숫자/_/- 만 허용합니다: '$NEW'"; exit 1
+    fi
+    if [ "$NEW" = "telegram" ]; then
+      echo "ERROR: 'telegram'은 전역 봇 예약 이름입니다. 다른 이름을 쓰세요."; exit 1
+    fi
+    if [ "$OLD" = "$NEW" ]; then echo "ERROR: old/new 이름이 동일합니다: $OLD"; exit 1; fi
+    row="$(lookup "$OLD")" || { echo "ERROR: 등록되지 않은 프로젝트: $OLD"; exit 1; }
+    if lookup "$NEW" >/dev/null 2>&1; then echo "ERROR: 이미 등록됨: $NEW"; exit 1; fi
+    # 세션명이 이름 기반이므로 실행 중에는 거부 (down 후 재시도)
+    if is_running "$OLD"; then
+      echo "ERROR: 실행 중입니다. 먼저 '$PROG down $OLD' 후 다시 시도하세요."; exit 1
+    fi
+    sd_raw="$(cut -f2 <<<"$row")"
+    sd="$(expand "$sd_raw")"
+    # 상태 디렉터리가 기본 경로($CHANNELS_DIR/<old>)면 함께 이동, 커스텀 경로면 유지
+    new_sd="$sd_raw"
+    if [ "$KEEPDIR" = 0 ] && [ "$sd" = "$CHANNELS_DIR/$OLD" ]; then
+      target="$CHANNELS_DIR/$NEW"
+      if [ -e "$target" ]; then
+        echo "ERROR: 대상 상태 디렉터리가 이미 존재합니다: $target (이동 취소)"; exit 1
+      fi
+      mv "$sd" "$target" || { echo "ERROR: 상태 디렉터리 이동 실패: $sd → $target"; exit 1; }
+      new_sd="$target"
+      echo "  상태 디렉터리 이동: $sd → $target"
+    else
+      echo "  상태 디렉터리 유지: $sd"
+    fi
+    rename_registry_line "$OLD" "$NEW" "$new_sd" || { echo "ERROR: 레지스트리 갱신 실패"; exit 1; }
+    echo "이름 변경: $OLD → $NEW"
+    echo "다음: $PROG up $NEW"
     ;;
   up)
     TARGET="${1:?name|all 필요}"
