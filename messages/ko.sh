@@ -7,7 +7,7 @@
 CCTG_MSG_SHARED_CREATED="공통 설정 생성: %s (defaultMode=bypassPermissions + deny 안전망)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: 이 동작은 jq가 필요합니다. 'cctg common edit'로 직접 편집하거나 jq를 설치하세요 (brew install jq).\n"
 
-CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd>       프로젝트 봇 등록\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         봇별 옵션(권한 모드·추가 인자) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status                 등록/실행 상태\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
+CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]\n                         프로젝트 봇 등록 (플래그 사용 시 비대화형, --id 필수)\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         봇별 옵션(권한 모드·추가 인자) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status                 등록/실행 상태\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
 
 # 공용 조각
 CCTG_MSG_FOLLOW_SHARED="공통 따름"
@@ -42,6 +42,10 @@ CCTG_MSG_ADD_PROMPT_TGID="본인 텔레그램 숫자 ID (모르면 @userinfobot 
 CCTG_MSG_ERR_NOT_NUMERIC_ID="ERROR: 숫자 ID가 아닙니다: '%s'\n"
 CCTG_MSG_ADD_PROMPT_MODE="권한 모드 [엔터=공통 따름 | %s]: "
 CCTG_MSG_ERR_BAD_MODE_ADD="ERROR: 잘못된 권한 모드: '%s' (유효: %s)\n"
+CCTG_MSG_ERR_ADD_UNKNOWN_FLAG="ERROR: 알 수 없는 add 플래그: '%s' (유효: --id <num>, --token-env <VAR>, --token-stdin, --mode <m>)\n"
+CCTG_MSG_ERR_ADD_FLAG_VALUE="ERROR: %s 에는 값이 필요합니다\n"
+CCTG_MSG_ERR_ADD_BAD_ENVNAME="ERROR: '%s' 은(는) 유효한 환경변수 이름이 아닙니다\n"
+CCTG_MSG_ERR_ADD_NEED_ID="ERROR: 비대화형 add(--token-env/--token-stdin)에는 --id <num> 가 필수입니다\n"
 CCTG_MSG_ADD_DONE="등록 완료: %s → cwd=%s, state=%s\n"
 CCTG_MSG_ADD_DONE_ALLOWLIST="  allowlist에 %s 시드함 (페어링 불필요)\n"
 CCTG_MSG_ADD_DONE_MODE="  권한 모드: %s  (공통: %s common / 봇별: %s config %s)\n"

@@ -335,8 +335,25 @@ down_one() {
 
 cmd_add() {
     NAME="${1:?name 필요}"; CWD="${2:?working_dir 필요}"
+    shift 2 || true
+
+    # 비대화형 플래그 파싱. 토큰 플래그(--token-env/--token-stdin)가 있으면 비대화형 모드로 전환:
+    # 그 경우 --id 가 필수이고, --mode 생략 시 공통 설정을 따른다(프롬프트 없음).
+    # 토큰은 프로세스 목록 노출을 피하기 위해 argv 로 직접 받지 않는다(env 또는 stdin 경유).
+    local opt_id="" opt_token_env="" opt_token_stdin=0 opt_mode="" noninteractive=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --id)          [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--id";          opt_id="$2"; shift 2 ;;
+        --token-env)   [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--token-env";   opt_token_env="$2"; noninteractive=1; shift 2 ;;
+        --token-stdin) opt_token_stdin=1; noninteractive=1; shift ;;
+        --mode)        [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--mode";        opt_mode="$2"; shift 2 ;;
+        *)             die ERR_ADD_UNKNOWN_FLAG "$1" ;;
+      esac
+    done
+
     valid_name "$NAME" || die ERR_BADNAME "$NAME"
     is_reserved_name "$NAME" && die ERR_RESERVED "$NAME" "$RESERVED_NAMES"
+    [ -n "$opt_mode" ] && ! valid_mode "$opt_mode" && die ERR_BAD_MODE_ADD "$opt_mode" "$VALID_MODES"
     SD="$CHANNELS_DIR/$NAME"
     if lookup "$NAME" >/dev/null 2>&1; then die ERR_ALREADY_REGISTERED "$NAME"; fi
     # 외부(전역) 채널 디렉터리 보호: 우리가 만든 적 없는(launch.env 부재) 상태 디렉터리에
@@ -346,14 +363,27 @@ cmd_add() {
     fi
     mkdir -p "$SD/inbox"
 
-    # 1) 봇 토큰 (가려서 입력)
-    t ADD_PROMPT_TOKEN
-    read -rs TOKEN; echo
+    # 1) 봇 토큰 — stdin/env(비대화형) 또는 가려서 입력(대화형)
+    if [ "$opt_token_stdin" = 1 ]; then
+      IFS= read -r TOKEN || true
+    elif [ -n "$opt_token_env" ]; then
+      printf '%s' "$opt_token_env" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$' || die ERR_ADD_BAD_ENVNAME "$opt_token_env"
+      TOKEN="${!opt_token_env-}"
+    else
+      t ADD_PROMPT_TOKEN
+      read -rs TOKEN; echo
+    fi
     [ -z "$TOKEN" ] && die ERR_EMPTY_TOKEN
 
-    # 2) 본인 텔레그램 숫자 ID (allowlist 시드용)
-    t ADD_PROMPT_TGID
-    read -r TGID
+    # 2) 본인 텔레그램 숫자 ID (allowlist 시드용) — 비대화형이면 --id 필수
+    if [ -n "$opt_id" ]; then
+      TGID="$opt_id"
+    elif [ "$noninteractive" = 1 ]; then
+      die ERR_ADD_NEED_ID
+    else
+      t ADD_PROMPT_TGID
+      read -r TGID
+    fi
     printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"
 
     # 3) 토큰 → .env (600)
@@ -366,11 +396,17 @@ cmd_add() {
 { "dmPolicy": "allowlist", "allowFrom": ["$TGID"], "groups": {}, "pending": {} }
 JSON
 
-    # 4.5) 권한 모드 선택 (선택). 비우면 공통 설정(cctg common 의 defaultMode)을 따른다.
-    t ADD_PROMPT_MODE "$VALID_MODES"
-    read -r PMODE
-    if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
-      die ERR_BAD_MODE_ADD "$PMODE" "$VALID_MODES"
+    # 4.5) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음), 아니면 대화형
+    if [ -n "$opt_mode" ]; then
+      PMODE="$opt_mode"
+    elif [ "$noninteractive" = 1 ]; then
+      PMODE=""
+    else
+      t ADD_PROMPT_MODE "$VALID_MODES"
+      read -r PMODE
+      if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
+        die ERR_BAD_MODE_ADD "$PMODE" "$VALID_MODES"
+      fi
     fi
 
     # 4.6) 공통 설정 파일 시드 (없으면)
