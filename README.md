@@ -31,6 +31,8 @@ It never touches the global bot (`~/.claude/channels/telegram/`). Each project b
 
 ## Requirements
 
+> **macOS only** — CCTG relies on `caffeinate` (a macOS built-in) and assumes the macOS shell/tooling layout. Linux and WSL are **not supported** at this time.
+
 | Dependency | Purpose | Notes |
 |---|---|---|
 | `claude` | Claude Code CLI | Required |
@@ -90,6 +92,8 @@ cctg <command> [args]
 
 > Bot names may only contain letters, digits, `_`, and `-` (to avoid clashing with tmux session names and registry separators). `telegram` is reserved for the global bot and cannot be used.
 
+> **Note on sample output** — The CLI currently prints its status/diagnostic messages in Korean. The example output blocks below are shown **verbatim** (real program output), with paths/IDs replaced by placeholders.
+
 ### 1. Register / remove a bot (add / rm)
 
 ```bash
@@ -102,6 +106,17 @@ cctg rm  myproject --purge            # unregister + delete state directory
 
 - **Bot token** — a token for a **new bot** issued by [@BotFather](https://t.me/BotFather) (masked input, stored in `.env` with 600 permissions)
 - **Your numeric Telegram ID** — if you don't know it, DM [@userinfobot](https://t.me/userinfobot). The given ID is used to auto-generate the `access.json` allowlist, so no separate pairing is needed.
+
+Example session (token input is masked):
+
+```console
+$ cctg add myproject ~/work/myproject
+봇 토큰 입력 (@BotFather 발급, 새 봇이어야 함): ********
+본인 텔레그램 숫자 ID (모르면 @userinfobot 에 DM): 123456789
+권한 모드 [엔터=공통 따름 | acceptEdits auto bypassPermissions default dontAsk plan]:
+등록 완료: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
+  allowlist에 123456789 시드함 (페어링 불필요)
+```
 
 By default `rm` **keeps** the state directory containing the token and allowlist (reusable on re-registration). A running bot must be stopped with `down` first. `--purge` also deletes the state directory, but for safety it never touches the global bot directory or paths outside `CHANNELS_DIR`.
 
@@ -127,6 +142,11 @@ cctg restart all        # restart all
 
 On start, `caffeinate -is` prevents sleep while the bot runs in a detached tmux session (`cctg-<name>`). After that, DM the bot and it responds right away.
 
+```console
+$ cctg up myproject
+UP   myproject  (cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject, tmux=cctg-myproject)
+```
+
 ### 3. Status / logs (status / logs / attach)
 
 ```bash
@@ -138,10 +158,45 @@ cctg attach myproject    # attach to the tmux session for live view (detach: Ctr
 
 `status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent. If the bot is stopped, `logs` and `attach` stop with a friendly message.
 
+```console
+$ cctg status
+전역 봇: /Users/you/.claude/channels/telegram (이 스크립트는 관리하지 않음)
+--- 프로젝트 봇 ---
+  [RUNNING] myproject  up 2h13m  (tmux=cctg-myproject)
+            cwd=/Users/you/work/myproject  state=/Users/you/.claude/channels/myproject
+            권한모드=공통
+  [stopped] sandbox
+            cwd=/Users/you/work/sandbox  state=/Users/you/.claude/channels/sandbox
+            권한모드=bypassPermissions
+  [BROKEN ] oldbot  (cwd없음, 토큰없음)
+            cwd=/Users/you/work/oldbot  state=/Users/you/.claude/channels/oldbot
+            권한모드=공통
+```
+
 ### 4. Diagnostics (doctor)
 
 ```bash
 cctg doctor              # check dependencies (tmux/claude/caffeinate/jq), PATH, registry, shared permission policy
+```
+
+```console
+$ cctg doctor
+cctg doctor (v0.1.0)
+--- 의존성 ---
+  ok   tmux (/opt/homebrew/bin/tmux)
+  ok   claude (/Users/you/.local/bin/claude)
+  ok   caffeinate (/usr/bin/caffeinate)
+  ok   jq (/opt/homebrew/bin/jq)
+--- PATH ---
+  ok   ~/.local/bin 이 PATH에 있음
+--- 레지스트리 ---
+  파일: /Users/you/.claude/channels/projects.conf
+  등록된 프로젝트 봇: 2 개
+--- 공통 설정(권한 정책) ---
+  파일: /Users/you/.claude/channels/cctg-shared.settings.json
+  defaultMode: bypassPermissions
+  deny: 5 개 / allow: 0 개
+  (telegram 플러그인은 전역 설치 필요: /plugin install telegram@claude-plugins-official)
 ```
 
 ## Permissions & options (config / common)
@@ -231,6 +286,9 @@ This removes only `~/.local/bin/cctg` (after verifying we installed it) and neve
 
 ## Further reading
 
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 - [Packaging structure and future promotion path](docs/packaging.md)
 - [Future work candidates (TODO)](docs/TODO.md)
 
