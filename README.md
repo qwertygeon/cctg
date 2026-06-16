@@ -2,6 +2,8 @@
 
 # CCTG — Claude Code Tmux Gateway
 
+[![CI](https://github.com/qwertygeon/cctg/actions/workflows/ci.yml/badge.svg)](https://github.com/qwertygeon/cctg/actions/workflows/ci.yml)
+
 **CCTG** (Claude Code Tmux Gateway) is a launcher for macOS that ties together **tmux + Claude Code + the Telegram gateway**, making it easy to spin up and manage per-project Claude Code Telegram channel bots. The command is `cctg`.
 
 It never touches the global bot (`~/.claude/channels/telegram/`). Each project bot has its own state directory, token, and working directory, and runs in an isolated tmux session.
@@ -51,7 +53,7 @@ It never touches the global bot (`~/.claude/channels/telegram/`). Each project b
 | `claude` | Claude Code CLI | Required |
 | `tmux` | Runs the bot in a detached session | Required |
 | `caffeinate` | Prevents system sleep while running | Built into macOS |
-| `jq` | Structured edits of `cctg common` permission policy | Optional (without it, use `common edit` to edit directly) |
+| `jq` | Structured edits of `cctg common` permission policy; `cctg status --json` output | Optional (without it, use `common edit` to edit directly; `status --json` errors) |
 | telegram plugin | Telegram channel integration | Must be installed globally: `/plugin install telegram@claude-plugins-official` |
 
 ## Installation
@@ -96,10 +98,11 @@ cctg status
 
 ```
 cctg <command> [args]
-  add <name> <cwd>      rm <name> [--purge]   rename <old> <new> [--keep-dir]
+  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+  rm <name> [--purge]   rename <old> <new> [--keep-dir]
   config <name> [...]   common [...]          (permissions/options — see "Permissions & options")
   up <name|all>         down <name|all>       restart <name|all>
-  status                logs <name> [N]       attach <name>
+  status [--json]       logs <name> [N]       attach <name>
   lang [show|en|ko|clear]                     (CLI output language — see "Language")
   doctor                update                version           help
 ```
@@ -130,6 +133,28 @@ Your numeric Telegram ID (DM @userinfobot if unknown): 123456789
 Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
+```
+
+#### Non-interactive registration (CI / scripting)
+
+Pass flags to skip the prompts. Supplying a **token flag** (`--token-env` or `--token-stdin`) switches `add` to non-interactive mode, which then **requires `--id`**; `--mode` is optional (omit to follow the shared policy).
+
+| Flag | Meaning |
+|---|---|
+| `--id <num>` | Numeric Telegram ID for the allowlist (required when non-interactive) |
+| `--token-env <VAR>` | Read the bot token from environment variable `VAR` |
+| `--token-stdin` | Read the bot token from stdin (one line) |
+| `--mode <m>` | Permission mode (`acceptEdits`/`auto`/`bypassPermissions`/`default`/`dontAsk`/`plan`) |
+
+> The token is **never taken as a command-line argument** (it would leak via the process list). Use `--token-env` or `--token-stdin`.
+
+```bash
+# from an environment variable
+BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
+  --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
+
+# from stdin (e.g. piped from a secrets manager)
+secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
 ```
 
 By default `rm` **keeps** the state directory containing the token and allowlist (reusable on re-registration). A running bot must be stopped with `down` first. `--purge` also deletes the state directory, but for safety it never touches the global bot directory or paths outside `CHANNELS_DIR`.
@@ -165,12 +190,26 @@ UP   myproject  (cwd=/Users/you/work/myproject, state=/Users/you/.claude/channel
 
 ```bash
 cctg status              # per-bot status (RUNNING+uptime / stopped / BROKEN) + cwd/state paths
+cctg status --json       # machine-readable status (for scripting/other tools; needs jq)
 cctg logs myproject      # print the last 50 log lines (without attaching)
 cctg logs myproject 200  # last 200 lines
 cctg attach myproject    # attach to the tmux session for live view (detach: Ctrl-b d)
 ```
 
-`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent. If the bot is stopped, `logs` and `attach` stop with a friendly message.
+`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent — and a per-reason recovery hint (`↳ ...`) is printed beneath it. `status --json` emits a machine-readable array (`name`, `state`, `running`, `cwd`, `stateDir`, `mode`, `session`, `uptimeSeconds`, `issues`) with locale-independent tokens, for use by other tools (requires `jq`).
+
+`logs` reads the live tmux pane while the bot is running. On `down`, CCTG saves a snapshot of the pane (the rendered text, up to ~2000 lines) to `<state>/last-session.log`, so `logs` keeps working **after** the bot is stopped — it falls back to that snapshot. `attach` still requires a running session.
+
+> The snapshot lives inside the 0700 state directory with 600 permissions. It can contain conversation content, so treat it like the rest of the state directory.
+
+**Periodic snapshots (crash/reboot coverage, opt-in).** The `down` snapshot only fires on a graceful stop, so a crash or reboot that never runs `down` leaves no fresh log. Enable a periodic snapshot per bot to cover that:
+
+```bash
+cctg config myproject snapshot 60    # snapshot every 60s while running (min 5)
+cctg config myproject snapshot off   # disable (default)
+```
+
+While the bot runs, a lightweight background watcher re-captures the pane every N seconds to the same `last-session.log` (rendered text, so no ANSI noise), and exits automatically when the session ends. After a crash or reboot, `cctg logs` then shows the most recent snapshot (at most N seconds stale). It's off by default because it writes continuously; `restart` applies a changed interval.
 
 ```console
 $ cctg status
@@ -195,7 +234,7 @@ cctg doctor              # check dependencies (tmux/claude/caffeinate/jq), PATH,
 
 ```console
 $ cctg doctor
-cctg doctor (v0.1.0)
+cctg doctor (vX.Y.Z)
 --- dependencies ---
   ok   tmux (/opt/homebrew/bin/tmux)
   ok   claude (/Users/you/.local/bin/claude)
@@ -268,6 +307,7 @@ cctg config myproject                       # print bot options (= config ... sh
 cctg config myproject mode bypassPermissions   # set this bot's permission mode
 cctg config myproject mode clear            # clear it to follow the shared value
 cctg config myproject args "--model opus"   # extra claude args for this bot only
+cctg config myproject snapshot 60           # periodic log snapshot every 60s (off to disable)
 cctg config myproject edit                  # edit launch.env directly
 ```
 

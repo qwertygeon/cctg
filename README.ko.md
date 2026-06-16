@@ -2,6 +2,8 @@
 
 # CCTG — Claude Code Tmux Gateway
 
+[![CI](https://github.com/qwertygeon/cctg/actions/workflows/ci.yml/badge.svg)](https://github.com/qwertygeon/cctg/actions/workflows/ci.yml)
+
 **CCTG**(Claude Code Tmux Gateway)는 macOS에서 **tmux + Claude Code + Telegram 게이트웨이**를 묶어, 프로젝트별 Claude Code 텔레그램 채널 봇을 쉽게 띄우고 관리하는 런처다. 명령은 `cctg` 다.
 
 전역 봇(`~/.claude/channels/telegram/`)은 건드리지 않는다. 프로젝트 봇은 각자 상태 디렉터리·토큰·작업 디렉터리를 갖고 격리된 tmux 세션에서 돈다.
@@ -51,7 +53,7 @@
 | `claude` | Claude Code CLI | 필수 |
 | `tmux` | 봇을 detached 세션으로 구동 | 필수 |
 | `caffeinate` | 구동 중 시스템 sleep 방지 | macOS 기본 제공 |
-| `jq` | `cctg common` 의 구조화된 권한 정책 수정 | 선택(없으면 `common edit` 로 직접 편집) |
+| `jq` | `cctg common` 의 구조화된 권한 정책 수정; `cctg status --json` 출력 | 선택(없으면 `common edit` 로 직접 편집; `status --json` 은 에러) |
 | telegram 플러그인 | Telegram 채널 연동 | 전역 설치 필요: `/plugin install telegram@claude-plugins-official` |
 
 ## 설치
@@ -96,10 +98,11 @@ cctg status
 
 ```
 cctg <command> [args]
-  add <name> <cwd>      rm <name> [--purge]   rename <old> <new> [--keep-dir]
+  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+  rm <name> [--purge]   rename <old> <new> [--keep-dir]
   config <name> [...]   common [...]          (권한·옵션 — 아래 「권한·옵션」 절)
   up <name|all>         down <name|all>       restart <name|all>
-  status                logs <name> [N]       attach <name>
+  status [--json]       logs <name> [N]       attach <name>
   lang [show|en|ko|clear]                     (CLI 출력 언어 — 아래 「언어」 절)
   doctor                update                version           help
 ```
@@ -128,6 +131,28 @@ $ cctg add myproject ~/work/myproject
 권한 모드 [엔터=공통 따름 | acceptEdits auto bypassPermissions default dontAsk plan]:
 등록 완료: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   allowlist에 123456789 시드함 (페어링 불필요)
+```
+
+#### 비대화형 등록 (CI / 스크립트)
+
+플래그로 프롬프트를 건너뛴다. **토큰 플래그**(`--token-env` 또는 `--token-stdin`)를 주면 `add` 가 비대화형 모드로 전환되며, 이때 **`--id` 가 필수**다. `--mode` 는 선택(생략 시 공통 정책을 따름).
+
+| 플래그 | 의미 |
+|---|---|
+| `--id <num>` | allowlist용 숫자 Telegram ID (비대화형 시 필수) |
+| `--token-env <VAR>` | 환경변수 `VAR` 에서 봇 토큰을 읽음 |
+| `--token-stdin` | stdin(한 줄)에서 봇 토큰을 읽음 |
+| `--mode <m>` | 권한 모드 (`acceptEdits`/`auto`/`bypassPermissions`/`default`/`dontAsk`/`plan`) |
+
+> 토큰은 **명령행 인자로 받지 않는다**(프로세스 목록에 노출되므로). `--token-env` 또는 `--token-stdin` 을 사용한다.
+
+```bash
+# 환경변수에서
+BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
+  --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
+
+# stdin 에서 (예: 시크릿 매니저 파이프)
+secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
 ```
 
 `rm` 은 기본적으로 토큰·allowlist가 든 상태 디렉터리를 **보존**한다(재등록 시 재사용 가능). 실행 중인 봇은 먼저 `down` 해야 한다. `--purge` 는 상태 디렉터리까지 삭제하되, 전역 봇 디렉터리나 `CHANNELS_DIR` 밖 경로는 안전을 위해 건드리지 않는다.
@@ -163,12 +188,26 @@ UP   myproject  (cwd=/Users/you/work/myproject, state=/Users/you/.claude/channel
 
 ```bash
 cctg status              # 봇별 상태(RUNNING+업타임 / stopped / BROKEN) + cwd·state 경로
+cctg status --json       # 기계 판독용 상태 (스크립트·외부 도구 연동용, jq 필요)
 cctg logs myproject      # 최근 로그 50줄 출력 (attach 없이)
 cctg logs myproject 200  # 최근 200줄
 cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리: Ctrl-b d)
 ```
 
-`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우다. `logs` 와 `attach` 는 봇이 정지 상태면 친절한 안내와 함께 중단한다.
+`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우이며, 그 아래에 사유별 복구 힌트(`↳ ...`)를 출력한다. `status --json` 은 기계 판독용 배열(`name`·`state`·`running`·`cwd`·`stateDir`·`mode`·`session`·`uptimeSeconds`·`issues`)을 로케일 무관 토큰으로 출력한다(외부 도구 연동용, `jq` 필요).
+
+`logs` 는 봇이 실행 중이면 tmux 페인을 실시간으로 읽는다. `down` 시 CCTG 가 페인 스냅샷(렌더된 텍스트, 최대 ~2000줄)을 `<state>/last-session.log` 에 저장하므로, 봇을 **정지한 뒤에도** `logs` 가 그 스냅샷으로 폴백해 동작한다. `attach` 는 여전히 실행 중인 세션이 필요하다.
+
+> 스냅샷은 0700 상태 디렉터리 안에 600 권한으로 저장되며 대화 내용이 포함될 수 있으므로 상태 디렉터리와 동일하게 취급한다.
+
+**주기 스냅샷 (크래시·재부팅 대비, 옵트인).** `down` 스냅샷은 정상 정지 시에만 찍히므로, `down` 을 거치지 않는 크래시·재부팅은 최신 로그를 남기지 못한다. 봇별로 주기 스냅샷을 켜서 이를 보완한다:
+
+```bash
+cctg config myproject snapshot 60    # 실행 중 60초마다 스냅샷 (최소 5)
+cctg config myproject snapshot off   # 비활성화 (기본값)
+```
+
+봇이 실행 중이면 가벼운 백그라운드 watcher 가 N초마다 페인을 같은 `last-session.log` 로 재캡처(렌더 텍스트라 ANSI 잡음 없음)하고, 세션이 끝나면 자동 종료된다. 크래시·재부팅 후 `cctg logs` 는 가장 최근 스냅샷(최대 N초 지난)을 보여준다. 연속 기록 비용 때문에 기본은 OFF 이며, 주기 변경은 `restart` 로 적용된다.
 
 ```console
 $ cctg status
@@ -193,7 +232,7 @@ cctg doctor              # 의존성(tmux/claude/caffeinate/jq)·PATH·레지스
 
 ```console
 $ cctg doctor
-cctg doctor (v0.1.0)
+cctg doctor (vX.Y.Z)
 --- 의존성 ---
   ok   tmux (/opt/homebrew/bin/tmux)
   ok   claude (/Users/you/.local/bin/claude)
@@ -266,6 +305,7 @@ cctg config myproject                       # 봇 옵션 출력 (= config ... sh
 cctg config myproject mode bypassPermissions   # 이 봇 권한 모드 설정
 cctg config myproject mode clear            # 공통값을 따르도록 비움
 cctg config myproject args "--model opus"   # 이 봇 전용 claude 추가 인자
+cctg config myproject snapshot 60           # 주기 로그 스냅샷 60초마다 (off 로 비활성화)
 cctg config myproject edit                  # launch.env 직접 편집
 ```
 

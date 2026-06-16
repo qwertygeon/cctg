@@ -51,7 +51,7 @@ _cctg() {
       if (( CURRENT == 3 )); then
         _cctg_names
       elif (( CURRENT == 4 )); then
-        compadd -- show edit mode args
+        compadd -- show edit mode args snapshot
       fi ;;
     common)
       # common <action> [...]
@@ -64,7 +64,19 @@ _cctg() {
         esac
       fi ;;
     add)
-      (( CURRENT == 4 )) && _files -/ ;;
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+      if (( CURRENT == 4 )); then
+        _files -/
+      elif (( CURRENT >= 5 )); then
+        case "${words[CURRENT-1]}" in
+          --mode)      compadd -- acceptEdits auto bypassPermissions default dontAsk plan ;;
+          --token-env) compadd -- ${(k)parameters} ;;
+          --id)        ;; # 자유 입력(숫자)
+          *)           compadd -- --id --token-env --token-stdin --mode ;;
+        esac
+      fi ;;
+    status)
+      (( CURRENT == 3 )) && compadd -- --json ;;
     lang)
       (( CURRENT == 3 )) && compadd -- show en ko clear ;;
   esac

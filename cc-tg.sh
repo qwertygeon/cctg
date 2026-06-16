@@ -95,12 +95,15 @@ cctg_lang() {
 _load_messages() {
   local lang base sel
   if base="$(find_companion messages/en.sh)"; then
+    # 런타임 결정 경로 — 정적 추적 불가
+    # shellcheck source=/dev/null
     . "$base"
   else
     printf 'cctg: warning: message catalog not found (messages/en.sh); output may show raw keys.\n' >&2
   fi
   lang="$(cctg_lang)"
   if [ "$lang" != "en" ]; then
+    # shellcheck source=/dev/null
     sel="$(find_companion "messages/$lang.sh")" && . "$sel"
   fi
 }
@@ -198,6 +201,12 @@ mode_of() {
     | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
 }
 
+# launch.env 의 CCTG_LOG_SNAPSHOT_INTERVAL(초) 추출(따옴표 제거). 없으면 빈 문자열.
+snapshot_interval_of() {
+  conf_get "$1/launch.env" CCTG_LOG_SNAPSHOT_INTERVAL \
+    | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
+}
+
 # jq 필요 동작 가드
 need_jq() {
   command -v jq >/dev/null 2>&1 && return 0
@@ -288,6 +297,51 @@ fmt_dur() {
   else                      printf '%dm' "$m"; fi
 }
 
+# 세션의 현재 화면(렌더 텍스트, 스크롤백 2000줄)을 last-session.log(600)로 원자적 저장.
+# capture-pane 의 렌더 텍스트라 ANSI 잡음이 없다. tmp→mv 라 읽는 쪽이 부분 파일을 보지 않는다.
+take_snapshot() {
+  local sess="$1" sd="$2" snap="$2/last-session.log"
+  [ -d "$sd" ] || return 0
+  if tmux capture-pane -p -S -2000 -t "$sess" > "$snap.tmp" 2>/dev/null; then
+    mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
+  else
+    rm -f "$snap.tmp"
+  fi
+}
+
+# 실행 중인 봇 세션을 interval 초마다 스냅샷하는 백그라운드 watcher 기동(크래시·재부팅 대비).
+# 세션이 사라지면 watcher 가 스스로 종료한다. PID 는 <sd>/.snapshotter.pid 로 추적해 down 시 정지.
+# nohup + fd 리다이렉트로 호출 셸과 분리되어 cctg 종료 후에도 계속 동작한다.
+start_snapshotter() {
+  local name="$1" sd="$2" interval="$3" sess pidf
+  sess="$(sess_of "$name")"; pidf="$sd/.snapshotter.pid"
+  stop_snapshotter "$sd"   # 재기동 시 기존 watcher 정리
+  # 루프 본문은 단일 인용 문자열이라 부모 셸 확장과 무관(인자로 값 전달).
+  nohup bash -c '
+    sess="$1"; sd="$2"; interval="$3"; snap="$sd/last-session.log"
+    while tmux has-session -t "$sess" 2>/dev/null; do
+      if tmux capture-pane -p -S -2000 -t "$sess" > "$snap.tmp" 2>/dev/null; then
+        mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
+      else
+        rm -f "$snap.tmp"
+      fi
+      sleep "$interval"
+    done
+    rm -f "$sd/.snapshotter.pid"
+  ' cctg-snapshotter "$sess" "$sd" "$interval" >/dev/null 2>&1 &
+  printf '%s\n' "$!" > "$pidf"
+  chmod 600 "$pidf" 2>/dev/null
+}
+
+# watcher 정지(있으면). PID 파일을 읽어 종료하고 파일 제거. 없으면 무동작.
+stop_snapshotter() {
+  local pidf="$1/.snapshotter.pid" pid
+  [ -f "$pidf" ] || return 0
+  pid="$(head -n1 "$pidf" 2>/dev/null)"
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  rm -f "$pidf"
+}
+
 up_one() {
   local name="$1" cwd sd row
   row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name"; return 1; }
@@ -306,7 +360,8 @@ up_one() {
   # 봇별 launch.env(있으면)에서 CCTG_PERMISSION_MODE / CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
   #   - CCTG_PERMISSION_MODE 가 있으면 --permission-mode 로 공통 defaultMode 를 override (없으면 공통값 사용).
   #   - \$ 이스케이프로 런타임(launch.env source 이후)에 단어 분리되도록 한다.
-  local launch="cd $(printf '%q' "$cwd") \
+  local launch
+  launch="cd $(printf '%q' "$cwd") \
 && export TELEGRAM_STATE_DIR=$(printf '%q' "$sd") \
 && set -a && source $(printf '%q' "$sd/.env") \
 && { [ -f $(printf '%q' "$sd/launch.env") ] && source $(printf '%q' "$sd/launch.env") || true; } \
@@ -317,22 +372,53 @@ up_one() {
 
   tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"
   t UP_OK "$name" "$cwd" "$sd" "$(sess_of "$name")"
+
+  # 옵트인: launch.env 의 CCTG_LOG_SNAPSHOT_INTERVAL(초)가 양수면 주기 스냅샷 watcher 기동.
+  local snap_iv; snap_iv="$(snapshot_interval_of "$sd")"
+  if printf '%s' "$snap_iv" | grep -qE '^[0-9]+$' && [ "$snap_iv" -gt 0 ]; then
+    start_snapshotter "$name" "$sd" "$snap_iv"
+    t UP_SNAPSHOT_ON "$snap_iv"
+  fi
 }
 
 down_one() {
-  local name="$1"
+  local name="$1" row sd=""
+  [ -n "$name" ] && row="$(lookup "$name")" && sd="$(expand "$(cut -f2 <<<"$row")")"
   if is_running "$name"; then
+    # 정지 watcher 가 우리 최종 스냅샷을 덮어쓰지 않도록 먼저 멈춘다.
+    [ -n "$sd" ] && stop_snapshotter "$sd"
+    # 종료 전 마지막 세션 출력을 보존한다 — 종료 후에도 `cctg logs` 로 조회 가능.
+    [ -n "$sd" ] && take_snapshot "$(sess_of "$name")" "$sd"
     tmux kill-session -t "$(sess_of "$name")"
     t DOWN_OK "$name"
   else
+    # 세션이 외부에서 종료된 경우 남아 있을 수 있는 watcher PID 파일을 정리한다.
+    [ -n "$sd" ] && stop_snapshotter "$sd"
     t DOWN_STOPPED "$name"
   fi
 }
 
 cmd_add() {
     NAME="${1:?name 필요}"; CWD="${2:?working_dir 필요}"
+    shift 2 || true
+
+    # 비대화형 플래그 파싱. 토큰 플래그(--token-env/--token-stdin)가 있으면 비대화형 모드로 전환:
+    # 그 경우 --id 가 필수이고, --mode 생략 시 공통 설정을 따른다(프롬프트 없음).
+    # 토큰은 프로세스 목록 노출을 피하기 위해 argv 로 직접 받지 않는다(env 또는 stdin 경유).
+    local opt_id="" opt_token_env="" opt_token_stdin=0 opt_mode="" noninteractive=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --id)          [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--id";          opt_id="$2"; shift 2 ;;
+        --token-env)   [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--token-env";   opt_token_env="$2"; noninteractive=1; shift 2 ;;
+        --token-stdin) opt_token_stdin=1; noninteractive=1; shift ;;
+        --mode)        [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--mode";        opt_mode="$2"; shift 2 ;;
+        *)             die ERR_ADD_UNKNOWN_FLAG "$1" ;;
+      esac
+    done
+
     valid_name "$NAME" || die ERR_BADNAME "$NAME"
     is_reserved_name "$NAME" && die ERR_RESERVED "$NAME" "$RESERVED_NAMES"
+    [ -n "$opt_mode" ] && ! valid_mode "$opt_mode" && die ERR_BAD_MODE_ADD "$opt_mode" "$VALID_MODES"
     SD="$CHANNELS_DIR/$NAME"
     if lookup "$NAME" >/dev/null 2>&1; then die ERR_ALREADY_REGISTERED "$NAME"; fi
     # 외부(전역) 채널 디렉터리 보호: 우리가 만든 적 없는(launch.env 부재) 상태 디렉터리에
@@ -342,14 +428,27 @@ cmd_add() {
     fi
     mkdir -p "$SD/inbox"
 
-    # 1) 봇 토큰 (가려서 입력)
-    t ADD_PROMPT_TOKEN
-    read -rs TOKEN; echo
+    # 1) 봇 토큰 — stdin/env(비대화형) 또는 가려서 입력(대화형)
+    if [ "$opt_token_stdin" = 1 ]; then
+      IFS= read -r TOKEN || true
+    elif [ -n "$opt_token_env" ]; then
+      printf '%s' "$opt_token_env" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$' || die ERR_ADD_BAD_ENVNAME "$opt_token_env"
+      TOKEN="${!opt_token_env-}"
+    else
+      t ADD_PROMPT_TOKEN
+      read -rs TOKEN; echo
+    fi
     [ -z "$TOKEN" ] && die ERR_EMPTY_TOKEN
 
-    # 2) 본인 텔레그램 숫자 ID (allowlist 시드용)
-    t ADD_PROMPT_TGID
-    read -r TGID
+    # 2) 본인 텔레그램 숫자 ID (allowlist 시드용) — 비대화형이면 --id 필수
+    if [ -n "$opt_id" ]; then
+      TGID="$opt_id"
+    elif [ "$noninteractive" = 1 ]; then
+      die ERR_ADD_NEED_ID
+    else
+      t ADD_PROMPT_TGID
+      read -r TGID
+    fi
     printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"
 
     # 3) 토큰 → .env (600)
@@ -362,11 +461,17 @@ cmd_add() {
 { "dmPolicy": "allowlist", "allowFrom": ["$TGID"], "groups": {}, "pending": {} }
 JSON
 
-    # 4.5) 권한 모드 선택 (선택). 비우면 공통 설정(cctg common 의 defaultMode)을 따른다.
-    t ADD_PROMPT_MODE "$VALID_MODES"
-    read -r PMODE
-    if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
-      die ERR_BAD_MODE_ADD "$PMODE" "$VALID_MODES"
+    # 4.5) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음), 아니면 대화형
+    if [ -n "$opt_mode" ]; then
+      PMODE="$opt_mode"
+    elif [ "$noninteractive" = 1 ]; then
+      PMODE=""
+    else
+      t ADD_PROMPT_MODE "$VALID_MODES"
+      read -r PMODE
+      if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
+        die ERR_BAD_MODE_ADD "$PMODE" "$VALID_MODES"
+      fi
     fi
 
     # 4.6) 공통 설정 파일 시드 (없으면)
@@ -383,6 +488,10 @@ CCTG_PERMISSION_MODE=
 
 # 이 봇 전용 claude 추가 인자(선택). 예: CLAUDE_EXTRA_ARGS="--model opus"
 CLAUDE_EXTRA_ARGS=
+
+# 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
+# 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
+CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
     [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
 
@@ -465,13 +574,19 @@ CCTG_PERMISSION_MODE=
 
 # 이 봇 전용 claude 추가 인자(선택). 예: CLAUDE_EXTRA_ARGS="--model opus"
 CLAUDE_EXTRA_ARGS=
+
+# 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
+# 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
+CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
     fi
     case "$ACTION" in
       show)
-        local pm; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
+        local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
+        sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
         t CFG_SHOW_HEADER "$NAME" "$LE"
         t CFG_SHOW_MODE "$pm"
+        t CFG_SHOW_SNAPSHOT "$sv"
         t CFG_SHOW_LAUNCHENV
         cat "$LE" ;;
       edit)
@@ -487,13 +602,26 @@ ENV
           set_env_kv "$LE" CCTG_PERMISSION_MODE "$M"
           t CFG_MODE_SET "$NAME" "$M"
         fi
-        is_running "$NAME" && t APPLY_RESTART "$PROG" "$NAME" ;;
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       args)
         ARGS="${3-}"
         set_env_kv "$LE" CLAUDE_EXTRA_ARGS "$ARGS"
         local argshow="${ARGS:-$(t EMPTY_PAREN)}"
         t CFG_ARGS_SET "$NAME" "$argshow"
-        is_running "$NAME" && t APPLY_RESTART "$PROG" "$NAME" ;;
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      snapshot)
+        S="${3-}"
+        [ -z "$S" ] && die ERR_CONFIG_SNAPSHOT_USAGE "$PROG" "$NAME"
+        if [ "$S" = off ] || [ "$S" = 0 ]; then
+          set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL ""
+          t CFG_SNAPSHOT_OFF "$NAME"
+        else
+          { printf '%s' "$S" | grep -qE '^[0-9]+$' && [ "$S" -ge 5 ]; } \
+            || die ERR_BAD_SNAPSHOT "$S"
+          set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL "$S"
+          t CFG_SNAPSHOT_SET "$NAME" "$S"
+        fi
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
         te ERR_CONFIG_UNKNOWN "$ACTION"
         t CFG_USAGE "$PROG" >&2
@@ -565,6 +693,9 @@ cmd_restart() {
 }
 
 cmd_status() {
+    [ "${1:-}" = "--json" ] && { status_json; return; }
+    if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
+
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
@@ -586,6 +717,9 @@ cmd_status() {
         t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
       elif [ -n "$issues" ]; then
         t STATUS_BROKEN "$n" "$issues"
+        # BROKEN 사유별 복구 힌트
+        [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$cwd" "$PROG" "$n"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$n"
       else
         t STATUS_STOPPED "$n"
       fi
@@ -593,13 +727,61 @@ cmd_status() {
       t STATUS_PATHS "$cwd" "$sd"
       t STATUS_MODE "$pm"
     done < <(all_names)
-    [ "$found" = 0 ] && t STATUS_NONE
+    if [ "$found" = 0 ]; then t STATUS_NONE; fi
+}
+
+# status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
+status_json() {
+    need_jq || exit 1
+    local objs=() n row cwd sd sess created up_s pm running state iss issues_json now
+    now="$(date +%s)"
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      row="$(lookup "$n")"
+      cwd="$(expand "$(cut -f1 <<<"$row")")"
+      sd="$(expand "$(cut -f2 <<<"$row")")"
+      sess="$(sess_of "$n")"
+      iss=()
+      [ -d "$cwd" ]     || iss+=("no-cwd")
+      [ -f "$sd/.env" ] || iss+=("no-token")
+      up_s=-1
+      if is_running "$n"; then
+        running=true; state="running"
+        created="$(tmux display-message -p -t "$sess" '#{session_created}' 2>/dev/null)"
+        printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
+      elif [ "${#iss[@]}" -gt 0 ]; then
+        running=false; state="broken"
+      else
+        running=false; state="stopped"
+      fi
+      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="shared"
+      if [ "${#iss[@]}" -gt 0 ]; then issues_json="$(printf '%s\n' "${iss[@]}" | jq -R . | jq -s .)"; else issues_json="[]"; fi
+      objs+=("$(jq -nc \
+        --arg name "$n" --arg state "$state" --argjson running "$running" \
+        --arg cwd "$cwd" --arg stateDir "$sd" --arg mode "$pm" --arg session "$sess" \
+        --argjson uptimeSeconds "$up_s" --argjson issues "$issues_json" \
+        '{name:$name,state:$state,running:$running,cwd:$cwd,stateDir:$stateDir,mode:$mode,session:$session,uptimeSeconds:(if $uptimeSeconds<0 then null else $uptimeSeconds end),issues:$issues}')")
+    done < <(all_names)
+    if [ "${#objs[@]}" -gt 0 ]; then printf '%s\n' "${objs[@]}" | jq -s .; else printf '[]\n'; fi
 }
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
-    is_running "$NAME" || die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
-    tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+    if is_running "$NAME"; then
+      tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+      return
+    fi
+    # 정지 상태: down 시 저장한 마지막 세션 스냅샷이 있으면 보여준다.
+    local row sd snap
+    if row="$(lookup "$NAME")"; then
+      sd="$(expand "$(cut -f2 <<<"$row")")"; snap="$sd/last-session.log"
+      if [ -f "$snap" ]; then
+        t LOGS_SNAPSHOT "$NAME"
+        tail -n "$N" "$snap"
+        return
+      fi
+    fi
+    die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
 }
 
 cmd_attach() {
@@ -615,7 +797,7 @@ cmd_lang() {
       show)
         local l src
         if [ -n "${CCTG_LANG:-}" ]; then
-          l="$CCTG_LANG"; src=env
+          l="$CCTG_LANG"; src="env"
         elif [ -n "$(conf_get "$CCTG_CONFIG" lang)" ]; then
           l="$(conf_get "$CCTG_CONFIG" lang)"; src=config
         elif [ -n "${LC_ALL:-${LANG:-}}" ]; then

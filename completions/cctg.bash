@@ -5,6 +5,7 @@
 _cctg() {
   local cur prev cmd cmds names extra reg
   cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
   cmds="add rm rename config common up down restart status logs attach lang doctor update version help"
   reg="${CC_TG_REGISTRY:-${CC_CHANNELS_DIR:-$HOME/.claude/channels}/projects.conf}"
 
@@ -24,7 +25,7 @@ _cctg() {
         case "$cmd" in up|down|restart) extra="all" ;; *) extra="" ;; esac
         COMPREPLY=( $(compgen -W "$names $extra" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
-        COMPREPLY=( $(compgen -W "show edit mode args" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show edit mode args snapshot" -- "$cur") )
       fi
       ;;
     common)
@@ -39,9 +40,22 @@ _cctg() {
       fi
       ;;
     add)
-      # add <name> <cwd> — 세 번째 인자는 디렉터리
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
       if [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -d -- "$cur") )
+      elif [ "$COMP_CWORD" -ge 4 ]; then
+        case "$prev" in
+          --mode)      COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") ) ;;
+          --token-env) COMPREPLY=( $(compgen -A variable -- "$cur") ) ;;
+          --id)        ;; # 자유 입력(숫자)
+          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode" -- "$cur") ) ;;
+        esac
+      fi
+      ;;
+    status)
+      # status [--json]
+      if [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=( $(compgen -W "--json" -- "$cur") )
       fi
       ;;
     lang)

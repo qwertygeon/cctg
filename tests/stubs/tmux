@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Fake tmux for the cctg test suite.
+#
+# Deterministic and side-effect-free: it never talks to a real tmux server, so
+# tests can exercise is_running / status / up / down / restart without spawning
+# real sessions.
+#
+# Session state is tracked in the file named by $FAKE_TMUX_STATE (one session
+# name per line); the test harness points it inside $BATS_TEST_TMPDIR. When
+# $FAKE_TMUX_STATE is unset the stub is stateless and reports nothing running.
+#   - new-session  -> records the -s <name> session as running
+#   - kill-session -> removes the -t <name> session
+#   - has-session  -> exit 0 if the -t <name> session is recorded, else 1
+#   - display-message -> prints $FAKE_TMUX_CREATED (default 1700000000)
+#   - capture-pane -> prints two fixed lines (clean rendered text)
+
+state="${FAKE_TMUX_STATE:-}"
+cmd="${1:-}"; shift || true
+
+# Pull a flag's value out of the remaining args (e.g. -s <val> / -t <val>).
+flag_val() {
+  local want="$1"; shift
+  while [ $# -gt 0 ]; do
+    [ "$1" = "$want" ] && { printf '%s' "${2:-}"; return 0; }
+    shift
+  done
+  return 1
+}
+
+case "$cmd" in
+  has-session)
+    target="$(flag_val -t "$@")" || exit 1
+    [ -n "$state" ] && [ -f "$state" ] && grep -qxF "$target" "$state" && exit 0
+    exit 1 ;;
+  new-session)
+    name="$(flag_val -s "$@")" || exit 0
+    if [ -n "$state" ]; then
+      grep -qxF "$name" "$state" 2>/dev/null || printf '%s\n' "$name" >> "$state"
+    fi ;;
+  kill-session)
+    target="$(flag_val -t "$@")" || exit 0
+    if [ -n "$state" ] && [ -f "$state" ]; then
+      grep -vxF "$target" "$state" > "$state.tmp" 2>/dev/null || : > "$state.tmp"
+      mv "$state.tmp" "$state"
+    fi ;;
+  display-message)
+    printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
+  capture-pane)
+    printf 'fake pane line 1\nfake pane line 2\n' ;;
+  attach|send-keys)
+    : ;;
+  *)
+    : ;;
+esac
+exit 0
