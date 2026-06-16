@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-16
+
 ### Added
 - Automated release publishing (`.github/workflows/release.yml`): pushing a `VERSION` change to `main` re-runs the CI gates, creates the `v{VERSION}` tag, and publishes a GitHub Release with notes extracted from the matching `CHANGELOG.md` section (idempotent — skips if the tag already exists). `docs/RELEASING.md` now documents the `develop → main` branch policy and the version-bump-triggered flow.
 - Opt-in periodic log snapshots for crash/reboot coverage: `cctg config <name> snapshot <seconds|off>` (min 5s, off by default). While the bot runs, a lightweight background watcher re-captures the tmux pane (rendered text) to `<state>/last-session.log` every N seconds and self-terminates when the session ends, so `cctg logs` shows a recent snapshot even after a crash or reboot that never ran `down`. `down` stops the watcher and takes a final snapshot. Shown in `cctg config <name> show`; bash/zsh completions updated.
@@ -51,6 +53,7 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/qwertygeon/cctg/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/qwertygeon/cctg/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/qwertygeon/cctg/releases/tag/v0.1.0
