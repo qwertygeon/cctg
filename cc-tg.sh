@@ -58,6 +58,8 @@ find_companion() {
 # 정의·전역설정만 로드(함수 호출은 아래 init). 정의 전용이라 source 순서는 무관하다.
 # shellcheck source=lib/env.sh
 . "$SCRIPT_DIR/lib/env.sh"
+# shellcheck source=lib/channels.sh
+. "$SCRIPT_DIR/lib/channels.sh"
 # shellcheck source=lib/output.sh
 . "$SCRIPT_DIR/lib/output.sh"
 # shellcheck source=lib/config.sh

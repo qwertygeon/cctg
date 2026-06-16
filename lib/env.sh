@@ -7,7 +7,6 @@ REGISTRY="${CC_TG_REGISTRY:-$CHANNELS_DIR/projects.conf}"
 # 전역 ~/.claude/settings.json 과 merge 되며(deny 는 union, deny 가 allow 보다 우선),
 # 여기 defaultMode 가 봇의 기본 권한 모드가 된다. 봇별 launch.env 의 CCTG_PERMISSION_MODE 가 우선한다.
 SHARED_SETTINGS="${CC_TG_SHARED_SETTINGS:-$CHANNELS_DIR/cctg-shared.settings.json}"
-PLUGIN="plugin:telegram@claude-plugins-official"
 SESS_PREFIX="cctg-"
 
 # claude --permission-mode 가 받는 유효한 모드 (claude --help 기준)
