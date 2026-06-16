@@ -913,8 +913,8 @@ CMD="${1:-}"
 shift || true
 case "$CMD" in
   add)                  cmd_add "$@" ;;
-  rm|remove)            cmd_rm "$@" ;;
-  rename|mv)            cmd_rename "$@" ;;
+  rm)                   cmd_rm "$@" ;;
+  rename)               cmd_rename "$@" ;;
   config)               cmd_config "$@" ;;
   common)               cmd_common "$@" ;;
   up)                   cmd_up "$@" ;;

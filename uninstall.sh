@@ -9,14 +9,19 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$REPO_DIR/cc-tg.sh"
-BINDIR="${BINDIR:-$HOME/.local/bin}"
-DEST="$BINDIR/cctg"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
 MANIFEST="$CONFIG_DIR/install.conf"
 
-# 매니페스트에서 libexec 위치를 읽는다 (copy 설치는 bin 이 libexec/cc-tg.sh 로의 심볼릭).
+# 매니페스트에서 설치 경로를 읽는다 (copy 설치는 bin 이 libexec/cc-tg.sh 로의 심볼릭).
+BINDIR_M=""
 LIBEXECDIR_M=""
-[ -f "$MANIFEST" ] && LIBEXECDIR_M="$(awk -F= '$1=="libexecdir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+if [ -f "$MANIFEST" ]; then
+  BINDIR_M="$(awk -F= '$1=="bindir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+  LIBEXECDIR_M="$(awk -F= '$1=="libexecdir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+fi
+# BINDIR 우선순위: 환경변수 > 매니페스트 bindir= > 기본값
+BINDIR="${BINDIR:-${BINDIR_M:-$HOME/.local/bin}}"
+DEST="$BINDIR/cctg"
 
 if [ -L "$DEST" ]; then
   # 심볼릭 설치 — dev(레포 cc-tg.sh) 또는 copy(libexec/cc-tg.sh) 둘 다 우리 링크인지 확인 후 제거
@@ -66,7 +71,15 @@ if [ -f "$MANIFEST" ]; then
         awk -v b="$MARK_BEGIN" -v e="$MARK_END" 'BEGIN{s=0} $0==b{s=1;next} s&&$0==e{s=0;next} !s{print}' "$f" > "$tmp" && mv "$tmp" "$f"
         echo "제거됨(셸 블록): $f"
       fi
+      # install.sh 가 만든 rc 백업 제거 (DEC-002: 삭제하고 안내)
+      [ -f "$f.cctg-bak" ] && rm -f "$f.cctg-bak" && echo "제거됨(rc 백업): $f.cctg-bak (필요 시 재설치 전 직접 백업 권장)"
     done
     unset IFS
   fi
 fi
+
+# cctg 설정 디렉터리 정리 — 상태 디렉터리(~/.claude/channels/)는 보존하고,
+# 도구 메타데이터(언어 설정·설치 매니페스트)만 제거해 깨끗한 언인스톨로 만든다.
+[ -f "$CONFIG_DIR/config" ] && rm -f "$CONFIG_DIR/config" && echo "제거됨(언어 설정): $CONFIG_DIR/config"
+[ -f "$MANIFEST" ] && rm -f "$MANIFEST" && echo "제거됨(매니페스트): $MANIFEST"
+[ -d "$CONFIG_DIR" ] && rmdir "$CONFIG_DIR" 2>/dev/null && echo "제거됨(설정 디렉터리): $CONFIG_DIR" || true

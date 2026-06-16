@@ -13,12 +13,16 @@
 *.cctg-bak
 *.local
 
+# 시크릿·릴리스 산출물 (방어적 — 봇 상태는 ~/.claude/channels 등 repo 밖이지만 로컬 테스트 대비)
+.env
+RELEASE_NOTES.md
+
 # .claude/ — AI 메타데이터 (전체 제외, docs/ 문서 추적)
 .claude/*
 !.claude/docs/
 !.claude/docs/*.md
 
-# AI workspace (pipeline 실행 로그·기록 — SPEC_ROOT 하위)
+# AI workspace / SDD 파이프라인 워크스페이스 (실행 로그·결정 기록 — 저장소 추적 대상 아님)
 _ai-workspace/
 
 # OS / Tool crash dumps
