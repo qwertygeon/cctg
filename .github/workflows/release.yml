@@ -17,7 +17,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # annotated 태그 생성·기존 태그 확인을 위해 전체 히스토리·태그를 받는다.
           fetch-depth: 0
@@ -25,7 +25,7 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
-          v="$(cat VERSION)"
+          v="$(tr -d '[:space:]' < VERSION)"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           if git rev-parse "v$v" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -42,7 +42,7 @@ jobs:
       - name: Gate — syntax / shellcheck / i18n / bats
         if: steps.ver.outputs.exists == 'false'
         run: |
-          for f in cc-tg.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do
+          for f in cc-tg.sh lib/*.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do
             echo "bash -n $f"; bash -n "$f"
           done
           shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh

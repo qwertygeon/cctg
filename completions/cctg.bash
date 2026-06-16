@@ -26,6 +26,10 @@ _cctg() {
         COMPREPLY=( $(compgen -W "$names $extra" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -W "show edit mode args snapshot" -- "$cur") )
+      elif [ "$cmd" = rm ] && [ "$COMP_CWORD" -ge 3 ]; then
+        COMPREPLY=( $(compgen -W "--purge" -- "$cur") )
+      elif [ "$cmd" = rename ] && [ "$COMP_CWORD" -ge 4 ]; then
+        COMPREPLY=( $(compgen -W "--keep-dir" -- "$cur") )
       fi
       ;;
     common)
@@ -40,15 +44,16 @@ _cctg() {
       fi
       ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>]
       if [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -d -- "$cur") )
       elif [ "$COMP_CWORD" -ge 4 ]; then
         case "$prev" in
           --mode)      COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") ) ;;
           --token-env) COMPREPLY=( $(compgen -A variable -- "$cur") ) ;;
+          --channel)   COMPREPLY=( $(compgen -W "telegram" -- "$cur") ) ;;
           --id)        ;; # 자유 입력(숫자)
-          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode" -- "$cur") ) ;;
+          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode --channel" -- "$cur") ) ;;
         esac
       fi
       ;;

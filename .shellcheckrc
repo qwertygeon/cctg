@@ -1,0 +1,22 @@
+# shellcheck project config — keep in sync with .github/workflows/ci.yml.
+#
+# CI lints logic scripts at warning severity:
+#   shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh
+# Run with `-S warning` locally to match CI exactly — severity is a CLI-only
+# option and cannot be pinned from this file.
+#
+# Files intentionally kept out of the lint command (documented here so the
+# exclusions live with the code, not only in the workflow):
+#   - messages/*.sh : t() consumes these as an eval'd data catalog, so every
+#                     CCTG_MSG_* scalar reads as unused (SC2034 across the file).
+#   - completions/_cctg : zsh, not shellcheck's dialect.
+
+# COMPREPLY=( $(compgen ...) ) word-splitting is the intended bash-completion
+# idiom; no logic script triggers SC2207 (CI proves them clean), so silencing it
+# project-wide is safe and keeps `shellcheck completions/cctg.bash` clean.
+disable=SC2207
+
+# cc-tg.sh 는 lib/*.sh 를 source 한다. external-sources 로 따라가 전체 프로그램을 한 번에 분석
+# (lib/ 를 개별 lint 하면 교차 파일 전역/함수 때문에 SC2154 등 노이즈가 생김). source 경로는
+# cc-tg.sh 의 `# shellcheck source=lib/...` 디렉티브가 지정한다.
+external-sources=true

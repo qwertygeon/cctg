@@ -36,11 +36,15 @@ _cctg() {
   fi
 
   case "${words[2]}" in
-    rm|logs|attach)
+    rm)
+      (( CURRENT == 3 )) && _cctg_names
+      (( CURRENT >= 4 )) && compadd -- --purge ;;
+    logs|attach)
       (( CURRENT == 3 )) && _cctg_names ;;
     rename)
-      # 3번째 인자(old)만 보완. 4번째(new name)는 자유 입력.
-      (( CURRENT == 3 )) && _cctg_names ;;
+      # 3번째 인자(old)만 보완. 4번째(new name)는 자유 입력. 5번째 이후 --keep-dir.
+      (( CURRENT == 3 )) && _cctg_names
+      (( CURRENT >= 5 )) && compadd -- --keep-dir ;;
     up|down|restart)
       if (( CURRENT == 3 )); then
         compadd -- all
@@ -64,15 +68,16 @@ _cctg() {
         esac
       fi ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>]
       if (( CURRENT == 4 )); then
         _files -/
       elif (( CURRENT >= 5 )); then
         case "${words[CURRENT-1]}" in
           --mode)      compadd -- acceptEdits auto bypassPermissions default dontAsk plan ;;
           --token-env) compadd -- ${(k)parameters} ;;
+          --channel)   compadd -- telegram ;;
           --id)        ;; # 자유 입력(숫자)
-          *)           compadd -- --id --token-env --token-stdin --mode ;;
+          *)           compadd -- --id --token-env --token-stdin --mode --channel ;;
         esac
       fi ;;
     status)

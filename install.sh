@@ -127,6 +127,11 @@ else
   cp "$SRC" "$LIBEXECDIR/cc-tg.sh"
   chmod +x "$LIBEXECDIR/cc-tg.sh"
   cp "$REPO_DIR/VERSION" "$LIBEXECDIR/VERSION"
+  # lib/ 모듈(필수) 동반 복사 — cc-tg.sh 가 SCRIPT_DIR/lib 에서 source 한다.
+  if [ -d "$REPO_DIR/lib" ]; then
+    rm -rf "${LIBEXECDIR:?}/lib"
+    cp -R "$REPO_DIR/lib" "$LIBEXECDIR/lib"
+  fi
   # i18n 메시지 카탈로그(있으면) 동반 복사 — cc-tg.sh 가 SCRIPT_DIR 기준으로 source 한다.
   if [ -d "$REPO_DIR/messages" ]; then
     rm -rf "$LIBEXECDIR/messages"
