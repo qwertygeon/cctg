@@ -77,15 +77,20 @@ up_one() {
   # 봇별 launch.env(있으면)에서 CCTG_PERMISSION_MODE / CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
   #   - CCTG_PERMISSION_MODE 가 있으면 --permission-mode 로 공통 defaultMode 를 override (없으면 공통값 사용).
   #   - \$ 이스케이프로 런타임(launch.env source 이후)에 단어 분리되도록 한다.
+  # 봇의 채널 타입에 따라 상태디렉터리 env 이름·플러그인 ID 를 descriptor 에서 해석(기본 telegram).
+  local ch sd_env plugin
+  ch="$(channel_of "$name")"
+  sd_env="$(channel_spec "$ch" statedir_env)"
+  plugin="$(channel_spec "$ch" plugin)"
   local launch
   launch="cd $(printf '%q' "$cwd") \
-&& export TELEGRAM_STATE_DIR=$(printf '%q' "$sd") \
+&& export ${sd_env}=$(printf '%q' "$sd") \
 && set -a && source $(printf '%q' "$sd/.env") \
 && { [ -f $(printf '%q' "$sd/launch.env") ] && source $(printf '%q' "$sd/launch.env") || true; } \
 && set +a \
 && MODE_ARG=\"\" \
 && { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
-&& caffeinate -is claude --channels $PLUGIN $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
+&& caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"
   t UP_OK "$name" "$cwd" "$sd" "$(sess_of "$name")"
