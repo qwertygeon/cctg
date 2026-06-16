@@ -26,6 +26,10 @@ _cctg() {
         COMPREPLY=( $(compgen -W "$names $extra" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -W "show edit mode args snapshot" -- "$cur") )
+      elif [ "$cmd" = rm ] && [ "$COMP_CWORD" -ge 3 ]; then
+        COMPREPLY=( $(compgen -W "--purge" -- "$cur") )
+      elif [ "$cmd" = rename ] && [ "$COMP_CWORD" -ge 4 ]; then
+        COMPREPLY=( $(compgen -W "--keep-dir" -- "$cur") )
       fi
       ;;
     common)
