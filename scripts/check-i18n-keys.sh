@@ -10,7 +10,9 @@ set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MSG_DIR="$REPO_DIR/messages"
-SRC="$REPO_DIR/cc-tg.sh"
+# 키 참조 스캔 소스: 진입점 + lib/ 모듈(명령 구현이 lib/commands.sh 등으로 분리됨)
+SRCS=("$REPO_DIR/cc-tg.sh")
+[ -d "$REPO_DIR/lib" ] && SRCS+=("$REPO_DIR"/lib/*.sh)
 fail=0
 
 keys_of() { grep -oE '^CCTG_MSG_[A-Z0-9_]+' "$1" | sort -u; }
@@ -28,12 +30,12 @@ for cat in "$MSG_DIR"/*.sh; do
   if [ -n "$extra" ]; then echo "ERROR: $(basename "$cat") 에 en.sh 에 없는 키:"; printf '  %s\n' $extra; fail=1; fi
 done
 
-# 2) cc-tg.sh 에서 참조하는 키가 en.sh 에 정의됐는지
+# 2) 소스(cc-tg.sh + lib/*.sh)에서 참조하는 키가 en.sh 에 정의됐는지
 #    t KEY / te KEY / die KEY 형태의 첫 인자(대문자 키)를 추출
-used="$(grep -oE '\b(t|te|die) [A-Z][A-Z0-9_]+' "$SRC" | awk '{print "CCTG_MSG_"$2}' | sort -u)"
+used="$(grep -ohE '\b(t|te|die) [A-Z][A-Z0-9_]+' "${SRCS[@]}" | awk '{print "CCTG_MSG_"$2}' | sort -u)"
 defined="$(printf '%s\n' "$base_keys")"
 undef="$(comm -23 <(printf '%s\n' "$used") <(printf '%s\n' "$defined"))"
-if [ -n "$undef" ]; then echo "ERROR: cc-tg.sh 가 참조하지만 en.sh 에 없는 키:"; printf '  %s\n' $undef; fail=1; fi
+if [ -n "$undef" ]; then echo "ERROR: 소스가 참조하지만 en.sh 에 없는 키:"; printf '  %s\n' $undef; fail=1; fi
 
 if [ "$fail" = 0 ]; then
   echo "OK: 카탈로그 키 패리티·참조 키 모두 정상 ($(printf '%s\n' "$base_keys" | wc -l | tr -d ' ') 키)"

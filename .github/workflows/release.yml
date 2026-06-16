@@ -42,7 +42,7 @@ jobs:
       - name: Gate — syntax / shellcheck / i18n / bats
         if: steps.ver.outputs.exists == 'false'
         run: |
-          for f in cc-tg.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do
+          for f in cc-tg.sh lib/*.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do
             echo "bash -n $f"; bash -n "$f"
           done
           shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh

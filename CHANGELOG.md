@@ -7,13 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Developer tooling: `.editorconfig` (shell = 2-space, LF, UTF-8, final newline) and `.shellcheckrc` (`severity=warning`, documenting why `messages/*.sh` (SC2034 data catalog) and `completions/*` (SC2207 idiom / zsh) are excluded from the CI lint).
+- Developer tooling: `.editorconfig` (shell = 2-space, LF, UTF-8, final newline) and `.shellcheckrc` (`disable=SC2207` for the completion `compgen` idiom, `external-sources` so `shellcheck cc-tg.sh` follows the `lib/*.sh` modules, and documentation of why `messages/*.sh` (SC2034 data catalog) is excluded from the CI lint command).
 - Shell completions for `rm --purge` and `rename --keep-dir` (bash and zsh).
 
 ### Changed
 - `uninstall.sh` now resolves `BINDIR` from the install manifest (`bindir=`) before falling back to the default, and cleans up the install manifest, the language-preference config, and the shell-rc `*.cctg-bak` backups it created (deletions are announced; state dirs under `~/.claude/channels/` are still preserved).
 - CI and release workflows pinned to `actions/checkout@v5` (Node.js 20 deprecation); `release.yml` hardens the `VERSION` read against stray whitespace (`tr -d`).
 - `.gitignore` now also ignores `.env`, `RELEASE_NOTES.md`, and the `_ai-workspace/` pipeline workspace.
+- Internal refactor: the monolithic `cc-tg.sh` was split into a thin entry point + runtime-sourced `lib/*.sh` modules (`env`/`output`/`config`/`util`/`registry`/`session`/`commands`). No change to commands, output, or behavior — bats 81/81 unchanged, verified in both dev (symlink) and copy (libexec) installs. `install.sh` now packages `lib/` alongside `messages/`; `scripts/check-i18n-keys.sh` and the `bash -n` CI gate also scan `lib/`.
 
 ### Removed
 - Undocumented `remove`/`mv` aliases for `rm`/`rename` (minimal command surface; the canonical names are unchanged).
