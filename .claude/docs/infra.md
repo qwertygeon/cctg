@@ -51,8 +51,8 @@
 - **개발 설치**: `./install.sh --dev` (레포 심볼릭).
 - **검증 명령**(CI 와 동일):
   ```bash
-  for f in cc-tg.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do bash -n "$f"; done
-  shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh   # .shellcheckrc: severity 는 -S 로, SC2207 disable
+  for f in cc-tg.sh lib/*.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do bash -n "$f"; done
+  shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh   # .shellcheckrc: severity 는 -S 로, SC2207 disable, external-sources 로 lib/ 추종
   bash scripts/check-i18n-keys.sh
   bats tests/
   ```
