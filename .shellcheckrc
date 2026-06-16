@@ -1,0 +1,17 @@
+# shellcheck project config — keep in sync with .github/workflows/ci.yml.
+#
+# CI lints logic scripts at warning severity:
+#   shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh
+# Run with `-S warning` locally to match CI exactly — severity is a CLI-only
+# option and cannot be pinned from this file.
+#
+# Files intentionally kept out of the lint command (documented here so the
+# exclusions live with the code, not only in the workflow):
+#   - messages/*.sh : t() consumes these as an eval'd data catalog, so every
+#                     CCTG_MSG_* scalar reads as unused (SC2034 across the file).
+#   - completions/_cctg : zsh, not shellcheck's dialect.
+
+# COMPREPLY=( $(compgen ...) ) word-splitting is the intended bash-completion
+# idiom; no logic script triggers SC2207 (CI proves them clean), so silencing it
+# project-wide is safe and keeps `shellcheck completions/cctg.bash` clean.
+disable=SC2207
