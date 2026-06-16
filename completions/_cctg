@@ -51,7 +51,7 @@ _cctg() {
       if (( CURRENT == 3 )); then
         _cctg_names
       elif (( CURRENT == 4 )); then
-        compadd -- show edit mode args
+        compadd -- show edit mode args snapshot
       fi ;;
     common)
       # common <action> [...]

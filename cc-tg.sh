@@ -201,6 +201,12 @@ mode_of() {
     | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
 }
 
+# launch.env 의 CCTG_LOG_SNAPSHOT_INTERVAL(초) 추출(따옴표 제거). 없으면 빈 문자열.
+snapshot_interval_of() {
+  conf_get "$1/launch.env" CCTG_LOG_SNAPSHOT_INTERVAL \
+    | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
+}
+
 # jq 필요 동작 가드
 need_jq() {
   command -v jq >/dev/null 2>&1 && return 0
@@ -291,6 +297,51 @@ fmt_dur() {
   else                      printf '%dm' "$m"; fi
 }
 
+# 세션의 현재 화면(렌더 텍스트, 스크롤백 2000줄)을 last-session.log(600)로 원자적 저장.
+# capture-pane 의 렌더 텍스트라 ANSI 잡음이 없다. tmp→mv 라 읽는 쪽이 부분 파일을 보지 않는다.
+take_snapshot() {
+  local sess="$1" sd="$2" snap="$2/last-session.log"
+  [ -d "$sd" ] || return 0
+  if tmux capture-pane -p -S -2000 -t "$sess" > "$snap.tmp" 2>/dev/null; then
+    mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
+  else
+    rm -f "$snap.tmp"
+  fi
+}
+
+# 실행 중인 봇 세션을 interval 초마다 스냅샷하는 백그라운드 watcher 기동(크래시·재부팅 대비).
+# 세션이 사라지면 watcher 가 스스로 종료한다. PID 는 <sd>/.snapshotter.pid 로 추적해 down 시 정지.
+# nohup + fd 리다이렉트로 호출 셸과 분리되어 cctg 종료 후에도 계속 동작한다.
+start_snapshotter() {
+  local name="$1" sd="$2" interval="$3" sess pidf
+  sess="$(sess_of "$name")"; pidf="$sd/.snapshotter.pid"
+  stop_snapshotter "$sd"   # 재기동 시 기존 watcher 정리
+  # 루프 본문은 단일 인용 문자열이라 부모 셸 확장과 무관(인자로 값 전달).
+  nohup bash -c '
+    sess="$1"; sd="$2"; interval="$3"; snap="$sd/last-session.log"
+    while tmux has-session -t "$sess" 2>/dev/null; do
+      if tmux capture-pane -p -S -2000 -t "$sess" > "$snap.tmp" 2>/dev/null; then
+        mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
+      else
+        rm -f "$snap.tmp"
+      fi
+      sleep "$interval"
+    done
+    rm -f "$sd/.snapshotter.pid"
+  ' cctg-snapshotter "$sess" "$sd" "$interval" >/dev/null 2>&1 &
+  printf '%s\n' "$!" > "$pidf"
+  chmod 600 "$pidf" 2>/dev/null
+}
+
+# watcher 정지(있으면). PID 파일을 읽어 종료하고 파일 제거. 없으면 무동작.
+stop_snapshotter() {
+  local pidf="$1/.snapshotter.pid" pid
+  [ -f "$pidf" ] || return 0
+  pid="$(head -n1 "$pidf" 2>/dev/null)"
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  rm -f "$pidf"
+}
+
 up_one() {
   local name="$1" cwd sd row
   row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name"; return 1; }
@@ -321,23 +372,28 @@ up_one() {
 
   tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"
   t UP_OK "$name" "$cwd" "$sd" "$(sess_of "$name")"
+
+  # 옵트인: launch.env 의 CCTG_LOG_SNAPSHOT_INTERVAL(초)가 양수면 주기 스냅샷 watcher 기동.
+  local snap_iv; snap_iv="$(snapshot_interval_of "$sd")"
+  if printf '%s' "$snap_iv" | grep -qE '^[0-9]+$' && [ "$snap_iv" -gt 0 ]; then
+    start_snapshotter "$name" "$sd" "$snap_iv"
+    t UP_SNAPSHOT_ON "$snap_iv"
+  fi
 }
 
 down_one() {
-  local name="$1" row sd
+  local name="$1" row sd=""
+  [ -n "$name" ] && row="$(lookup "$name")" && sd="$(expand "$(cut -f2 <<<"$row")")"
   if is_running "$name"; then
-    # 종료 전 마지막 세션 출력(렌더된 텍스트, 스크롤백 2000줄)을 상태 디렉터리에 보존한다.
-    # 종료 후에도 `cctg logs` 로 조회 가능. capture-pane 의 렌더 텍스트라 ANSI 잡음이 없다.
-    if row="$(lookup "$name")"; then
-      sd="$(expand "$(cut -f2 <<<"$row")")"
-      if [ -d "$sd" ]; then
-        tmux capture-pane -p -S -2000 -t "$(sess_of "$name")" > "$sd/last-session.log" 2>/dev/null \
-          && chmod 600 "$sd/last-session.log" 2>/dev/null || true
-      fi
-    fi
+    # 정지 watcher 가 우리 최종 스냅샷을 덮어쓰지 않도록 먼저 멈춘다.
+    [ -n "$sd" ] && stop_snapshotter "$sd"
+    # 종료 전 마지막 세션 출력을 보존한다 — 종료 후에도 `cctg logs` 로 조회 가능.
+    [ -n "$sd" ] && take_snapshot "$(sess_of "$name")" "$sd"
     tmux kill-session -t "$(sess_of "$name")"
     t DOWN_OK "$name"
   else
+    # 세션이 외부에서 종료된 경우 남아 있을 수 있는 watcher PID 파일을 정리한다.
+    [ -n "$sd" ] && stop_snapshotter "$sd"
     t DOWN_STOPPED "$name"
   fi
 }
@@ -432,6 +488,10 @@ CCTG_PERMISSION_MODE=
 
 # 이 봇 전용 claude 추가 인자(선택). 예: CLAUDE_EXTRA_ARGS="--model opus"
 CLAUDE_EXTRA_ARGS=
+
+# 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
+# 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
+CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
     [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
 
@@ -514,13 +574,19 @@ CCTG_PERMISSION_MODE=
 
 # 이 봇 전용 claude 추가 인자(선택). 예: CLAUDE_EXTRA_ARGS="--model opus"
 CLAUDE_EXTRA_ARGS=
+
+# 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
+# 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
+CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
     fi
     case "$ACTION" in
       show)
-        local pm; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
+        local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
+        sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
         t CFG_SHOW_HEADER "$NAME" "$LE"
         t CFG_SHOW_MODE "$pm"
+        t CFG_SHOW_SNAPSHOT "$sv"
         t CFG_SHOW_LAUNCHENV
         cat "$LE" ;;
       edit)
@@ -542,6 +608,19 @@ ENV
         set_env_kv "$LE" CLAUDE_EXTRA_ARGS "$ARGS"
         local argshow="${ARGS:-$(t EMPTY_PAREN)}"
         t CFG_ARGS_SET "$NAME" "$argshow"
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      snapshot)
+        S="${3-}"
+        [ -z "$S" ] && die ERR_CONFIG_SNAPSHOT_USAGE "$PROG" "$NAME"
+        if [ "$S" = off ] || [ "$S" = 0 ]; then
+          set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL ""
+          t CFG_SNAPSHOT_OFF "$NAME"
+        else
+          { printf '%s' "$S" | grep -qE '^[0-9]+$' && [ "$S" -ge 5 ]; } \
+            || die ERR_BAD_SNAPSHOT "$S"
+          set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL "$S"
+          t CFG_SNAPSHOT_SET "$NAME" "$S"
+        fi
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
         te ERR_CONFIG_UNKNOWN "$ACTION"

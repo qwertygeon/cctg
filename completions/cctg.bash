@@ -25,7 +25,7 @@ _cctg() {
         case "$cmd" in up|down|restart) extra="all" ;; *) extra="" ;; esac
         COMPREPLY=( $(compgen -W "$names $extra" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
-        COMPREPLY=( $(compgen -W "show edit mode args" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show edit mode args snapshot" -- "$cur") )
       fi
       ;;
     common)
