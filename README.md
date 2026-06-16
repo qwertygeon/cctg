@@ -53,7 +53,7 @@ It never touches the global bot (`~/.claude/channels/telegram/`). Each project b
 | `claude` | Claude Code CLI | Required |
 | `tmux` | Runs the bot in a detached session | Required |
 | `caffeinate` | Prevents system sleep while running | Built into macOS |
-| `jq` | Structured edits of `cctg common` permission policy | Optional (without it, use `common edit` to edit directly) |
+| `jq` | Structured edits of `cctg common` permission policy; `cctg status --json` output | Optional (without it, use `common edit` to edit directly; `status --json` errors) |
 | telegram plugin | Telegram channel integration | Must be installed globally: `/plugin install telegram@claude-plugins-official` |
 
 ## Installation
@@ -102,7 +102,7 @@ cctg <command> [args]
   rm <name> [--purge]   rename <old> <new> [--keep-dir]
   config <name> [...]   common [...]          (permissions/options — see "Permissions & options")
   up <name|all>         down <name|all>       restart <name|all>
-  status                logs <name> [N]       attach <name>
+  status [--json]       logs <name> [N]       attach <name>
   lang [show|en|ko|clear]                     (CLI output language — see "Language")
   doctor                update                version           help
 ```
@@ -190,12 +190,13 @@ UP   myproject  (cwd=/Users/you/work/myproject, state=/Users/you/.claude/channel
 
 ```bash
 cctg status              # per-bot status (RUNNING+uptime / stopped / BROKEN) + cwd/state paths
+cctg status --json       # machine-readable status (for scripting/other tools; needs jq)
 cctg logs myproject      # print the last 50 log lines (without attaching)
 cctg logs myproject 200  # last 200 lines
 cctg attach myproject    # attach to the tmux session for live view (detach: Ctrl-b d)
 ```
 
-`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent.
+`status` shows each bot's `RUNNING` (+uptime) / `stopped` / `BROKEN` state along with its `cwd`/`state` paths. `BROKEN` means the bot is registered but its working directory is missing or its token file (`.env`) is absent — and a per-reason recovery hint (`↳ ...`) is printed beneath it. `status --json` emits a machine-readable array (`name`, `state`, `running`, `cwd`, `stateDir`, `mode`, `session`, `uptimeSeconds`, `issues`) with locale-independent tokens, for use by other tools (requires `jq`).
 
 `logs` reads the live tmux pane while the bot is running. On `down`, CCTG saves a snapshot of the pane (the rendered text, up to ~2000 lines) to `<state>/last-session.log`, so `logs` keeps working **after** the bot is stopped — it falls back to that snapshot. `attach` still requires a running session.
 

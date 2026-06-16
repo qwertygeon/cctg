@@ -53,7 +53,7 @@
 | `claude` | Claude Code CLI | 필수 |
 | `tmux` | 봇을 detached 세션으로 구동 | 필수 |
 | `caffeinate` | 구동 중 시스템 sleep 방지 | macOS 기본 제공 |
-| `jq` | `cctg common` 의 구조화된 권한 정책 수정 | 선택(없으면 `common edit` 로 직접 편집) |
+| `jq` | `cctg common` 의 구조화된 권한 정책 수정; `cctg status --json` 출력 | 선택(없으면 `common edit` 로 직접 편집; `status --json` 은 에러) |
 | telegram 플러그인 | Telegram 채널 연동 | 전역 설치 필요: `/plugin install telegram@claude-plugins-official` |
 
 ## 설치
@@ -102,7 +102,7 @@ cctg <command> [args]
   rm <name> [--purge]   rename <old> <new> [--keep-dir]
   config <name> [...]   common [...]          (권한·옵션 — 아래 「권한·옵션」 절)
   up <name|all>         down <name|all>       restart <name|all>
-  status                logs <name> [N]       attach <name>
+  status [--json]       logs <name> [N]       attach <name>
   lang [show|en|ko|clear]                     (CLI 출력 언어 — 아래 「언어」 절)
   doctor                update                version           help
 ```
@@ -188,12 +188,13 @@ UP   myproject  (cwd=/Users/you/work/myproject, state=/Users/you/.claude/channel
 
 ```bash
 cctg status              # 봇별 상태(RUNNING+업타임 / stopped / BROKEN) + cwd·state 경로
+cctg status --json       # 기계 판독용 상태 (스크립트·외부 도구 연동용, jq 필요)
 cctg logs myproject      # 최근 로그 50줄 출력 (attach 없이)
 cctg logs myproject 200  # 최근 200줄
 cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리: Ctrl-b d)
 ```
 
-`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우다.
+`status` 는 봇마다 `RUNNING`(+업타임)/`stopped`/`BROKEN` 상태와 `cwd`·`state` 경로를 보여준다. `BROKEN` 은 등록은 됐지만 작업 디렉터리가 없거나 토큰 파일(`.env`)이 없는 경우이며, 그 아래에 사유별 복구 힌트(`↳ ...`)를 출력한다. `status --json` 은 기계 판독용 배열(`name`·`state`·`running`·`cwd`·`stateDir`·`mode`·`session`·`uptimeSeconds`·`issues`)을 로케일 무관 토큰으로 출력한다(외부 도구 연동용, `jq` 필요).
 
 `logs` 는 봇이 실행 중이면 tmux 페인을 실시간으로 읽는다. `down` 시 CCTG 가 페인 스냅샷(렌더된 텍스트, 최대 ~2000줄)을 `<state>/last-session.log` 에 저장하므로, 봇을 **정지한 뒤에도** `logs` 가 그 스냅샷으로 폴백해 동작한다. `attach` 는 여전히 실행 중인 세션이 필요하다.
 

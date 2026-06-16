@@ -52,6 +52,12 @@ _cctg() {
         esac
       fi
       ;;
+    status)
+      # status [--json]
+      if [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=( $(compgen -W "--json" -- "$cur") )
+      fi
+      ;;
     lang)
       # lang [show|en|ko|clear]
       if [ "$COMP_CWORD" -eq 2 ]; then
