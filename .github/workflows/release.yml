@@ -1,0 +1,89 @@
+name: Release
+
+# B2 트리거: main 의 VERSION 파일이 바뀌면 자동 발행.
+# 흐름: develop → PR → main (VERSION·CHANGELOG 갱신 포함) → push →
+#       이 워크플로가 게이트 통과 확인 후 v{VERSION} 태그 생성 + GitHub Release 발행.
+# 태그가 이미 있으면 멱등하게 건너뛴다(재실행·VERSION 외 변경 동반 push 대비).
+on:
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # annotated 태그 생성·기존 태그 확인을 위해 전체 히스토리·태그를 받는다.
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        run: |
+          v="$(cat VERSION)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$v" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag v$v already exists — skipping release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 잘못된 VERSION bump 가 깨진 릴리스로 발행되지 않도록 CI 와 동일 게이트를 재실행한다.
+      - name: Install bats
+        if: steps.ver.outputs.exists == 'false'
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: Gate — syntax / shellcheck / i18n / bats
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          for f in cc-tg.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do
+            echo "bash -n $f"; bash -n "$f"
+          done
+          shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh
+          bash scripts/check-i18n-keys.sh
+          bats tests/
+
+      - name: Extract release notes
+        if: steps.ver.outputs.exists == 'false'
+        id: notes
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          # CHANGELOG 의 "## [X.Y.Z] ..." 섹션부터 다음 "## [" 직전까지 추출.
+          awk -v ver="$v" '
+            index($0, "## [" ver "]") == 1 { f=1; next }
+            /^## \[/ { if (f) exit }
+            f { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ -s RELEASE_NOTES.md ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No CHANGELOG section for $v — falling back to auto-generated notes."
+          fi
+
+      - name: Create tag
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$v" -m "v$v"
+          git push origin "v$v"
+
+      - name: Publish GitHub Release
+        if: steps.ver.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          if [ "${{ steps.notes.outputs.found }}" = "true" ]; then
+            gh release create "v$v" --title "v$v" --notes-file RELEASE_NOTES.md
+          else
+            gh release create "v$v" --title "v$v" --generate-notes
+          fi
