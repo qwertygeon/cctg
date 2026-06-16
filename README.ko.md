@@ -198,7 +198,16 @@ cctg attach myproject    # 해당 tmux 세션에 붙어 실시간 확인 (분리
 
 `logs` 는 봇이 실행 중이면 tmux 페인을 실시간으로 읽는다. `down` 시 CCTG 가 페인 스냅샷(렌더된 텍스트, 최대 ~2000줄)을 `<state>/last-session.log` 에 저장하므로, 봇을 **정지한 뒤에도** `logs` 가 그 스냅샷으로 폴백해 동작한다. `attach` 는 여전히 실행 중인 세션이 필요하다.
 
-> 스냅샷은 `down` 마다 덮어쓴다(마지막 세션 1개). 0700 상태 디렉터리 안에 600 권한으로 저장되며 대화 내용이 포함될 수 있으므로 상태 디렉터리와 동일하게 취급한다. `down` 을 거치지 않는 크래시·재부팅은 스냅샷을 갱신하지 못한다.
+> 스냅샷은 0700 상태 디렉터리 안에 600 권한으로 저장되며 대화 내용이 포함될 수 있으므로 상태 디렉터리와 동일하게 취급한다.
+
+**주기 스냅샷 (크래시·재부팅 대비, 옵트인).** `down` 스냅샷은 정상 정지 시에만 찍히므로, `down` 을 거치지 않는 크래시·재부팅은 최신 로그를 남기지 못한다. 봇별로 주기 스냅샷을 켜서 이를 보완한다:
+
+```bash
+cctg config myproject snapshot 60    # 실행 중 60초마다 스냅샷 (최소 5)
+cctg config myproject snapshot off   # 비활성화 (기본값)
+```
+
+봇이 실행 중이면 가벼운 백그라운드 watcher 가 N초마다 페인을 같은 `last-session.log` 로 재캡처(렌더 텍스트라 ANSI 잡음 없음)하고, 세션이 끝나면 자동 종료된다. 크래시·재부팅 후 `cctg logs` 는 가장 최근 스냅샷(최대 N초 지난)을 보여준다. 연속 기록 비용 때문에 기본은 OFF 이며, 주기 변경은 `restart` 로 적용된다.
 
 ```console
 $ cctg status
@@ -296,6 +305,7 @@ cctg config myproject                       # 봇 옵션 출력 (= config ... sh
 cctg config myproject mode bypassPermissions   # 이 봇 권한 모드 설정
 cctg config myproject mode clear            # 공통값을 따르도록 비움
 cctg config myproject args "--model opus"   # 이 봇 전용 claude 추가 인자
+cctg config myproject snapshot 60           # 주기 로그 스냅샷 60초마다 (off 로 비활성화)
 cctg config myproject edit                  # launch.env 직접 편집
 ```
 

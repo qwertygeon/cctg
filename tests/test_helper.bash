@@ -20,8 +20,10 @@ setup() {
   mkdir -p "$WORK"
 
   # Fake tmux first on PATH; real jq/awk/sed/etc. still resolve behind it.
+  # FAKE_TMUX_STATE tracks which sessions the stub considers "running".
   export PATH="$REPO_ROOT/tests/stubs:$PATH"
-  export FAKE_TMUX_SESSIONS=""
+  export FAKE_TMUX_STATE="$BATS_TEST_TMPDIR/.tmux-sessions"
+  : > "$FAKE_TMUX_STATE"
 
   # Convenience handles to the files the script derives from CC_CHANNELS_DIR.
   REGISTRY="$CC_CHANNELS_DIR/projects.conf"
@@ -55,4 +57,13 @@ file_mode() {
 }
 
 # Mark a bot's session as running for the fake tmux.
-mark_running() { export FAKE_TMUX_SESSIONS="cctg-$1"; }
+mark_running() { printf 'cctg-%s\n' "$1" >> "$FAKE_TMUX_STATE"; }
+
+# Stop any background log-snapshotter a test started (best-effort cleanup).
+teardown() {
+  local pidf
+  for pidf in "$CC_CHANNELS_DIR"/*/.snapshotter.pid; do
+    [ -f "$pidf" ] || continue
+    kill "$(head -n1 "$pidf" 2>/dev/null)" 2>/dev/null || true
+  done
+}

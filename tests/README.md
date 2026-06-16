@@ -22,6 +22,9 @@ one. Tests never touch your real `~/.claude/channels` or tmux server.
 
 ## Coverage
 
-`add` `rm` `rename` `config` `common` `status --json` `lang` `logs` `down`
-`doctor` `version`, plus the dispatcher and the registry/reserved-name/state-dir
-safety guards.
+`add` `rm` `rename` `config` `common` `status --json` `lang` `logs` `up` `down`
+`restart` `doctor` `version`, the opt-in snapshot watcher lifecycle, the
+dispatcher, and the registry / reserved-name / state-dir safety guards.
+
+The fake `tmux` is stateful (`new-session`/`kill-session`/`has-session` track a
+session list), so `up`/`down`/`restart` exercise the real lifecycle paths.

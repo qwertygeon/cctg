@@ -200,7 +200,16 @@ cctg attach myproject    # attach to the tmux session for live view (detach: Ctr
 
 `logs` reads the live tmux pane while the bot is running. On `down`, CCTG saves a snapshot of the pane (the rendered text, up to ~2000 lines) to `<state>/last-session.log`, so `logs` keeps working **after** the bot is stopped — it falls back to that snapshot. `attach` still requires a running session.
 
-> The snapshot is overwritten on each `down` (last session only) and lives inside the 0700 state directory with 600 permissions. It can contain conversation content, so treat it like the rest of the state directory. A crash or reboot that never runs `down` won't refresh the snapshot.
+> The snapshot lives inside the 0700 state directory with 600 permissions. It can contain conversation content, so treat it like the rest of the state directory.
+
+**Periodic snapshots (crash/reboot coverage, opt-in).** The `down` snapshot only fires on a graceful stop, so a crash or reboot that never runs `down` leaves no fresh log. Enable a periodic snapshot per bot to cover that:
+
+```bash
+cctg config myproject snapshot 60    # snapshot every 60s while running (min 5)
+cctg config myproject snapshot off   # disable (default)
+```
+
+While the bot runs, a lightweight background watcher re-captures the pane every N seconds to the same `last-session.log` (rendered text, so no ANSI noise), and exits automatically when the session ends. After a crash or reboot, `cctg logs` then shows the most recent snapshot (at most N seconds stale). It's off by default because it writes continuously; `restart` applies a changed interval.
 
 ```console
 $ cctg status
@@ -298,6 +307,7 @@ cctg config myproject                       # print bot options (= config ... sh
 cctg config myproject mode bypassPermissions   # set this bot's permission mode
 cctg config myproject mode clear            # clear it to follow the shared value
 cctg config myproject args "--model opus"   # extra claude args for this bot only
+cctg config myproject snapshot 60           # periodic log snapshot every 60s (off to disable)
 cctg config myproject edit                  # edit launch.env directly
 ```
 

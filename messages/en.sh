@@ -8,7 +8,7 @@
 CCTG_MSG_SHARED_CREATED="Created shared settings: %s (defaultMode=bypassPermissions + deny safety net)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: this action requires jq. Edit directly with 'cctg common edit', or install jq (brew install jq).\n"
 
-CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]\n                         register a project bot (flags = non-interactive; needs --id)\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         view/edit per-bot options (permission mode, extra args)\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status [--json]        registration/run status (--json: machine-readable)\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
+CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]\n                         register a project bot (flags = non-interactive; needs --id)\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>]\n                         view/edit per-bot options (permission mode, extra args, log snapshot)\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status [--json]        registration/run status (--json: machine-readable)\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
 
 # Shared fragments
 CCTG_MSG_FOLLOW_SHARED="follow shared"
@@ -33,6 +33,7 @@ CCTG_MSG_ERR_NO_CWD="ERROR: working directory not found: %s\n"
 CCTG_MSG_ERR_NO_TOKEN="ERROR: token file not found: %s (run add first)\n"
 CCTG_MSG_ALREADY_RUNNING="Already running: %s\n"
 CCTG_MSG_UP_OK="UP   %s  (cwd=%s, state=%s, tmux=%s)\n"
+CCTG_MSG_UP_SNAPSHOT_ON="  log snapshot: every %ss → state/last-session.log (survives crash/reboot)\n"
 CCTG_MSG_DOWN_OK="DOWN %s\n"
 CCTG_MSG_DOWN_STOPPED="Stopped: %s\n"
 
@@ -71,14 +72,19 @@ CCTG_MSG_RENAME_NEXT="Next: %s up %s\n"
 # config
 CCTG_MSG_CFG_SHOW_HEADER="# %s bot options (%s)\n"
 CCTG_MSG_CFG_SHOW_MODE="  permission mode: %s\n"
+CCTG_MSG_CFG_SHOW_SNAPSHOT="  log snapshot: %s\n"
 CCTG_MSG_CFG_SHOW_LAUNCHENV="--- launch.env ---\n"
 CCTG_MSG_ERR_CONFIG_MODE_USAGE="Usage: %s config %s mode <mode|clear>  (modes: %s)\n"
 CCTG_MSG_CFG_MODE_CLEARED="%s permission mode: (follow shared)\n"
 CCTG_MSG_CFG_MODE_SET="%s permission mode: %s\n"
 CCTG_MSG_APPLY_RESTART="  to apply: %s restart %s\n"
 CCTG_MSG_CFG_ARGS_SET="%s CLAUDE_EXTRA_ARGS: %s\n"
+CCTG_MSG_CFG_SNAPSHOT_SET="%s log snapshot: every %ss\n"
+CCTG_MSG_CFG_SNAPSHOT_OFF="%s log snapshot: off\n"
+CCTG_MSG_ERR_CONFIG_SNAPSHOT_USAGE="Usage: %s config %s snapshot <seconds|off>  (min 5; off to disable)\n"
+CCTG_MSG_ERR_BAD_SNAPSHOT="ERROR: snapshot interval must be an integer >= 5 seconds (or 'off'): '%s'\n"
 CCTG_MSG_ERR_CONFIG_UNKNOWN="ERROR: unknown config action: %s\n"
-CCTG_MSG_CFG_USAGE="Usage: %s config <name> [show | edit | mode <mode|clear> | args <string>]\n"
+CCTG_MSG_CFG_USAGE="Usage: %s config <name> [show | edit | mode <mode|clear> | args <string> | snapshot <seconds|off>]\n"
 
 # common
 CCTG_MSG_COMMON_SHOW_HEADER="# Shared settings (%s)\n"
@@ -106,7 +112,7 @@ CCTG_MSG_STATUS_NONE="  (no project bots registered)\n"
 
 # logs / attach
 CCTG_MSG_LOGS_STOPPED="Stopped: %s (no logs). Run '%s up %s' then try again.\n"
-CCTG_MSG_LOGS_SNAPSHOT="# %s is stopped — showing the last saved session log (from the most recent 'down').\n"
+CCTG_MSG_LOGS_SNAPSHOT="# %s is stopped — showing the last saved session log (from the most recent 'down' or periodic snapshot).\n"
 CCTG_MSG_ERR_NOT_RUNNING="ERROR: not running: %s (run '%s up %s' first)\n"
 CCTG_MSG_ATTACH_DETACH_HINT="(to detach, press Ctrl-b then d)\n"
 

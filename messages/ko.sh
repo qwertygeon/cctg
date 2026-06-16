@@ -7,7 +7,7 @@
 CCTG_MSG_SHARED_CREATED="공통 설정 생성: %s (defaultMode=bypassPermissions + deny 안전망)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: 이 동작은 jq가 필요합니다. 'cctg common edit'로 직접 편집하거나 jq를 설치하세요 (brew install jq).\n"
 
-CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]\n                         프로젝트 봇 등록 (플래그 사용 시 비대화형, --id 필수)\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>]\n                         봇별 옵션(권한 모드·추가 인자) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status [--json]        등록/실행 상태 (--json: 기계 판독용)\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
+CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]\n                         프로젝트 봇 등록 (플래그 사용 시 비대화형, --id 필수)\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>]\n                         봇별 옵션(권한 모드·추가 인자·로그 스냅샷) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status [--json]        등록/실행 상태 (--json: 기계 판독용)\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
 
 # 공용 조각
 CCTG_MSG_FOLLOW_SHARED="공통 따름"
@@ -32,6 +32,7 @@ CCTG_MSG_ERR_NO_CWD="ERROR: 작업 디렉터리 없음: %s\n"
 CCTG_MSG_ERR_NO_TOKEN="ERROR: 토큰 파일 없음: %s (먼저 add 하세요)\n"
 CCTG_MSG_ALREADY_RUNNING="이미 실행 중: %s\n"
 CCTG_MSG_UP_OK="UP   %s  (cwd=%s, state=%s, tmux=%s)\n"
+CCTG_MSG_UP_SNAPSHOT_ON="  로그 스냅샷: %s초마다 → state/last-session.log (크래시·재부팅에도 보존)\n"
 CCTG_MSG_DOWN_OK="DOWN %s\n"
 CCTG_MSG_DOWN_STOPPED="정지 상태: %s\n"
 
@@ -70,14 +71,19 @@ CCTG_MSG_RENAME_NEXT="다음: %s up %s\n"
 # config
 CCTG_MSG_CFG_SHOW_HEADER="# %s 봇 옵션 (%s)\n"
 CCTG_MSG_CFG_SHOW_MODE="  권한 모드: %s\n"
+CCTG_MSG_CFG_SHOW_SNAPSHOT="  로그 스냅샷: %s\n"
 CCTG_MSG_CFG_SHOW_LAUNCHENV="--- launch.env ---\n"
 CCTG_MSG_ERR_CONFIG_MODE_USAGE="사용법: %s config %s mode <mode|clear>  (모드: %s)\n"
 CCTG_MSG_CFG_MODE_CLEARED="%s 권한 모드: (공통 따름)\n"
 CCTG_MSG_CFG_MODE_SET="%s 권한 모드: %s\n"
 CCTG_MSG_APPLY_RESTART="  적용하려면: %s restart %s\n"
 CCTG_MSG_CFG_ARGS_SET="%s CLAUDE_EXTRA_ARGS: %s\n"
+CCTG_MSG_CFG_SNAPSHOT_SET="%s 로그 스냅샷: %s초마다\n"
+CCTG_MSG_CFG_SNAPSHOT_OFF="%s 로그 스냅샷: off\n"
+CCTG_MSG_ERR_CONFIG_SNAPSHOT_USAGE="사용법: %s config %s snapshot <초|off>  (최소 5; off로 비활성화)\n"
+CCTG_MSG_ERR_BAD_SNAPSHOT="ERROR: 스냅샷 주기는 5초 이상의 정수여야 합니다(또는 'off'): '%s'\n"
 CCTG_MSG_ERR_CONFIG_UNKNOWN="ERROR: 알 수 없는 config 동작: %s\n"
-CCTG_MSG_CFG_USAGE="사용법: %s config <name> [show | edit | mode <mode|clear> | args <string>]\n"
+CCTG_MSG_CFG_USAGE="사용법: %s config <name> [show | edit | mode <mode|clear> | args <string> | snapshot <초|off>]\n"
 
 # common
 CCTG_MSG_COMMON_SHOW_HEADER="# 공통 설정 (%s)\n"
@@ -105,7 +111,7 @@ CCTG_MSG_STATUS_NONE="  (등록된 프로젝트 봇 없음)\n"
 
 # logs / attach
 CCTG_MSG_LOGS_STOPPED="정지 상태: %s (로그 없음). '%s up %s' 후 다시 시도하세요.\n"
-CCTG_MSG_LOGS_SNAPSHOT="# %s 정지됨 — 마지막 세션 로그를 표시합니다(가장 최근 'down' 시점 저장).\n"
+CCTG_MSG_LOGS_SNAPSHOT="# %s 정지됨 — 마지막 세션 로그를 표시합니다(가장 최근 'down' 또는 주기 스냅샷).\n"
 CCTG_MSG_ERR_NOT_RUNNING="ERROR: 실행 중이 아닙니다: %s ('%s up %s' 먼저)\n"
 CCTG_MSG_ATTACH_DETACH_HINT="(분리하려면 Ctrl-b 누른 뒤 d)\n"
 
