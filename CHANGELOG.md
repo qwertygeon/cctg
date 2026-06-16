@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-16
+
 ### Added
 - Channel abstraction (multi-gateway scaffold): a per-channel descriptor (`lib/channels.sh` — `channel_spec`) plus a 4th `channel` column in the registry (legacy 3-column rows read as `telegram`) decouple the telegram-specific plugin id / state-dir env var / token key. `cctg add --channel <name>` selects the channel (only `telegram` is implemented today; other names are refused with a clear message), and `status --json` / `config show` report it. No behaviour change for existing telegram bots (`lib/session.sh up_one` resolves the same values through the descriptor). Adding Discord/iMessage later is a localized `channel_spec` entry + `IMPLEMENTED_CHANNELS` listing, pending verification of their plugin ids/conventions.
 - Developer tooling: `.editorconfig` (shell = 2-space, LF, UTF-8, final newline) and `.shellcheckrc` (`disable=SC2207` for the completion `compgen` idiom, `external-sources` so `shellcheck cc-tg.sh` follows the `lib/*.sh` modules, and documentation of why `messages/*.sh` (SC2034 data catalog) is excluded from the CI lint command).
@@ -67,7 +69,8 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/qwertygeon/cctg/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/qwertygeon/cctg/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/qwertygeon/cctg/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/qwertygeon/cctg/releases/tag/v0.1.0
