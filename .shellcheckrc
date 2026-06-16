@@ -15,3 +15,8 @@
 # idiom; no logic script triggers SC2207 (CI proves them clean), so silencing it
 # project-wide is safe and keeps `shellcheck completions/cctg.bash` clean.
 disable=SC2207
+
+# cc-tg.sh 는 lib/*.sh 를 source 한다. external-sources 로 따라가 전체 프로그램을 한 번에 분석
+# (lib/ 를 개별 lint 하면 교차 파일 전역/함수 때문에 SC2154 등 노이즈가 생김). source 경로는
+# cc-tg.sh 의 `# shellcheck source=lib/...` 디렉티브가 지정한다.
+external-sources=true
