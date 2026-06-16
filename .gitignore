@@ -17,5 +17,14 @@
 .env
 RELEASE_NOTES.md
 
-# SDD 파이프라인 워크스페이스 (실행 로그·결정 기록 — 저장소 추적 대상 아님)
+# .claude/ — AI 메타데이터 (전체 제외, docs/ 문서 추적)
+.claude/*
+!.claude/docs/
+!.claude/docs/*.md
+
+# AI workspace / SDD 파이프라인 워크스페이스 (실행 로그·결정 기록 — 저장소 추적 대상 아님)
 _ai-workspace/
+
+# OS / Tool crash dumps
+*.stackdump
+core.*
