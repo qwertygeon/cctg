@@ -232,7 +232,7 @@ cctg doctor              # 의존성(tmux/claude/caffeinate/jq)·PATH·레지스
 
 ```console
 $ cctg doctor
-cctg doctor (v0.1.0)
+cctg doctor (vX.Y.Z)
 --- 의존성 ---
   ok   tmux (/opt/homebrew/bin/tmux)
   ok   claude (/Users/you/.local/bin/claude)
