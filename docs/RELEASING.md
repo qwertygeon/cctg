@@ -1,28 +1,45 @@
 # CCTG 릴리스 가이드
 
-> 버전 올리기부터 GitHub Release 발행까지의 표준 절차. `VERSION` 파일이 버전의 SoT 이며, git 태그·CHANGELOG·릴리스 노트가 이를 따른다.
+> 버전 올리기부터 GitHub Release 발행까지의 표준 절차. `VERSION` 파일이 버전의 SoT 이며, git 태그·CHANGELOG·릴리스 노트가 이를 따른다. `main` 에 VERSION 변경이 들어오면 GitHub Actions 가 태그 생성·Release 발행을 **자동** 처리한다.
 
 ## 목차
 
+- [브랜치 정책](#브랜치-정책)
 - [사전 조건](#사전-조건)
 - [버전 규약 (SemVer)](#버전-규약-semver)
 - [릴리스 절차](#릴리스-절차)
-  - [1. 버전·CHANGELOG 갱신](#1-버전changelog-갱신)
-  - [2. 커밋](#2-커밋)
-  - [3. 태그 생성](#3-태그-생성)
-  - [4. 푸시](#4-푸시)
-  - [5. GitHub Release 발행](#5-github-release-발행)
+  - [1. 릴리스 브랜치에서 버전·CHANGELOG 갱신](#1-릴리스-브랜치에서-버전changelog-갱신)
+  - [2. develop → main PR·머지](#2-develop--main-pr머지)
+  - [3. 자동 발행 (release.yml)](#3-자동-발행-releaseyml)
 - [CI 게이트](#ci-게이트)
+- [수동 발행 (폴백)](#수동-발행-폴백)
 - [사용자 업데이트 경로](#사용자-업데이트-경로)
+
+## 브랜치 정책
+
+2단계 통합 모델을 따른다.
+
+| 브랜치 | 역할 | 받는 입력 |
+|---|---|---|
+| `feature/*`, `fix/*` | 개별 작업 | 로컬에서 분기 |
+| `develop` | 통합 브랜치 (다음 릴리스 누적) | `feature/*` → PR |
+| `main` | 릴리스 가능 상태 (항상 배포 가능) | `develop` → PR |
+| 태그 `vX.Y.Z` | 릴리스 시점 고정 | `main` push 시 자동 생성 |
+
+- 일상 작업은 `develop` 에서 분기해 `develop` 으로 PR 한다.
+- `main` 직접 push 하지 않는다. `main` 은 `develop` 으로부터의 PR 로만 갱신한다.
+- `main` 에 VERSION 변경이 도달하는 순간이 곧 릴리스 트리거다 (아래 [3](#3-자동-발행-releaseyml)).
+- 커밋 메시지는 `[type] 요약` 규약을 따른다 (`feat`/`fix`/`docs`/`refactor`/`test`/`chore`). 상세는 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## 사전 조건
 
-- `main` 브랜치가 깨끗하고(`git status`) 최신인지 확인한다.
-- 로컬 검증을 통과해야 한다 (CI 와 동일):
+- 릴리스 대상 변경이 `develop` 에 모두 통합되어 있고 CI 가 green 인지 확인한다.
+- 로컬 검증을 통과해야 한다 (CI·release 게이트와 동일):
   ```bash
   for f in cc-tg.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do bash -n "$f"; done
   shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh
   bash scripts/check-i18n-keys.sh
+  bats tests/
   ```
 
 ## 버전 규약 (SemVer)
@@ -39,58 +56,38 @@
 
 ## 릴리스 절차
 
-### 1. 버전·CHANGELOG 갱신
+### 1. 릴리스 브랜치에서 버전·CHANGELOG 갱신
+
+`develop` 에서 릴리스 준비 브랜치를 분기하거나 `develop` 에 직접 다음을 반영한다:
 
 - `VERSION` 파일을 새 버전으로 수정한다 (SoT). `cctg version` 출력으로 확인.
-- `CHANGELOG.md` 의 `[Unreleased]` 누적분을 `[X.Y.Z] - YYYY-MM-DD` 섹션으로 확정하고, 새 빈 `[Unreleased]` 를 추가한다.
+- `CHANGELOG.md` 의 `[Unreleased]` 누적분을 `[X.Y.Z] - YYYY-MM-DD` 섹션으로 확정하고, 새 빈 `[Unreleased]` 를 추가한다. (release.yml 이 이 `## [X.Y.Z]` 섹션을 릴리스 노트로 추출한다.)
 - 하단 compare 링크를 갱신한다:
   ```
   [Unreleased]: https://github.com/qwertygeon/cctg/compare/vX.Y.Z...HEAD
   [X.Y.Z]: https://github.com/qwertygeon/cctg/compare/v{PREV}...vX.Y.Z
   ```
 
-### 2. 커밋
+### 2. develop → main PR·머지
 
 ```bash
-git add VERSION CHANGELOG.md
-git commit -m "[chore] release vX.Y.Z"
+# develop 푸시 후 GitHub UI 또는 gh 로 PR 생성
+gh pr create --base main --head develop --title "release vX.Y.Z" --fill
 ```
 
-### 3. 태그 생성
+PR 의 CI 가 green 인지 확인하고 `main` 으로 머지한다. **VERSION 변경이 `main` 에 도달하는 것이 트리거**다.
 
-annotated 태그를 권장한다 (날짜·작성자 메타데이터 보존):
+### 3. 자동 발행 (release.yml)
 
-```bash
-git tag -a vX.Y.Z -m "vX.Y.Z"
-```
+`main` 에 VERSION 변경이 push 되면 `.github/workflows/release.yml` 이 자동 실행된다:
 
-### 4. 푸시
+1. `VERSION` 을 읽어 `v{VERSION}` 태그가 이미 있는지 확인 (있으면 멱등하게 종료).
+2. CI 와 동일한 게이트 재실행 (`bash -n` · `shellcheck` · i18n · `bats`).
+3. `CHANGELOG.md` 의 `## [X.Y.Z]` 섹션을 릴리스 노트로 추출 (없으면 자동 생성 노트로 폴백).
+4. `v{VERSION}` annotated 태그 생성·push.
+5. `gh release create` 로 GitHub Release 발행.
 
-태그는 자동으로 따라가지 않으므로 별도 푸시한다:
-
-```bash
-git push origin main
-git push origin vX.Y.Z
-# 또는 한 번에: git push --follow-tags
-```
-
-### 5. GitHub Release 발행
-
-**A. 웹 UI**
-
-1. `https://github.com/qwertygeon/cctg/releases` → **Draft a new release**
-2. **Choose a tag** → `vX.Y.Z` (4단계에서 푸시한 태그)
-3. **Release title**: `vX.Y.Z`
-4. 본문: `CHANGELOG.md` 의 `## [X.Y.Z]` 섹션을 붙여넣는다.
-5. **Publish release**
-
-**B. gh CLI**
-
-```bash
-# 최초 1회: brew install gh && gh auth login
-gh release create vX.Y.Z --title "vX.Y.Z" \
-  --notes "$(awk '/^## \[X.Y.Z\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)"
-```
+> 별도 수동 태그·발행 단계는 필요 없다. VERSION 을 올리지 않은 일반 변경은 트리거되지 않으며, 같은 버전 재-push 는 태그가 이미 존재하므로 건너뛴다.
 
 ## CI 게이트
 
@@ -99,10 +96,25 @@ gh release create vX.Y.Z --title "vX.Y.Z" \
 - `bash -n` — 전 셸 스크립트 구문 검사
 - `shellcheck -S warning` — 로직 스크립트(`cc-tg.sh`·`install.sh`·`uninstall.sh`·`scripts/*.sh`) 정적 분석
 - `scripts/check-i18n-keys.sh` — 메시지 카탈로그 키 패리티·참조 키 검증
+- `bats tests/` — 명령 동작 테스트 스위트
+
+`release.yml` 은 발행 직전 동일 게이트를 한 번 더 실행하여 잘못된 VERSION bump 가 깨진 릴리스로 나가지 않게 한다.
 
 > `messages/*.sh` 는 `t()` 가 eval 로 소비하는 데이터 카탈로그(SC2034 다수)라 shellcheck 대상에서 제외하고 i18n 린트로 검증한다. `completions/*` 는 `COMPREPLY=( $(compgen ...) )` 관용구(SC2207)가 본질적이라 정적 분석 대상에서 제외한다.
 
-릴리스 전 CI 가 green 인지 확인한다.
+## 수동 발행 (폴백)
+
+자동 발행이 실패했거나(게이트 실패·노트 추출 실패) 핫픽스로 특정 태그를 직접 발행해야 할 때:
+
+```bash
+# main 최신 상태에서
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
+gh release create vX.Y.Z --title "vX.Y.Z" \
+  --notes "$(awk '/^## \[X.Y.Z\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)"
+```
+
+태그가 이미 push 된 상태라면 `gh release create` 만 실행한다.
 
 ## 사용자 업데이트 경로
 
