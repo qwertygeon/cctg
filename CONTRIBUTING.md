@@ -26,6 +26,11 @@ The single entry point is `cc-tg.sh`. Shell completions live in `completions/`, 
   ```bash
   shellcheck cc-tg.sh install.sh uninstall.sh
   ```
+- Run the test suite ([`bats`](https://github.com/bats-core/bats-core); `brew install bats-core` or `apt-get install bats`):
+  ```bash
+  bats tests/
+  ```
+  Tests run against a throwaway state tree and a fake `tmux`, so they never touch your real bots. See [`tests/README.md`](tests/README.md). Add or update tests when you change command behavior.
 - Verify the affected commands manually (`cctg doctor`, `add`, `up`, `status`, etc.).
 - If behavior changed, update `README.md` (and `README.ko.md`) and add a `CHANGELOG.md` entry under `[Unreleased]`.
 - Never commit secrets (bot tokens, chat IDs) or machine-specific paths.

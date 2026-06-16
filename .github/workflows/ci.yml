@@ -38,3 +38,22 @@ jobs:
       # 메시지 카탈로그 키 패리티 + 참조 키 검증.
       - name: i18n key parity
         run: bash scripts/check-i18n-keys.sh
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # bats(테스트 러너)는 러너에 없을 수 있어 apt 로 설치. jq 는 사전 설치.
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: Tool versions
+        run: |
+          bats --version
+          jq --version
+
+      # cc-tg.sh 의 등록/명령 동작을 격리된 임시 상태 트리에서 검증한다.
+      # tmux 는 tests/stubs/tmux 가 대체하므로 러너에 tmux 가 없어도 동작한다.
+      - name: bats
+        run: bats tests/

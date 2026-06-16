@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Fake tmux for the cctg test suite.
+#
+# Deterministic and side-effect-free: it never talks to a real tmux server, so
+# tests can exercise is_running / status / up / down without spawning sessions.
+#   - "running" sessions are listed (space-separated) in $FAKE_TMUX_SESSIONS
+#     (cctg session names, e.g. "cctg-mybot").
+#   - session_created epoch comes from $FAKE_TMUX_CREATED (default 1700000000).
+#   - capture-pane emits two fixed lines so `logs`/down-snapshots have content.
+
+cmd="${1:-}"
+case "$cmd" in
+  has-session)
+    target=""
+    shift
+    while [ $# -gt 0 ]; do
+      case "$1" in -t) target="${2:-}"; shift 2 ;; *) shift ;; esac
+    done
+    for s in ${FAKE_TMUX_SESSIONS:-}; do
+      [ "$s" = "$target" ] && exit 0
+    done
+    exit 1 ;;
+  display-message)
+    printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
+  capture-pane)
+    printf 'fake pane line 1\nfake pane line 2\n' ;;
+  new-session|kill-session|attach|send-keys)
+    : ;;
+  *)
+    : ;;
+esac
+exit 0

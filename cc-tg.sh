@@ -536,13 +536,13 @@ ENV
           set_env_kv "$LE" CCTG_PERMISSION_MODE "$M"
           t CFG_MODE_SET "$NAME" "$M"
         fi
-        is_running "$NAME" && t APPLY_RESTART "$PROG" "$NAME" ;;
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       args)
         ARGS="${3-}"
         set_env_kv "$LE" CLAUDE_EXTRA_ARGS "$ARGS"
         local argshow="${ARGS:-$(t EMPTY_PAREN)}"
         t CFG_ARGS_SET "$NAME" "$argshow"
-        is_running "$NAME" && t APPLY_RESTART "$PROG" "$NAME" ;;
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
         te ERR_CONFIG_UNKNOWN "$ACTION"
         t CFG_USAGE "$PROG" >&2
@@ -648,7 +648,7 @@ cmd_status() {
       t STATUS_PATHS "$cwd" "$sd"
       t STATUS_MODE "$pm"
     done < <(all_names)
-    [ "$found" = 0 ] && t STATUS_NONE
+    if [ "$found" = 0 ]; then t STATUS_NONE; fi
 }
 
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.

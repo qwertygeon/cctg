@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A [bats](https://github.com/bats-core/bats-core) test suite under `tests/` (63 tests) covering `add`/`rm`/`rename`/`config`/`common`/`status --json`/`lang`/`logs`/`down`/`doctor`/`version`, the dispatcher, and the registry / reserved-name / state-dir safety guards. Tests run against an isolated state tree with a fake `tmux` (`tests/stubs/tmux`), so they touch no real bots. A `test` job runs them in CI.
 - `cctg status --json` for machine-readable output (array of `{name, state, running, cwd, stateDir, mode, session, uptimeSeconds, issues}` with locale-independent tokens; requires `jq`), and per-reason recovery hints (`↳ ...`) printed under each `BROKEN` bot in the text view.
 - Bot log persistence: `cctg down` snapshots the tmux pane (rendered text, ~2000 lines) to `<state>/last-session.log` (600 perms), and `cctg logs` falls back to that snapshot when the bot is stopped — so logs survive session end.
 - Non-interactive `cctg add` flags for CI/scripting: `--id <num>`, `--token-env <VAR>`, `--token-stdin`, `--mode <m>`. A token flag switches `add` to non-interactive mode (then `--id` is required; `--mode` optional, defaulting to the shared policy). The token is never accepted as an argv to avoid process-list exposure. bash/zsh completions updated.
@@ -14,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/RELEASING.md` documenting the version-bump → tag → GitHub Release procedure (VERSION is the SoT, tags are `v{VERSION}`).
 
 ### Fixed
+- Exit codes for successful commands: `cctg config <bot> mode|args` on a *stopped* bot, and `cctg status` with one or more bots registered, no longer return a non-zero exit status (the command branch had ended on a falsy `is_running`/`found` test). Surfaced by the new test suite; matters for `&&` chaining and scripting.
 - `cc-tg.sh` is now `shellcheck -S warning` clean (SC1090 dynamic-source directives, SC2155 declare-before-assign, SC2209 string-quote).
 
 ## [0.1.1] - 2026-06-16
