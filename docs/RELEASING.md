@@ -29,6 +29,7 @@
 - 일상 작업은 `develop` 에서 분기해 `develop` 으로 PR 한다.
 - `main` 직접 push 하지 않는다. `main` 은 `develop` 으로부터의 PR 로만 갱신한다.
 - `main` 에 VERSION 변경이 도달하는 순간이 곧 릴리스 트리거다 (아래 [3](#3-자동-발행-releaseyml)).
+- **브랜치 보호 전제**: `release.yml` 은 `main` push *후* 게이트를 실행하므로, 잘못된 VERSION bump 가 `main` 에 먼저 들어가는 것을 워크플로만으로는 막지 못한다. repo Settings → Branches 에서 `main` 에 "Require a pull request before merging" + "Require status checks to pass (CI)" 보호 규칙을 활성화하여 PR·CI 통과를 강제한다 — 이것이 실질 방어선이다.
 - 커밋 메시지는 `[type] 요약` 규약을 따른다 (`feat`/`fix`/`docs`/`refactor`/`test`/`chore`). 상세는 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## 사전 조건

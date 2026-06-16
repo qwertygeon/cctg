@@ -22,6 +22,7 @@ The single entry point is `cc-tg.sh`. Shell completions live in `completions/`, 
 
 ## Before opening a PR
 
+- Branch from and open your PR against `develop` (not `main`) — `develop` is the integration branch; `main` is updated only by a `develop → main` PR. See [docs/RELEASING.md](docs/RELEASING.md).
 - Run [`shellcheck`](https://www.shellcheck.net/) on changed scripts and address warnings:
   ```bash
   shellcheck cc-tg.sh install.sh uninstall.sh

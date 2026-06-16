@@ -234,7 +234,7 @@ cctg doctor              # check dependencies (tmux/claude/caffeinate/jq), PATH,
 
 ```console
 $ cctg doctor
-cctg doctor (v0.1.0)
+cctg doctor (vX.Y.Z)
 --- dependencies ---
   ok   tmux (/opt/homebrew/bin/tmux)
   ok   claude (/Users/you/.local/bin/claude)
