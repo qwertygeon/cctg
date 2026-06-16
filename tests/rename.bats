@@ -22,7 +22,7 @@ load test_helper
   [[ "$output" == *"kept state directory"* ]]
   grep -qE '^new \| ' "$REGISTRY"
   [ -d "$CC_CHANNELS_DIR/old" ]            # dir unchanged
-  grep -qE "\| $CC_CHANNELS_DIR/old$" "$REGISTRY"
+  grep -qE "\| $CC_CHANNELS_DIR/old \| telegram$" "$REGISTRY"   # state dir kept (field 3); channel column preserved
 }
 
 @test "rename: preserves the working_dir column" {
@@ -40,7 +40,7 @@ load test_helper
   [ "$status" -eq 0 ]
   [[ "$output" == *"kept state directory"* ]]
   [ -d "$custom" ]
-  grep -qE "\| $custom$" "$REGISTRY"
+  grep -qE "\| $custom \| telegram$" "$REGISTRY"   # legacy 3-col row upgraded with default channel
 }
 
 @test "rename: refuses a reserved new name" {
