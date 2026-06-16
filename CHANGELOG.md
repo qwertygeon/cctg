@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Developer tooling: `.editorconfig` (shell = 2-space, LF, UTF-8, final newline) and `.shellcheckrc` (`severity=warning`, documenting why `messages/*.sh` (SC2034 data catalog) and `completions/*` (SC2207 idiom / zsh) are excluded from the CI lint).
+- Shell completions for `rm --purge` and `rename --keep-dir` (bash and zsh).
+
+### Changed
+- `uninstall.sh` now resolves `BINDIR` from the install manifest (`bindir=`) before falling back to the default, and cleans up the install manifest, the language-preference config, and the shell-rc `*.cctg-bak` backups it created (deletions are announced; state dirs under `~/.claude/channels/` are still preserved).
+- CI and release workflows pinned to `actions/checkout@v5` (Node.js 20 deprecation); `release.yml` hardens the `VERSION` read against stray whitespace (`tr -d`).
+- `.gitignore` now also ignores `.env`, `RELEASE_NOTES.md`, and the `_ai-workspace/` pipeline workspace.
+
+### Removed
+- Undocumented `remove`/`mv` aliases for `rm`/`rename` (minimal command surface; the canonical names are unchanged).
+
 ## [0.2.0] - 2026-06-16
 
 ### Added
