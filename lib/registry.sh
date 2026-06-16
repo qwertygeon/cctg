@@ -27,14 +27,15 @@ remove_registry_line() {
 rename_registry_line() {
   local old="$1" new="$2" newsd="$3" tmp
   tmp="$(mktemp)" || return 1
-  awk -F'|' -v o="$old" -v nn="$new" -v ns="$newsd" '
+  awk -F'|' -v o="$old" -v nn="$new" -v ns="$newsd" -v dc="$DEFAULT_CHANNEL" '
     /^[[:space:]]*#/ {print; next}
     /^[[:space:]]*$/ {print; next}
     {
       c1=$1; gsub(/^[ \t]+|[ \t]+$/,"",c1)
       if (c1==o) {
         c2=$2; gsub(/^[ \t]+|[ \t]+$/,"",c2)
-        printf "%s | %s | %s\n", nn, c2, ns
+        c4=$4; gsub(/^[ \t]+|[ \t]+$/,"",c4); if (c4=="") c4=dc
+        printf "%s | %s | %s | %s\n", nn, c2, ns, c4
         next
       }
       print

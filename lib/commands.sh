@@ -8,16 +8,19 @@ cmd_add() {
     # 비대화형 플래그 파싱. 토큰 플래그(--token-env/--token-stdin)가 있으면 비대화형 모드로 전환:
     # 그 경우 --id 가 필수이고, --mode 생략 시 공통 설정을 따른다(프롬프트 없음).
     # 토큰은 프로세스 목록 노출을 피하기 위해 argv 로 직접 받지 않는다(env 또는 stdin 경유).
-    local opt_id="" opt_token_env="" opt_token_stdin=0 opt_mode="" noninteractive=0
+    local opt_id="" opt_token_env="" opt_token_stdin=0 opt_mode="" opt_channel="" noninteractive=0
     while [ $# -gt 0 ]; do
       case "$1" in
         --id)          [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--id";          opt_id="$2"; shift 2 ;;
         --token-env)   [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--token-env";   opt_token_env="$2"; noninteractive=1; shift 2 ;;
         --token-stdin) opt_token_stdin=1; noninteractive=1; shift ;;
         --mode)        [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--mode";        opt_mode="$2"; shift 2 ;;
+        --channel)     [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--channel";     opt_channel="$2"; shift 2 ;;
         *)             die ERR_ADD_UNKNOWN_FLAG "$1" ;;
       esac
     done
+    local CH="${opt_channel:-$DEFAULT_CHANNEL}"
+    valid_channel "$CH" || die ERR_CHANNEL_UNSUPPORTED "$CH" "$IMPLEMENTED_CHANNELS"
 
     valid_name "$NAME" || die ERR_BADNAME "$NAME"
     is_reserved_name "$NAME" && die ERR_RESERVED "$NAME" "$RESERVED_NAMES"
@@ -54,8 +57,8 @@ cmd_add() {
     fi
     printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"
 
-    # 3) 토큰 → .env (600)
-    printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TOKEN" > "$SD/.env"
+    # 3) 토큰 → .env (600). 키 이름은 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN).
+    printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env"
     chmod 600 "$SD/.env"
 
     # 4) access.json → allowlist 자동 생성 (페어링 불필요)
@@ -98,8 +101,8 @@ CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
     [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
 
-    # 6) 레지스트리 등록
-    printf '%s | %s | %s\n' "$NAME" "$CWD" "$SD" >> "$REGISTRY"
+    # 6) 레지스트리 등록 (4번째 컬럼 = 채널 타입)
+    printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY"
 
     t ADD_DONE "$NAME" "$CWD" "$SD"
     t ADD_DONE_ALLOWLIST "$TGID"
@@ -188,6 +191,7 @@ ENV
         local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
         t CFG_SHOW_HEADER "$NAME" "$LE"
+        t CFG_SHOW_CHANNEL "$(channel_of "$NAME")"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
         t CFG_SHOW_LAUNCHENV
@@ -336,7 +340,7 @@ cmd_status() {
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
 status_json() {
     need_jq || exit 1
-    local objs=() n row cwd sd sess created up_s pm running state iss issues_json now
+    local objs=() n row cwd sd sess created up_s pm running state iss issues_json now ch
     now="$(date +%s)"
     while IFS= read -r n; do
       [ -z "$n" ] && continue
@@ -358,12 +362,13 @@ status_json() {
         running=false; state="stopped"
       fi
       pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="shared"
+      ch="$(channel_of "$n")"
       if [ "${#iss[@]}" -gt 0 ]; then issues_json="$(printf '%s\n' "${iss[@]}" | jq -R . | jq -s .)"; else issues_json="[]"; fi
       objs+=("$(jq -nc \
         --arg name "$n" --arg state "$state" --argjson running "$running" \
-        --arg cwd "$cwd" --arg stateDir "$sd" --arg mode "$pm" --arg session "$sess" \
+        --arg cwd "$cwd" --arg stateDir "$sd" --arg mode "$pm" --arg session "$sess" --arg channel "$ch" \
         --argjson uptimeSeconds "$up_s" --argjson issues "$issues_json" \
-        '{name:$name,state:$state,running:$running,cwd:$cwd,stateDir:$stateDir,mode:$mode,session:$session,uptimeSeconds:(if $uptimeSeconds<0 then null else $uptimeSeconds end),issues:$issues}')")
+        '{name:$name,state:$state,running:$running,cwd:$cwd,stateDir:$stateDir,mode:$mode,channel:$channel,session:$session,uptimeSeconds:(if $uptimeSeconds<0 then null else $uptimeSeconds end),issues:$issues}')")
     done < <(all_names)
     if [ "${#objs[@]}" -gt 0 ]; then printf '%s\n' "${objs[@]}" | jq -s .; else printf '[]\n'; fi
 }

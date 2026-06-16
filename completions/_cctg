@@ -68,15 +68,16 @@ _cctg() {
         esac
       fi ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>]
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>]
       if (( CURRENT == 4 )); then
         _files -/
       elif (( CURRENT >= 5 )); then
         case "${words[CURRENT-1]}" in
           --mode)      compadd -- acceptEdits auto bypassPermissions default dontAsk plan ;;
           --token-env) compadd -- ${(k)parameters} ;;
+          --channel)   compadd -- telegram ;;
           --id)        ;; # 자유 입력(숫자)
-          *)           compadd -- --id --token-env --token-stdin --mode ;;
+          *)           compadd -- --id --token-env --token-stdin --mode --channel ;;
         esac
       fi ;;
     status)

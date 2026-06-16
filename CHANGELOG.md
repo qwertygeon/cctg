@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Channel abstraction (multi-gateway scaffold): a per-channel descriptor (`lib/channels.sh` — `channel_spec`) plus a 4th `channel` column in the registry (legacy 3-column rows read as `telegram`) decouple the telegram-specific plugin id / state-dir env var / token key. `cctg add --channel <name>` selects the channel (only `telegram` is implemented today; other names are refused with a clear message), and `status --json` / `config show` report it. No behaviour change for existing telegram bots (`lib/session.sh up_one` resolves the same values through the descriptor). Adding Discord/iMessage later is a localized `channel_spec` entry + `IMPLEMENTED_CHANNELS` listing, pending verification of their plugin ids/conventions.
 - Developer tooling: `.editorconfig` (shell = 2-space, LF, UTF-8, final newline) and `.shellcheckrc` (`disable=SC2207` for the completion `compgen` idiom, `external-sources` so `shellcheck cc-tg.sh` follows the `lib/*.sh` modules, and documentation of why `messages/*.sh` (SC2034 data catalog) is excluded from the CI lint command).
 - Shell completions for `rm --purge` and `rename --keep-dir` (bash and zsh).
 
