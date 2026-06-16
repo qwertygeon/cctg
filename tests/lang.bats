@@ -30,7 +30,10 @@ load test_helper
 }
 
 @test "lang clear: removes the persisted preference" {
-  unset CCTG_LANG
+  # Keep CCTG_LANG=en (from setup) so the confirmation renders in English.
+  # The active output language is fixed at startup from config (lang=ko here),
+  # so an explicit `unset` would make `clear` print the Korean message before it
+  # removes the pref — the persist/remove behaviour itself is language-independent.
   cctg lang ko >/dev/null
   run cctg lang clear
   [ "$status" -eq 0 ]
