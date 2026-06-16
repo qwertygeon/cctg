@@ -614,6 +614,9 @@ cmd_restart() {
 }
 
 cmd_status() {
+    [ "${1:-}" = "--json" ] && { status_json; return; }
+    if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
+
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
@@ -635,6 +638,9 @@ cmd_status() {
         t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
       elif [ -n "$issues" ]; then
         t STATUS_BROKEN "$n" "$issues"
+        # BROKEN 사유별 복구 힌트
+        [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$cwd" "$PROG" "$n"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$n"
       else
         t STATUS_STOPPED "$n"
       fi
@@ -643,6 +649,41 @@ cmd_status() {
       t STATUS_MODE "$pm"
     done < <(all_names)
     [ "$found" = 0 ] && t STATUS_NONE
+}
+
+# status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
+status_json() {
+    need_jq || exit 1
+    local objs=() n row cwd sd sess created up_s pm running state iss issues_json now
+    now="$(date +%s)"
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      row="$(lookup "$n")"
+      cwd="$(expand "$(cut -f1 <<<"$row")")"
+      sd="$(expand "$(cut -f2 <<<"$row")")"
+      sess="$(sess_of "$n")"
+      iss=()
+      [ -d "$cwd" ]     || iss+=("no-cwd")
+      [ -f "$sd/.env" ] || iss+=("no-token")
+      up_s=-1
+      if is_running "$n"; then
+        running=true; state="running"
+        created="$(tmux display-message -p -t "$sess" '#{session_created}' 2>/dev/null)"
+        printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
+      elif [ "${#iss[@]}" -gt 0 ]; then
+        running=false; state="broken"
+      else
+        running=false; state="stopped"
+      fi
+      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="shared"
+      if [ "${#iss[@]}" -gt 0 ]; then issues_json="$(printf '%s\n' "${iss[@]}" | jq -R . | jq -s .)"; else issues_json="[]"; fi
+      objs+=("$(jq -nc \
+        --arg name "$n" --arg state "$state" --argjson running "$running" \
+        --arg cwd "$cwd" --arg stateDir "$sd" --arg mode "$pm" --arg session "$sess" \
+        --argjson uptimeSeconds "$up_s" --argjson issues "$issues_json" \
+        '{name:$name,state:$state,running:$running,cwd:$cwd,stateDir:$stateDir,mode:$mode,session:$session,uptimeSeconds:(if $uptimeSeconds<0 then null else $uptimeSeconds end),issues:$issues}')")
+    done < <(all_names)
+    if [ "${#objs[@]}" -gt 0 ]; then printf '%s\n' "${objs[@]}" | jq -s .; else printf '[]\n'; fi
 }
 
 cmd_logs() {

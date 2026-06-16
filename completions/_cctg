@@ -75,6 +75,8 @@ _cctg() {
           *)           compadd -- --id --token-env --token-stdin --mode ;;
         esac
       fi ;;
+    status)
+      (( CURRENT == 3 )) && compadd -- --json ;;
     lang)
       (( CURRENT == 3 )) && compadd -- show en ko clear ;;
   esac
