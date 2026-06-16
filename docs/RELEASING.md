@@ -37,7 +37,7 @@
 - 릴리스 대상 변경이 `develop` 에 모두 통합되어 있고 CI 가 green 인지 확인한다.
 - 로컬 검증을 통과해야 한다 (CI·release 게이트와 동일):
   ```bash
-  for f in cc-tg.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do bash -n "$f"; done
+  for f in cc-tg.sh lib/*.sh install.sh uninstall.sh scripts/*.sh messages/*.sh; do bash -n "$f"; done
   shellcheck -S warning cc-tg.sh install.sh uninstall.sh scripts/*.sh
   bash scripts/check-i18n-keys.sh
   bats tests/
