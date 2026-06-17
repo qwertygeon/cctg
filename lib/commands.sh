@@ -291,6 +291,35 @@ ENV
           t CFG_SNAPSHOT_SET "$NAME" "$S"
         fi
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      cwd)
+        NEWCWD="${3-}"
+        [ -z "$NEWCWD" ] && die ERR_CONFIG_CWD_USAGE "$PROG" "$NAME"
+        NEWCWD="$(expand "$NEWCWD")"
+        [ -d "$NEWCWD" ] || die ERR_NO_SUCH_DIR "$NEWCWD"
+        set_registry_cwd "$NAME" "$NEWCWD" || die ERR_REGISTRY_UPDATE "$NAME"
+        t CFG_CWD_SET "$NAME" "$NEWCWD"
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      token)
+        # $3 이후를 플래그로 파싱: --token-env <VAR> | --token-stdin (argv 토큰 직접 전달 금지 — P-003)
+        shift 2
+        local t_env="" t_stdin=0 NEWTOK
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --token-env)   [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--token-env"; t_env="$2"; shift 2 ;;
+            --token-stdin) t_stdin=1; shift ;;
+            *)             die ERR_CONFIG_TOKEN_USAGE "$PROG" "$NAME" ;;
+          esac
+        done
+        if [ "$t_stdin" = 1 ]; then IFS= read -r NEWTOK || true
+        elif [ -n "$t_env" ]; then
+          printf '%s' "$t_env" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$' || die ERR_ADD_BAD_ENVNAME "$t_env"
+          NEWTOK="${!t_env-}"
+        else t ADD_PROMPT_TOKEN; read -rs NEWTOK; echo; fi
+        [ -z "$NEWTOK" ] && die ERR_EMPTY_TOKEN
+        local tk; tk="$(channel_spec "$(channel_of "$NAME")" token_key)"
+        printf '%s=%s\n' "$tk" "$NEWTOK" > "$sd/.env" && chmod 600 "$sd/.env"
+        t CFG_TOKEN_SET "$NAME"
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
         te ERR_CONFIG_UNKNOWN "$ACTION"
         t CFG_USAGE "$PROG" >&2
@@ -336,6 +365,8 @@ cmd_common() {
 
 cmd_up() {
     TARGET="${1:?name|all 필요}"
+    # 예약어(telegram/discord)는 레지스트리 없는 전용 경로로 라우팅(ADR-006)
+    if is_reserved_name "$TARGET"; then up_reserved "$TARGET"; return; fi
     if [ "$TARGET" = "all" ]; then
       while IFS= read -r n; do [ -n "$n" ] && up_one "$n"; done < <(all_names)
     else
@@ -345,6 +376,7 @@ cmd_up() {
 
 cmd_down() {
     TARGET="${1:?name|all 필요}"
+    if is_reserved_name "$TARGET"; then down_reserved "$TARGET"; return; fi
     if [ "$TARGET" = "all" ]; then
       while IFS= read -r n; do [ -n "$n" ] && down_one "$n"; done < <(all_names)
     else
@@ -354,6 +386,7 @@ cmd_down() {
 
 cmd_restart() {
     TARGET="${1:?name|all 필요}"
+    if is_reserved_name "$TARGET"; then down_reserved "$TARGET"; up_reserved "$TARGET"; return; fi
     if [ "$TARGET" = "all" ]; then
       while IFS= read -r n; do [ -n "$n" ] && { down_one "$n"; up_one "$n"; }; done < <(all_names)
     else
@@ -410,6 +443,34 @@ cmd_status() {
       fi
     done < <(all_names)
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
+
+    # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010)
+    local ch_found=0
+    for ch in $RESERVED_NAMES; do
+      channel_spec "$ch" plugin >/dev/null 2>&1 || continue
+      sd="$CHANNELS_DIR/$ch"; [ -d "$sd" ] || continue
+      if [ "$ch_found" = 0 ]; then t STATUS_RESERVED_HEADER; ch_found=1; fi
+      cwd="$PWD"   # DEC-001: 상태 표시용 — 전역 봇은 레지스트리에 cwd 없음
+      issues=""
+      [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
+      if is_running "$ch"; then
+        created="$(tmux display-message -p -t "$(sess_of "$ch")" '#{session_created}' 2>/dev/null)"
+        up=""
+        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+          up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+        fi
+        t STATUS_RUNNING "$ch" "$up" "$(sess_of "$ch")"
+      elif [ -n "$issues" ]; then
+        t STATUS_BROKEN "$ch" "$issues"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
+      else
+        t STATUS_STOPPED "$ch"
+      fi
+      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
+      t STATUS_PATHS "$cwd" "$sd"
+      t STATUS_MODE "$pm"
+      t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+    done
 }
 
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
@@ -450,6 +511,20 @@ status_json() {
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
+    # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
+    if is_reserved_name "$NAME"; then
+      if is_running "$NAME"; then
+        tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+        return
+      fi
+      local snap="$CHANNELS_DIR/$NAME/last-session.log"
+      if [ -f "$snap" ]; then
+        t LOGS_SNAPSHOT "$NAME"
+        tail -n "$N" "$snap"
+        return
+      fi
+      die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
+    fi
     if is_running "$NAME"; then
       tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
       return
