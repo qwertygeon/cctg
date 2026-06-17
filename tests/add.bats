@@ -93,3 +93,104 @@ load test_helper
   [ "$status" -ne 0 ]
   [[ "$output" == *"another channel bot's state"* ]]
 }
+
+# --- channel-branched add (FR-003/004/008): id_required, seed policy, --group ---
+# discord has id_required=no, so it must register without --id; telegram keeps the
+# required-id behaviour. seed_bot can't be reused for the no-id case (it injects
+# --id 555), so these drive add directly with --token-env/--token-stdin.
+
+@test "add: discord without --id proceeds (no ERR_ADD_NEED_ID) (SC-007)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"requires --id"* ]]
+  [ -f "$CC_CHANNELS_DIR/mybot/access.json" ]
+}
+
+@test "add: telegram without --id is still refused (SC-008)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"requires --id"* ]]
+}
+
+@test "add: discord --id absent seeds pairing/[]/{}, no pending (SC-009)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN
+  [ "$status" -eq 0 ]
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.dmPolicy == "pairing"' "$aj"
+  jq -e '.allowFrom == []' "$aj"
+  jq -e '.groups == {}' "$aj"
+  jq -e 'has("pending") == false' "$aj"
+}
+
+@test "add: discord --id present seeds allowlist with id, no pending (SC-010)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN --id 12345
+  [ "$status" -eq 0 ]
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.dmPolicy == "allowlist"' "$aj"
+  jq -e '.allowFrom | index("12345") != null' "$aj"
+  jq -e 'has("pending") == false' "$aj"
+}
+
+@test "add: telegram seed has no pending field (SC-011)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 12345
+  [ "$status" -eq 0 ]
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.dmPolicy == "allowlist"' "$aj"
+  jq -e '.allowFrom | index("12345") != null' "$aj"
+  jq -e 'has("pending") == false' "$aj"
+}
+
+@test "add: discord writes DISCORD_BOT_TOKEN into .env (SC-022)" {
+  printf 'dc-secret-token\n' | cctg add mybot "$WORK" --channel discord --token-stdin >/dev/null
+  grep -q '^DISCORD_BOT_TOKEN=dc-secret-token$' "$CC_CHANNELS_DIR/mybot/.env"
+}
+
+@test "add: --group <id> once seeds that key (SC-025)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group 846209781206941736
+  [ "$status" -eq 0 ]
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.groups["846209781206941736"].requireMention == true' "$aj"
+  jq -e '.groups["846209781206941736"].allowFrom == []' "$aj"
+}
+
+@test "add: --group twice seeds both keys (SC-026)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group 111000111000111000 --group 222000222000222000
+  [ "$status" -eq 0 ]
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.groups | has("111000111000111000")' "$aj"
+  jq -e '.groups | has("222000222000222000")' "$aj"
+}
+
+@test "add: non-numeric --group id errors and registers nothing (SC-027)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group abc
+  [ "$status" -ne 0 ]
+  # not registered: no mybot row in the registry (file may be absent entirely)
+  ! { [ -f "$REGISTRY" ] && grep -qE "^mybot \|" "$REGISTRY"; }
+}
+
+@test "add: --group :nomention sets requireMention false (SC-030)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group 846209781206941736:nomention
+  [ "$status" -eq 0 ]
+  jq -e '.groups["846209781206941736"].requireMention == false' \
+    "$CC_CHANNELS_DIR/mybot/access.json"
+}
+
+@test "add: --group :allow= seeds the listed members (SC-031)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group 846209781206941736:allow=184695080709324800,221773638772129792
+  [ "$status" -eq 0 ]
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.groups["846209781206941736"].allowFrom | index("184695080709324800") != null' "$aj"
+  jq -e '.groups["846209781206941736"].allowFrom | index("221773638772129792") != null' "$aj"
+}
+
+@test "add: --group :allow= with non-numeric member errors, registers nothing (SC-032)" {
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group 846209781206941736:allow=abc
+  [ "$status" -ne 0 ]
+  ! { [ -f "$REGISTRY" ] && grep -qE "^mybot \|" "$REGISTRY"; }
+}

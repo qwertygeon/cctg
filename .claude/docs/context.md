@@ -14,9 +14,9 @@
 ## 1. 프로젝트 개요
 
 - **프로젝트명**: CCTG (Claude Code Tmux Gateway)
-- **목적**: macOS에서 프로젝트별 Claude Code Telegram 채널 봇을 각자의 tmux 세션으로 띄우고 관리하는 CLI 런처. 명령은 `cctg`.
-- **현재 버전**: v0.2.0
-- **주요 기술 스택**: Bash(3.2 호환, 단일 진입점 `cc-tg.sh`), tmux, jq, `caffeinate`(macOS), Claude Code CLI(`claude --channels`), Telegram 채널 플러그인. 패키지 매니저 없음(순수 셸).
+- **목적**: macOS에서 프로젝트별 Claude Code 채널 봇(Telegram/Discord)을 각자의 tmux 세션으로 띄우고 관리하는 CLI 런처. 명령은 `cctg`.
+- **현재 버전**: v0.3.0
+- **주요 기술 스택**: Bash(3.2 호환, 단일 진입점 `cc-tg.sh`), tmux, jq, `caffeinate`(macOS), Claude Code CLI(`claude --channels`), 채널 플러그인(Telegram/Discord — `claude --channels plugin:<ch>@claude-plugins-official`). 패키지 매니저 없음(순수 셸).
 
 ---
 
@@ -31,7 +31,7 @@
 | 메시지 카탈로그 | `messages/en.sh`, `messages/ko.sh` | i18n 출력 문자열(`CCTG_MSG_*` 스칼라). `t()`/`te()`/`die()` 가 키로 조회 | en=베이스, 선택언어 overlay |
 | 자동완성 | `completions/cctg.bash`, `completions/_cctg` | bash/zsh 명령·플래그·봇이름 완성 | zsh 는 `#compdef` |
 | 검증 스크립트 | `scripts/check-i18n-keys.sh` | en/ko 키 패리티 + 참조 키 검증 | CI lint |
-| 테스트 | `tests/*.bats`, `tests/test_helper.bash`, `tests/stubs/tmux` | 격리 상태 트리 + stateful fake tmux 로 명령·lifecycle 검증(81) | 실제 봇/tmux 무접촉 |
+| 테스트 | `tests/*.bats`, `tests/test_helper.bash`, `tests/stubs/tmux` | 격리 상태 트리 + stateful fake tmux 로 명령·lifecycle 검증(119) | 실제 봇/tmux 무접촉 |
 | 설치/제거 | `install.sh`, `uninstall.sh` | copy(libexec) / `--dev`(symlink) 설치, 매니페스트·완성·셸rc 관리, 대칭 제거 | |
 | 문서 | `docs/` (RELEASING·TODO·i18n·packaging), `README(.ko).md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` | 사용자·기여자 문서 | |
 | CI/릴리스 | `.github/workflows/ci.yml`, `release.yml` | lint+test(main) / VERSION 변경→태그·Release 자동 발행 | |
@@ -65,8 +65,8 @@
 ### 3.4 외부 시스템 연동
 
 - **tmux**: 봇당 세션 `cctg-<name>`. 기동/종료/스냅샷/attach 의 대상.
-- **Claude Code CLI**: `claude --channels plugin:telegram@claude-plugins-official --settings <shared> [--permission-mode <m>]` 로 실행.
-- **Telegram 채널 플러그인**: 상태 디렉터리(`TELEGRAM_STATE_DIR`)에서 `.env`(토큰)·`access.json`(allowlist) 사용.
+- **Claude Code CLI**: `claude --channels plugin:<ch>@claude-plugins-official --settings <shared> [--permission-mode <m>]` 로 실행. 플러그인 ID 는 `channel_spec <ch> plugin` 으로 descriptor 조회(telegram/discord).
+- **채널 플러그인**: 상태 디렉터리(`<CH>_STATE_DIR` — telegram=`TELEGRAM_STATE_DIR`, discord=`DISCORD_STATE_DIR`)에서 `.env`(토큰)·`access.json`(allowlist/pairing) 사용.
 - **파일시스템**: 레지스트리·상태 디렉터리·공통 설정·매니페스트(아래 §4).
 
 ---
@@ -88,7 +88,7 @@
 |---|---|---|
 | state dir (상태 디렉터리) | 봇별 토큰·설정·로그가 사는 디렉터리(`~/.claude/channels/<name>/`) | data dir |
 | registry (레지스트리) | 봇 목록 파일 `projects.conf` (`name\|cwd\|state_dir\|channel`; 3컬럼 레거시 행은 telegram) | db |
-| channel descriptor | `lib/channels.sh` 의 채널별 속성(plugin/statedir_env/token_key/...) 조회 — `channel_spec` | |
+| channel descriptor | `lib/channels.sh` 의 채널별 속성 8필드(plugin/statedir_env/token_key/token_required + display/id_label/id_required/seed_policy) 조회 — `channel_spec` | |
 | shared settings (공통 설정) | 전 봇 주입 권한 정책 `cctg-shared.settings.json` | |
 | launch.env | 봇별 기동 옵션(권한 모드·추가 인자·스냅샷 간격) | |
 | managed block (관리 블록) | install 이 셸 rc 에 마커(`# >>> cctg >>>`)로 넣는 PATH/완성 블록 | |
@@ -102,7 +102,9 @@
 
 | 항목 | 내용 | 영향 범위 | 관련 spec |
 |---|---|---|---|
-| 구현 채널 telegram 한정 | 채널 추상화(`lib/channels.sh` descriptor + 레지스트리 `channel` 컬럼 + `add --channel`)는 도입됨. 단 실제 구현·검증된 채널은 telegram 뿐 — discord/imessage 는 plugin ID·토큰/접근 규약 검증 후 `channel_spec` 케이스 추가 + `IMPLEMENTED_CHANNELS` 등재로 활성화 | `lib/channels.sh` | (예정) discord/imessage 배선 |
+| 구현 채널 telegram + discord | 채널 추상화(`lib/channels.sh` descriptor 8필드 + 레지스트리 `channel` 컬럼 + `add --channel`)로 telegram·discord 활성. imessage/fakechat 는 미구현 — `channel_spec` 케이스 추가 + `IMPLEMENTED_CHANNELS` 등재로 활성화 | `lib/channels.sh` | v0.4.0/001 |
+| 완성 채널 미러 수동 동기화 | `completions/_cctg`(`CCTG_COMPLETION_CHANNELS`)·`completions/cctg.bash`(`channels=`)는 `lib/channels.sh` 를 source 하지 않고 `IMPLEMENTED_CHANNELS` 를 로컬 리터럴로 미러(ADR-003). 채널 추가 시 3곳을 함께 갱신해야 함(자동 동기화 아님) | `completions/*` | v0.4.0/001 |
+| `--group` 파싱 Bash 3.2 제약 | 연관배열 불가로 서버채널 컴파운드 토큰(`<id>[:nomention][:allow=...]`)을 스칼라 누적 + `:` split 으로 처리(DEC-001) | `lib/commands.sh` | v0.4.0/001 |
 | Bash 3.2 제약 | 연관 배열 불가 → 메시지 카탈로그·채널 descriptor 가 스칼라/case 기반. macOS BSD 도구 의존 | 전체 | — |
 | 플랫폼 한정 | `caffeinate` 등 macOS 의존 — Linux/WSL 미지원(의도된 범위) | 전체 | — |
 | 컨테이너/DB/서버 부재 | Docker·DB·서버 없음. 로컬 사용자 머신에서 직접 실행 | 전체 | — |
