@@ -121,6 +121,10 @@ down_one() {
 }
 
 # bot.pid 가 존재하고 PID 가 살아 있으면 true. stale(파일 있어도 PID 없음) 이면 false.
+# 한계: kill -0 는 다른 사용자 소유 PID 에 대해 macOS 에서 EPERM(exit 1)을 반환하므로
+# "죽음"으로 오판한다 → stale 취급 → 기동 허용되어 드물게 409 conflict 가능. cctg 는
+# 단일 사용자 운영을 전제하므로 무해하나(전역 봇 좌표가 사용자별 $CHANNELS_DIR 하위),
+# 다중 사용자 공유 환경에선 이 가드만으로 단독 소유를 보장하지 못한다.
 reserved_runner_alive() {
   local pidf="$1/bot.pid" pid
   [ -f "$pidf" ] || return 1
