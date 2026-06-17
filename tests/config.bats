@@ -54,3 +54,85 @@ load test_helper
   [ "$status" -eq 0 ]
   [[ "$output" == *"to apply"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# SC-001~006: config cwd / token (v0.5.0/001-cli-convenience-patches)
+# ---------------------------------------------------------------------------
+
+@test "config cwd: updates registry column 2 (SC-001)" {
+  seed_bot mybot
+  local newdir="$BATS_TEST_TMPDIR/newpath"
+  mkdir -p "$newdir"
+  run cctg config mybot cwd "$newdir"
+  [ "$status" -eq 0 ]
+  # Registry 2nd column (cwd) must now be the new path.
+  grep -qE "^mybot[[:space:]]*\|[[:space:]]*$newdir" "$REGISTRY"
+  # Success message must be present.
+  [[ "$output" == *"mybot"* ]]
+}
+
+@test "config cwd: rejects non-existent dir (SC-002)" {
+  seed_bot mybot
+  # Record original registry row before the attempted change.
+  local orig
+  orig="$(grep '^mybot' "$REGISTRY")"
+  run cctg config mybot cwd /nope/does/not/exist
+  [ "$status" -ne 0 ]
+  # Error output must reference the rejected path (ERR_NO_SUCH_DIR: "no such directory: %s").
+  [[ "$output" == *"nope"* ]] || [[ "$output" == *"no such"* ]] || [[ "$output" == *"not found"* ]]
+  # Registry row must remain unchanged.
+  [ "$(grep '^mybot' "$REGISTRY")" = "$orig" ]
+}
+
+@test "config cwd: hints restart when running (SC-003)" {
+  seed_bot mybot
+  local newdir="$BATS_TEST_TMPDIR/newpath3"
+  mkdir -p "$newdir"
+  mark_running mybot
+  run cctg config mybot cwd "$newdir"
+  [ "$status" -eq 0 ]
+  # Registry updated.
+  grep -qE "^mybot[[:space:]]*\|[[:space:]]*$newdir" "$REGISTRY"
+  # Restart hint must appear.
+  [[ "$output" == *"to apply"* ]]
+}
+
+@test "config token: rewrites .env with telegram key, mode 600 (SC-004)" {
+  seed_bot mybot
+  local sd="$CC_CHANNELS_DIR/mybot"
+  # Pipe stdin via a temp file so cctg's `read -r` on --token-stdin gets it.
+  local tmpf="$BATS_TEST_TMPDIR/tok4"
+  printf 'newtok' > "$tmpf"
+  run cctg config mybot token --token-stdin < "$tmpf"
+  [ "$status" -eq 0 ]
+  grep -q 'TELEGRAM_BOT_TOKEN=newtok' "$sd/.env"
+  [ "$(file_mode "$sd/.env")" = "600" ]
+}
+
+@test "config token: rejects empty token (SC-005)" {
+  seed_bot mybot
+  local sd="$CC_CHANNELS_DIR/mybot"
+  # Preserve the original .env content.
+  local orig
+  orig="$(cat "$sd/.env")"
+  # Feed an empty file as stdin — cctg's `read -r` will read empty string.
+  local tmpf="$BATS_TEST_TMPDIR/tok5"
+  : > "$tmpf"
+  run cctg config mybot token --token-stdin < "$tmpf"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"empty"* ]]
+  # .env must remain unchanged.
+  [ "$(cat "$sd/.env")" = "$orig" ]
+}
+
+@test "config token: uses DISCORD_BOT_TOKEN for discord (SC-006)" {
+  local sd="$CC_CHANNELS_DIR/dbot"
+  BOT_TOKEN="dtok" bash "$CCTG" add dbot "$WORK" \
+    --channel discord --token-env BOT_TOKEN >/dev/null
+  local tmpf="$BATS_TEST_TMPDIR/tok6"
+  printf 'newtok' > "$tmpf"
+  run cctg config dbot token --token-stdin < "$tmpf"
+  [ "$status" -eq 0 ]
+  grep -q 'DISCORD_BOT_TOKEN=newtok' "$sd/.env"
+  [ "$(file_mode "$sd/.env")" = "600" ]
+}

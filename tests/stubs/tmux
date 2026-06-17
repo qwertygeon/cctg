@@ -36,6 +36,13 @@ case "$cmd" in
     name="$(flag_val -s "$@")" || exit 0
     if [ -n "$state" ]; then
       grep -qxF "$name" "$state" 2>/dev/null || printf '%s\n' "$name" >> "$state"
+    fi
+    # Capture the full new-session command for SC-025 cwd verification.
+    # Tests that need to inspect the launch string set FAKE_TMUX_LASTCMD to a
+    # writable file path; the stub writes the raw argument list there (one arg
+    # per line) so tests can grep for the expected `cd <path>` fragment.
+    if [ -n "${FAKE_TMUX_LASTCMD:-}" ]; then
+      printf '%s\n' "$@" > "$FAKE_TMUX_LASTCMD"
     fi ;;
   kill-session)
     target="$(flag_val -t "$@")" || exit 0

@@ -43,6 +43,27 @@ rename_registry_line() {
   ' "$REGISTRY" > "$tmp" && mv "$tmp" "$REGISTRY"
 }
 
+# 레지스트리에서 name 줄의 2번 컬럼(cwd)을 갱신.
+# 이름(1번)·상태디렉터리(3번)·채널(4번)은 보존. 주석·빈 줄도 보존.
+set_registry_cwd() {
+  local name="$1" newcwd="$2" tmp
+  tmp="$(mktemp)" || return 1
+  awk -F'|' -v n="$name" -v nc="$newcwd" -v dc="$DEFAULT_CHANNEL" '
+    /^[[:space:]]*#/ {print; next}
+    /^[[:space:]]*$/ {print; next}
+    {
+      c1=$1; gsub(/^[ \t]+|[ \t]+$/,"",c1)
+      if (c1==n) {
+        c3=$3; gsub(/^[ \t]+|[ \t]+$/,"",c3)
+        c4=$4; gsub(/^[ \t]+|[ \t]+$/,"",c4); if (c4=="") c4=dc
+        printf "%s | %s | %s | %s\n", c1, nc, c3, c4
+        next
+      }
+      print
+    }
+  ' "$REGISTRY" > "$tmp" && mv "$tmp" "$REGISTRY"
+}
+
 # 선행 ~ 확장
 expand() { case "$1" in "~"*) printf '%s' "${HOME}${1#\~}";; *) printf '%s' "$1";; esac; }
 

@@ -80,6 +80,16 @@ mkdir -p "$CHANNELS_DIR"
 
 CMD="${1:-}"
 shift || true
+
+# 서브커맨드 --help/-h 선검사: 인자 중 --help/-h 가 있으면 해당 sub_usage 출력 후 exit 0 (ADR-005).
+# top-level `cctg --help` (CMD=""/"help") 는 아래 case 의 help 분기가 처리하므로 충돌 없음.
+case "$CMD" in
+  add|rm|rename|config|common|up|down|restart|status|logs|attach|lang|doctor|update|version|help)
+    for _a in "$@"; do
+      case "$_a" in --help|-h) sub_usage "$CMD"; exit 0 ;; esac
+    done ;;
+esac
+
 case "$CMD" in
   add)                  cmd_add "$@" ;;
   rm)                   cmd_rm "$@" ;;

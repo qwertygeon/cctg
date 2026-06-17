@@ -119,3 +119,58 @@ down_one() {
     t DOWN_STOPPED "$name"
   fi
 }
+
+# bot.pid 가 존재하고 PID 가 살아 있으면 true. stale(파일 있어도 PID 없음) 이면 false.
+reserved_runner_alive() {
+  local pidf="$1/bot.pid" pid
+  [ -f "$pidf" ] || return 1
+  pid="$(head -n1 "$pidf" 2>/dev/null)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+# 예약어 채널 전역 봇 기동. lookup 없이 고정 좌표($PWD / $CHANNELS_DIR/<ch>) 사용.
+up_reserved() {
+  local ch="$1" sd cwd
+  # imessage/fakechat 등 channel_spec 미정의 채널은 미지원(ADR-010).
+  channel_spec "$ch" plugin >/dev/null 2>&1 || { te ERR_RESERVED_UNSUPPORTED "$ch"; return 1; }
+  sd="$CHANNELS_DIR/$ch"
+  cwd="$PWD"                                                            # DEC-001: cctg 호출 시점 현재 작업 디렉터리
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$cwd"; return 1; }                 # up_one 과 동형 가드
+  [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$sd/.env"; return 1; }       # SC-017
+  # 단독소유자 가드: cctg-<ch> tmux 세션 OR bot.pid 생존 (ADR-007)
+  if is_running "$ch"; then te ERR_RESERVED_UP_OCCUPIED "$ch"; return 1; fi
+  if reserved_runner_alive "$sd"; then te ERR_RESERVED_UP_RUNNER "$ch"; return 1; fi
+
+  ensure_shared_settings
+  local shared_arg=""
+  [ -f "$SHARED_SETTINGS" ] && shared_arg="--settings $(printf '%q' "$SHARED_SETTINGS")"
+
+  local sd_env plugin
+  sd_env="$(channel_spec "$ch" statedir_env)"
+  plugin="$(channel_spec "$ch" plugin)"
+  local launch
+  launch="cd $(printf '%q' "$cwd") \
+&& export ${sd_env}=$(printf '%q' "$sd") \
+&& set -a && source $(printf '%q' "$sd/.env") \
+&& { [ -f $(printf '%q' "$sd/launch.env") ] && source $(printf '%q' "$sd/launch.env") || true; } \
+&& set +a \
+&& MODE_ARG=\"\" \
+&& { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
+&& caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
+
+  tmux new-session -d -s "$(sess_of "$ch")" bash -lc "$launch"
+  t RESERVED_UP "$ch" "$(sess_of "$ch")"
+}
+
+# 예약어 채널 전역 봇 정지. cctg 가 기동한 tmux 세션만 kill (ADR-008).
+# bot.pid 러너는 종료하지 않음(NFR-003 — cctg 관리 범위 외).
+# stop_snapshotter/take_snapshot 미호출(전역 봇에는 cctg launch.env·watcher 없음, P-002).
+down_reserved() {
+  local ch="$1"
+  if is_running "$ch"; then
+    tmux kill-session -t "$(sess_of "$ch")"
+    t DOWN_OK "$ch"
+  else
+    t RESERVED_DOWN_NONE "$ch"
+  fi
+}

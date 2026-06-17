@@ -22,6 +22,8 @@
   - [`attach`](#attach)
 - [설정](#설정)
   - [`config`](#config)
+    - [config cwd](#config-cwd)
+    - [config token](#config-token)
   - [`common`](#common)
   - [`lang`](#lang)
 - [유지보수](#유지보수)
@@ -37,21 +39,26 @@
 cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
-  config <name> [...]          common [...]
-  up <name|all>                down <name|all>          restart <name|all>
-  status [--json]              logs <name> [N]          attach <name>
+  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|cwd <경로>|token]
+  common [...]
+  up <name|all|telegram|discord>    down <name|all|telegram|discord>
+  restart <name|all|telegram|discord>
+  status [--json]              logs <name|telegram|discord> [N]          attach <name>
   lang [show|en|ko|clear]
   doctor    update    version    help
 ```
 
-하나의 봇은 한 프로젝트의 Claude Code 채널 세션이다. 즉 작업 디렉터리 하나, 토큰·접근 정책을 가진 채널 하나(Telegram 또는 Discord), 그리고 `cctg-<name>` 이라는 이름의 detached `tmux` 세션으로 구성된다. 전역 채널 봇(상태가 `~/.claude/channels/<channel>/` 에 있는 봇)은 `cctg` 가 건드리지 않는다.
+하나의 봇은 한 프로젝트의 Claude Code 채널 세션이다. 즉 작업 디렉터리 하나, 토큰·접근 정책을 가진 채널 하나(Telegram 또는 Discord), 그리고 `cctg-<name>` 이라는 이름의 detached `tmux` 세션으로 구성된다. 예약 이름 `telegram`·`discord` 로는 전역 채널 봇을 기동·정지·관찰할 수 있게 되었다.
+
+모든 서브커맨드는 `--help`(`-h`) 를 받아 한 줄 사용법을 출력하고 종료 코드 `0` 으로 끝난다.
 
 ## 표기 규약
 
-- **봇 이름**에는 `[A-Za-z0-9_-]` 만 쓸 수 있다. 예약 이름 `telegram`, `discord`, `imessage`, `fakechat` 은 거부되며, 이는 전역 채널 플러그인의 기본 상태 디렉터리이기 때문이다.
+- **봇 이름**에는 `[A-Za-z0-9_-]` 만 쓸 수 있다. `telegram`, `discord`, `imessage`, `fakechat` 은 **예약 이름**이다. `add`, `rm`, `rename` 은 예약 이름을 거부한다. 단, `telegram`·`discord` 는 `up`, `down`, `restart`, `status`, `logs` 에서 전역 봇 제어에 사용할 수 있다([실행 제어](#실행-제어) 참조).
 - CLI 는 **이중 언어**(영어 / 한국어)다. 아래 예시는 영어 출력이며, [`lang`](#lang) 으로 전환한다.
 - 예시의 경로·숫자 ID·토큰은 **자리표시자**이므로 실제 값으로 바꾼다.
 - `version`/`-v`/`--version` 과 `help`/`-h`/`--help`/인자 없음은 각각 `version`·`help` 의 별칭이다.
+- 모든 서브커맨드는 `--help`(`-h`) 를 받아 사용법 한 줄을 출력하고 종료 코드 `0` 으로 끝난다.
 
 ## 봇 라이프사이클
 
@@ -123,41 +130,49 @@ $ cctg rename proj proj2 --keep-dir
 ### `up`
 
 ```
-cctg up <name|all>
+cctg up <name|all|telegram|discord>
 ```
 
 `cctg-<name>` 이름의 detached `tmux` 세션에서 봇을 기동한다. 세션은 `caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] [추가 인자]` 를 실행하며, 채널의 상태 디렉터리는 환경 변수(`TELEGRAM_STATE_DIR` / `DISCORD_STATE_DIR`) 로 주입된다. 공통 권한 정책은 `--settings` 로 주입되고, 봇별 `CCTG_PERMISSION_MODE`(`launch.env`) 가 공통 `defaultMode` 를 override 하며, `CLAUDE_EXTRA_ARGS` 가 뒤에 덧붙는다.
 
 작업 디렉터리와 봇의 `.env`(토큰) 가 존재해야 하며, 없으면 `up` 이 오류를 보고한다. 봇에 `CCTG_LOG_SNAPSHOT_INTERVAL` 이 설정되어 있으면 주기 스냅샷 watcher 도 함께 기동된다. `cctg up all` 은 등록된 모든 봇을 기동한다.
 
+**전역 채널 봇 (`telegram` / `discord`)**: 예약 이름을 전달하면 레지스트리 없이 `~/.claude/channels/<channel>/` 을 상태 디렉터리로 사용한다. 작업 디렉터리(`cwd`)는 `cctg up` 실행 시점의 현재 디렉터리(`$PWD`)다. **단독소유자 가드**: `cctg-<channel>` tmux 세션이 이미 존재하거나 상태 디렉터리의 `bot.pid` 에 살아 있는 PID 가 있으면(플러그인 러너 활성) 기동을 거부한다. `.env` 가 없어도 거부한다.
+
 ```console
 $ cctg up proj
 $ cctg up all
+$ cctg up telegram
+$ cctg up discord
 ```
 
 ### `down`
 
 ```
-cctg down <name|all>
+cctg down <name|all|telegram|discord>
 ```
 
 봇을 정지한다. `tmux` 세션을 종료하기 전에 세션 화면 스냅샷을 `<state>/last-session.log` 에 저장하여(정지 후에도 [`logs`](#logs) 가 동작하도록) 두고, 실행 중인 스냅샷 watcher 가 있으면 정지한다. `cctg down all` 은 등록된 모든 봇을 정지한다. 이미 정지된 봇을 정지해도 남아 있는 스냅샷 watcher PID 파일을 정리한다.
 
+**전역 채널 봇 (`telegram` / `discord`)**: `cctg-<channel>` tmux 세션만 종료한다. 채널 플러그인 자체의 러너(`bot.pid` 프로세스)는 종료 대상이 아니다 — 세션이 없을 때 이 한계를 출력 메시지로 안내한다.
+
 ```console
 $ cctg down proj
 $ cctg down all
+$ cctg down telegram
 ```
 
 ### `restart`
 
 ```
-cctg restart <name|all>
+cctg restart <name|all|telegram|discord>
 ```
 
-`down` 후 `up`. 실행 중인 봇에 설정 변경(권한 모드·추가 인자·스냅샷 주기·공통 정책)을 적용할 때 사용한다.
+`down` 후 `up`. 실행 중인 봇에 설정 변경(권한 모드·추가 인자·스냅샷 주기·공통 정책)을 적용할 때 사용한다. 예약 이름 `telegram`·`discord` 를 써서 전역 채널 봇을 재기동할 수 있다.
 
 ```console
 $ cctg restart proj
+$ cctg restart telegram
 ```
 
 ## 관찰
@@ -170,7 +185,9 @@ cctg status [--json]
 
 봇별 상태를 출력한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `stopped` / `BROKEN` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다.
 
-봇은 등록되어 있으나 작업 디렉터리가 없거나 `.env`(토큰) 가 없으면 `BROKEN` 이며, 사유별 복구 힌트가 출력된다. 출력에는 전역 봇 디렉터리 행(=`cctg` 가 관리하지 않는 경로) 도 함께 표시된다.
+봇은 등록되어 있으나 작업 디렉터리가 없거나 `.env`(토큰) 가 없으면 `BROKEN` 이며, 사유별 복구 힌트가 출력된다.
+
+상태 디렉터리(`~/.claude/channels/<channel>/`)가 존재하는 예약 채널에 대해서는 `--- 전역 채널 봇 ---` 섹션이 이어서 출력된다. 전역 봇의 `cwd` 는 `cctg status` 를 실행한 시점의 현재 디렉터리다(전역 봇은 레지스트리에 작업 디렉터리가 없으므로).
 
 `--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`stopped`/`broken`), `running`(불리언), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
 
@@ -199,14 +216,17 @@ $ cctg status --json
 ### `logs`
 
 ```
-cctg logs <name> [N]
+cctg logs <name|telegram|discord> [N]
 ```
 
 최근 `N` 줄의 로그를 출력한다(기본 `50`). 봇이 실행 중이면 라이브 `tmux` 화면을 읽는다(스크롤백 최대 2000줄). 정지 상태에서는 `<state>/last-session.log` 스냅샷([`down`](#down) 시 또는 주기 스냅샷터가 기록) 으로 대체한다. 정지 상태인데 스냅샷이 없으면 오류를 보고한다.
 
+예약 이름 `telegram`·`discord` 를 써서 `~/.claude/channels/<channel>/` 의 전역 봇 로그를 읽을 수 있다.
+
 ```console
 $ cctg logs proj
 $ cctg logs proj 200
+$ cctg logs telegram
 ```
 
 ### `attach`
@@ -226,7 +246,7 @@ $ cctg attach proj
 ### `config`
 
 ```
-cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|off>]
+cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|off> | cwd <경로> | token [--token-env <VAR>|--token-stdin]]
 ```
 
 `<state>/launch.env` 에 저장되는 봇별 옵션을 보거나 수정한다. 변경은 다음 [`up`](#up) / [`restart`](#restart) 시 적용되며, 봇이 실행 중이면 `cctg` 가 재기동을 안내한다.
@@ -240,6 +260,8 @@ cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|of
 | `args <str>` | `CLAUDE_EXTRA_ARGS` 를 설정한다. 예: `"--model opus"`. |
 | `snapshot <초>` | `<초>` 초마다 주기 로그 스냅샷을 켠다(최소 `5`). |
 | `snapshot off` | 주기 스냅샷을 끈다(`0` 도 허용, off 가 기본). |
+| `cwd <경로>` | <a name="config-cwd"></a>레지스트리의 봇 작업 디렉터리를 변경한다. 경로가 실제로 존재해야 한다. 봇이 실행 중이면 재기동 안내가 출력된다. |
+| `token` | <a name="config-token"></a>`<state>/.env` 의 토큰을 교체한다(권한 `600`). `--token-env <VAR>`, `--token-stdin`, 또는 대화형 가림 입력을 받는다. 토큰 키(`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`)는 봇의 채널로 결정된다. 봇이 실행 중이면 재기동 안내가 출력된다. |
 
 권한 모델 자체는 [permissions.md](permissions.md) 를 참조한다.
 
@@ -249,6 +271,9 @@ $ cctg config proj mode bypassPermissions
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
+$ cctg config proj cwd ~/new/path/to/proj
+$ cctg config proj token --token-stdin
+$ cctg config proj token --token-env NEW_BOT_TOKEN
 ```
 
 ### `common`
