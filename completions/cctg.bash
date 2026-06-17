@@ -3,11 +3,13 @@
 # macOS 기본 bash 3.2 호환을 위해 _init_completion 에 의존하지 않는다.
 
 _cctg() {
-  local cur prev cmd cmds names extra reg
+  local cur prev cmd cmds names extra reg channels
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   cmds="add rm rename config common up down restart status logs attach lang doctor update version help"
   reg="${CC_TG_REGISTRY:-${CC_CHANNELS_DIR:-$HOME/.claude/channels}/projects.conf}"
+  # lib/channels.sh IMPLEMENTED_CHANNELS 미러 — 채널 추가 시 함께 갱신(완성 파일은 lib 를 source 안 함).
+  channels="telegram discord"
 
   # 첫 인자: 서브커맨드
   if [ "$COMP_CWORD" -eq 1 ]; then
@@ -44,16 +46,17 @@ _cctg() {
       fi
       ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>]
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>] [--group <id>[:nomention][:allow=m1,m2]]
       if [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -d -- "$cur") )
       elif [ "$COMP_CWORD" -ge 4 ]; then
         case "$prev" in
           --mode)      COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") ) ;;
           --token-env) COMPREPLY=( $(compgen -A variable -- "$cur") ) ;;
-          --channel)   COMPREPLY=( $(compgen -W "telegram" -- "$cur") ) ;;
+          --channel)   COMPREPLY=( $(compgen -W "$channels" -- "$cur") ) ;;
           --id)        ;; # 자유 입력(숫자)
-          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode --channel" -- "$cur") ) ;;
+          --group)     ;; # 자유 입력(컴파운드 토큰 <id>[:nomention][:allow=...])
+          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode --channel --group" -- "$cur") ) ;;
         esac
       fi
       ;;

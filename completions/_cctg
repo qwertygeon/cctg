@@ -4,6 +4,8 @@
 
 _cctg() {
   local -a cmds
+  # lib/channels.sh IMPLEMENTED_CHANNELS 미러 — 채널 추가 시 함께 갱신(완성 파일은 lib 를 source 안 함).
+  local CCTG_COMPLETION_CHANNELS="telegram discord"
   cmds=(
     'add:프로젝트 봇 등록'
     'rm:등록 해제'
@@ -68,16 +70,17 @@ _cctg() {
         esac
       fi ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>]
+      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>] [--group <id>[:nomention][:allow=m1,m2]]
       if (( CURRENT == 4 )); then
         _files -/
       elif (( CURRENT >= 5 )); then
         case "${words[CURRENT-1]}" in
           --mode)      compadd -- acceptEdits auto bypassPermissions default dontAsk plan ;;
           --token-env) compadd -- ${(k)parameters} ;;
-          --channel)   compadd -- telegram ;;
+          --channel)   compadd -- ${=CCTG_COMPLETION_CHANNELS} ;;
           --id)        ;; # 자유 입력(숫자)
-          *)           compadd -- --id --token-env --token-stdin --mode --channel ;;
+          --group)     ;; # 자유 입력(컴파운드 토큰 <id>[:nomention][:allow=...])
+          *)           compadd -- --id --token-env --token-stdin --mode --channel --group ;;
         esac
       fi ;;
     status)

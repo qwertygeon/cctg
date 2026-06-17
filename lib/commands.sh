@@ -8,7 +8,10 @@ cmd_add() {
     # 비대화형 플래그 파싱. 토큰 플래그(--token-env/--token-stdin)가 있으면 비대화형 모드로 전환:
     # 그 경우 --id 가 필수이고, --mode 생략 시 공통 설정을 따른다(프롬프트 없음).
     # 토큰은 프로세스 목록 노출을 피하기 위해 argv 로 직접 받지 않는다(env 또는 stdin 경유).
-    local opt_id="" opt_token_env="" opt_token_stdin=0 opt_mode="" opt_channel="" noninteractive=0
+    # --group 컴파운드 토큰을 단일 스칼라에 누적한다(연관배열 미사용 — Bash 3.2). 토큰은 `:` 로
+    # 내부 분해하므로 토큰 간 구분자는 탭(토큰 자체엔 공백/탭 없음)을 쓴다.
+    local GROUP_SEP; GROUP_SEP="$(printf '\t')"
+    local opt_id="" opt_token_env="" opt_token_stdin=0 opt_mode="" opt_channel="" opt_groups="" noninteractive=0
     while [ $# -gt 0 ]; do
       case "$1" in
         --id)          [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--id";          opt_id="$2"; shift 2 ;;
@@ -16,6 +19,7 @@ cmd_add() {
         --token-stdin) opt_token_stdin=1; noninteractive=1; shift ;;
         --mode)        [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--mode";        opt_mode="$2"; shift 2 ;;
         --channel)     [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--channel";     opt_channel="$2"; shift 2 ;;
+        --group)       [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--group";       opt_groups="$opt_groups${opt_groups:+$GROUP_SEP}$2"; shift 2 ;;
         *)             die ERR_ADD_UNKNOWN_FLAG "$1" ;;
       esac
     done
@@ -46,26 +50,83 @@ cmd_add() {
     fi
     [ -z "$TOKEN" ] && die ERR_EMPTY_TOKEN
 
-    # 2) 본인 텔레그램 숫자 ID (allowlist 시드용) — 비대화형이면 --id 필수
+    # 2) 본인 채널 ID (allowlist 시드용). 채널 descriptor 의 id_required 로 분기한다.
+    #    id_required=yes(telegram): 비대화형이면 --id 필수, allowlist 시드.
+    #    id_required=no(discord): --id 생략 가능 — 비면 빈 ID 로 진행해 페어링 정책 시드.
     if [ -n "$opt_id" ]; then
       TGID="$opt_id"
-    elif [ "$noninteractive" = 1 ]; then
+    elif [ "$(channel_spec "$CH" id_required)" = yes ] && [ "$noninteractive" = 1 ]; then
       die ERR_ADD_NEED_ID
+    elif [ "$noninteractive" = 1 ]; then
+      TGID=""
     else
-      t ADD_PROMPT_TGID
+      t ADD_PROMPT_TGID "$(channel_spec "$CH" id_label)"
       read -r TGID
     fi
-    printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"
+    [ -n "$TGID" ] && { printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"; }
 
     # 3) 토큰 → .env (600). 키 이름은 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN).
     printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env"
     chmod 600 "$SD/.env"
 
-    # 4) access.json → allowlist 자동 생성 (페어링 불필요)
-    #    TGID는 위에서 숫자만 통과시켰으므로 JSON 주입 위험 없음
-    cat > "$SD/access.json" <<JSON
-{ "dmPolicy": "allowlist", "allowFrom": ["$TGID"], "groups": {}, "pending": {} }
+    # 4) access.json → 채널 시드 정책에 따라 생성.
+    #    dmPolicy/allowFrom 를 단일 가드로 동시 결정한다(동일 가드 중복 평가 제거):
+    #      ID 제공 → allowlist + [<id>] / 미제공 → 채널 seed_policy(예: discord=pairing) + []
+    #    TGID·group id·member id 는 모두 ^[0-9]+$ 통과분만 JSON 에 주입한다(P-003 주입 방어).
+    local sp policy af
+    sp="$(channel_spec "$CH" seed_policy)"
+    if [ -n "$TGID" ]; then policy=allowlist; af='["'"$TGID"'"]'; else policy="$sp"; af='[]'; fi
+
+    if [ -z "$opt_groups" ]; then
+      # groups 미지정: heredoc 으로 작성(jq 불요 — jq 없는 환경의 일반 add 동작 보존).
+      cat > "$SD/access.json" <<JSON
+{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
 JSON
+    else
+      # groups 지정: 가변 키 JSON 객체 구성을 위해 jq 사용. 검증·jq 가드는 레지스트리 등록 전(ADR-006)
+      # 에서 수행하므로 실패 시 봇은 미등록 상태로 남는다.
+      need_jq || exit 1
+      local groups_json gtok gid grest gmod rm_flag allow_csv allow_json gm first
+      groups_json='{}'
+      # 토큰을 줄 단위로 변환해(구분자=탭→개행) read 로 순회 — 루프 본문에서 IFS 를 자유롭게 바꾼다.
+      while IFS= read -r gtok; do
+        [ -z "$gtok" ] && continue
+        gid="${gtok%%:*}"; grest="${gtok#"$gid"}"
+        printf '%s' "$gid" | grep -qE '^[0-9]+$' || die ERR_ADD_BAD_GROUP_ID "$gid"
+        rm_flag=true; allow_csv=""
+        # 수식어(`:` 구분): nomention / allow=csv
+        local saved_ifs="$IFS"; IFS=':'
+        for gmod in $grest; do
+          case "$gmod" in
+            "")        : ;;
+            nomention) rm_flag=false ;;
+            allow=*)   allow_csv="${gmod#allow=}" ;;
+          esac
+        done
+        IFS="$saved_ifs"
+        allow_json='[]'
+        if [ -n "$allow_csv" ]; then
+          allow_json='['; first=1
+          saved_ifs="$IFS"; IFS=','
+          for gm in $allow_csv; do
+            IFS="$saved_ifs"
+            printf '%s' "$gm" | grep -qE '^[0-9]+$' || die ERR_ADD_BAD_GROUP_MEMBER "$gm"
+            [ "$first" = 1 ] && first=0 || allow_json="$allow_json,"
+            allow_json="$allow_json\"$gm\""
+            saved_ifs="$IFS"; IFS=','
+          done
+          IFS="$saved_ifs"
+          allow_json="$allow_json]"
+        fi
+        groups_json="$(printf '%s' "$groups_json" | jq -c \
+          --arg id "$gid" --argjson rm "$rm_flag" --argjson af "$allow_json" \
+          '. + {($id): {requireMention:$rm, allowFrom:$af}}')" || die ERR_ADD_BAD_GROUP_ID "$gid"
+      done <<EOF
+$(printf '%s' "$opt_groups" | tr "$GROUP_SEP" '\n')
+EOF
+      jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
+        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}' > "$SD/access.json"
+    fi
 
     # 4.5) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음), 아니면 대화형
     if [ -n "$opt_mode" ]; then
@@ -105,7 +166,8 @@ ENV
     printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY"
 
     t ADD_DONE "$NAME" "$CWD" "$SD"
-    t ADD_DONE_ALLOWLIST "$TGID"
+    # allowlist(ID 시드) → 페어링 불필요 안내 / pairing(ID 미제공) → 페어링 절차 안내(ADR-004)
+    if [ "$policy" = allowlist ]; then t ADD_DONE_ALLOWLIST "$TGID"; else t ADD_DONE_PAIRING; fi
     local pmshow="${PMODE:-$(t FOLLOW_SHARED)}"
     t ADD_DONE_MODE "$pmshow" "$PROG" "$PROG" "$NAME"
     t ADD_DONE_NEXT "$PROG" "$NAME"
@@ -324,15 +386,28 @@ cmd_status() {
         t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
       elif [ -n "$issues" ]; then
         t STATUS_BROKEN "$n" "$issues"
-        # BROKEN 사유별 복구 힌트
+        # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
         [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$cwd" "$PROG" "$n"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$n"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
       else
         t STATUS_STOPPED "$n"
       fi
       pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
       t STATUS_PATHS "$cwd" "$sd"
       t STATUS_MODE "$pm"
+      # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
+      ch_disp="$(channel_spec "$(channel_of "$n")" display)"
+      if command -v jq >/dev/null 2>&1 && [ -f "$sd/access.json" ]; then
+        dm="$(jq -r '.dmPolicy // "?"' "$sd/access.json" 2>/dev/null)"
+        gc="$(jq -r '(.groups // {}) | length' "$sd/access.json" 2>/dev/null)"
+        if [ -n "$dm" ] && [ -n "$gc" ]; then
+          t STATUS_CHANNEL_TOPO "$ch_disp" "$dm" "$gc"
+        else
+          t STATUS_CHANNEL "$ch_disp"
+        fi
+      else
+        t STATUS_CHANNEL "$ch_disp"
+      fi
     done < <(all_names)
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
 }
@@ -506,7 +581,7 @@ cmd_doctor() {
     else
       t DOCTOR_SHARED_NONE
     fi
-    t DOCTOR_PLUGIN_HINT
+    t DOCTOR_PLUGIN_HINT "$IMPLEMENTED_CHANNELS"
 }
 
 cmd_version() {
