@@ -190,3 +190,48 @@ seed_global() {
   # without failing the overall suite; this path is best-effort in unit tests.
   true
 }
+
+# ---------------------------------------------------------------------------
+# Review follow-up (PR #10): config now manages reserved global bots.
+#   - token rotation via fixed coordinate, channel == bot name
+#   - cwd is rejected (global bots launch in $PWD, no stored cwd)
+#   - logs/config guard unsupported reserved channels (imessage/fakechat)
+# ---------------------------------------------------------------------------
+
+@test "config telegram token: writes TELEGRAM_BOT_TOKEN to global dir, mode 600" {
+  run bash -c "printf 'SECRET\n' | bash '$CCTG' config telegram token --token-stdin"
+  [ "$status" -eq 0 ]
+  local env="$CC_CHANNELS_DIR/telegram/.env"
+  [ "$(cat "$env")" = "TELEGRAM_BOT_TOKEN=SECRET" ]
+  [ "$(stat -f '%Lp' "$env" 2>/dev/null || stat -c '%a' "$env")" = "600" ]
+}
+
+@test "config discord token: uses DISCORD_BOT_TOKEN (channel == bot name)" {
+  run bash -c "printf 'DTOK\n' | bash '$CCTG' config discord token --token-stdin"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CC_CHANNELS_DIR/discord/.env")" = "DISCORD_BOT_TOKEN=DTOK" ]
+}
+
+@test "config telegram cwd: rejected — global bot has no stored cwd" {
+  run cctg config telegram cwd "$WORK"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"global channel bot"* ]]
+}
+
+@test "config telegram show: works without a registry entry" {
+  run cctg config telegram show
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"channel: telegram"* ]]
+}
+
+@test "config imessage token: rejected — unsupported reserved channel" {
+  run bash -c "printf 'x\n' | bash '$CCTG' config imessage token --token-stdin"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not supported"* ]]
+}
+
+@test "logs imessage: reports unsupported (not 'stopped')" {
+  run cctg logs imessage
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not supported"* ]]
+}

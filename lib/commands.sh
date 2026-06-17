@@ -228,8 +228,18 @@ cmd_rename() {
 cmd_config() {
     # 봇별 옵션(launch.env) 보기·수정
     NAME="${1:?name 필요}"; ACTION="${2:-show}"
-    row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
-    sd="$(expand "$(cut -f2 <<<"$row")")"
+    local cfg_channel
+    if is_reserved_name "$NAME"; then
+      # 예약어 전역 봇: 레지스트리 없이 고정 좌표 사용(ADR-006/010). channel_spec 정의 채널만 지원.
+      # up/down/logs/status 와 동일하게 config(token·mode·args·snapshot) 도 전역 봇을 다룬다.
+      channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
+      sd="$CHANNELS_DIR/$NAME"; mkdir -p "$sd"
+      cfg_channel="$NAME"                          # 예약어는 채널명 == 봇명
+    else
+      row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
+      sd="$(expand "$(cut -f2 <<<"$row")")"
+      cfg_channel="$(channel_of "$NAME")"
+    fi
     LE="$sd/launch.env"
     # 이 기능 도입 전 등록된 봇엔 키가 없을 수 있으므로 템플릿 보강
     if [ ! -f "$LE" ]; then
@@ -253,7 +263,7 @@ ENV
         local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
         t CFG_SHOW_HEADER "$NAME" "$LE"
-        t CFG_SHOW_CHANNEL "$(channel_of "$NAME")"
+        t CFG_SHOW_CHANNEL "$cfg_channel"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
         t CFG_SHOW_LAUNCHENV
@@ -292,6 +302,8 @@ ENV
         fi
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       cwd)
+        # 예약어 전역 봇은 $PWD 에서 기동하며 레지스트리에 저장된 cwd 가 없다(DEC-001).
+        is_reserved_name "$NAME" && die ERR_CONFIG_CWD_RESERVED "$NAME"
         NEWCWD="${3-}"
         [ -z "$NEWCWD" ] && die ERR_CONFIG_CWD_USAGE "$PROG" "$NAME"
         NEWCWD="$(expand "$NEWCWD")"
@@ -316,7 +328,7 @@ ENV
           NEWTOK="${!t_env-}"
         else t ADD_PROMPT_TOKEN; read -rs NEWTOK; echo; fi
         [ -z "$NEWTOK" ] && die ERR_EMPTY_TOKEN
-        local tk; tk="$(channel_spec "$(channel_of "$NAME")" token_key)"
+        local tk; tk="$(channel_spec "$cfg_channel" token_key)"
         # umask 077 서브셸로 생성 — chmod 후행 시의 순간 world-readable 창 제거.
         ( umask 077; printf '%s=%s\n' "$tk" "$NEWTOK" > "$sd/.env" )
         t CFG_TOKEN_SET "$NAME"
@@ -518,6 +530,8 @@ cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
     # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
     if is_reserved_name "$NAME"; then
+      # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
+      channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
       if is_running "$NAME"; then
         tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
         return

@@ -31,6 +31,7 @@ _cctg() {
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 4 ]; then
         case "${COMP_WORDS[3]}" in
           mode)  COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan clear" -- "$cur") ) ;;
+          cwd)   COMPREPLY=( $(compgen -d -- "$cur") ) ;;
           token) COMPREPLY=( $(compgen -W "--token-env --token-stdin --help" -- "$cur") ) ;;
         esac
       elif [ "$cmd" = rm ] && [ "$COMP_CWORD" -ge 3 ]; then

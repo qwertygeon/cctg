@@ -54,7 +54,7 @@ _cctg() {
         _cctg_names
       fi ;;
     config)
-      # config <name> <action> — 3번째=봇명, 4번째=동작, 5번째=값(mode のみ)
+      # config <name> <action> — 3번째=봇명, 4번째=동작, 5번째=값(mode/cwd/token 별 보완)
       if (( CURRENT == 3 )); then
         _cctg_names
       elif (( CURRENT == 4 )); then
