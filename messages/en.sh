@@ -154,6 +154,7 @@ CCTG_MSG_DOCTOR_PLUGIN_HINT="  (the channel plugins must be installed globally, 
 # config cwd / token (신규 — FR-001/002)
 CCTG_MSG_ERR_CONFIG_CWD_USAGE="Usage: %s config %s cwd <path>\n"
 CCTG_MSG_ERR_NO_SUCH_DIR="ERROR: no such directory: %s\n"
+CCTG_MSG_ERR_CONFIG_CWD_RESERVED="ERROR: '%s' is a global channel bot — it launches in the current directory and has no stored cwd.\n"
 CCTG_MSG_CFG_CWD_SET="%s cwd: %s\n"
 CCTG_MSG_ERR_CONFIG_TOKEN_USAGE="Usage: %s config %s token [--token-env VAR|--token-stdin]\n"
 CCTG_MSG_CFG_TOKEN_SET="%s token updated.\n"

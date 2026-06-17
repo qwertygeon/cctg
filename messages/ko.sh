@@ -153,6 +153,7 @@ CCTG_MSG_DOCTOR_PLUGIN_HINT="  (채널 플러그인은 전역 설치 필요, 예
 # config cwd / token (신규 — FR-001/002)
 CCTG_MSG_ERR_CONFIG_CWD_USAGE="사용법: %s config %s cwd <경로>\n"
 CCTG_MSG_ERR_NO_SUCH_DIR="ERROR: 디렉터리 없음: %s\n"
+CCTG_MSG_ERR_CONFIG_CWD_RESERVED="ERROR: '%s' 는 전역 채널 봇입니다 — 현재 디렉터리에서 기동하며 저장된 cwd 가 없습니다.\n"
 CCTG_MSG_CFG_CWD_SET="%s cwd: %s\n"
 CCTG_MSG_ERR_CONFIG_TOKEN_USAGE="사용법: %s config %s token [--token-env VAR|--token-stdin]\n"
 CCTG_MSG_CFG_TOKEN_SET="%s 토큰 갱신됨.\n"
