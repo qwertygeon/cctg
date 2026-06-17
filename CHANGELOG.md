@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Discord channel support** (`cctg add --channel discord`): the channel abstraction now drives Discord bots end to end (`add`/`up`/`down`/`logs`/`status`), not just Telegram. The token is stored as `DISCORD_BOT_TOKEN`. Because Discord's access model differs from Telegram's, the per-channel `channel_spec` descriptor grew from 4 to 8 fields (`display`, `id_label`, `id_required`, `seed_policy`) so `add` branches on them: Discord seeds `access.json` with `dmPolicy: "pairing"` and an empty allowlist by default (the plugin returns a pairing code approved later via `/discord:access pair`), while passing `--id <user snowflake>` seeds `dmPolicy: "allowlist"` directly. Telegram keeps requiring `--id` non-interactively.
+- **`cctg add --group <id>[:nomention][:allow=m1,m2,...]`** (Discord server channels): pre-seed server channels into `access.json` `groups` at registration time. Repeatable; the compound token sets per-channel `requireMention` (default true, `:nomention` flips it) and `allowFrom` (default all members, `:allow=...` restricts to listed member snowflakes). Channel and member IDs are validated as numeric before any registry write — a non-numeric value is refused and nothing is registered. bash/zsh completions list `--group`.
+- **`cctg status` channel + topology**: the text view now shows each bot's channel display name (`Telegram`/`Discord`); with `jq` and an `access.json` present it also shows the connection topology — the DM policy and seeded group count, e.g. `channel=Discord (pairing, 0 groups)`. Without `jq` it degrades to the display name only (no error).
+
+### Changed
+- Channel-specific descriptor metadata is now the single source of truth for human-facing strings: message catalog keys (`ADD_PROMPT_TGID`, `STATUS_GLOBAL`, `STATUS_HINT_NO_TOKEN`, `DOCTOR_PLUGIN_HINT`) and the completion `--channel` candidates no longer hardcode `telegram` / `TELEGRAM_BOT_TOKEN` / `/telegram`; they read the channel's `id_label` / `token_key` / `display` or the `IMPLEMENTED_CHANNELS` list. Adding a channel is now a `channel_spec` case block plus one `IMPLEMENTED_CHANNELS` entry (and the completion mirror variable). The `access.json` seed no longer writes the unused `"pending": {}` field for any channel. The registry schema is unchanged — legacy 3-column rows still read as `telegram`.
+
 ## [0.3.0] - 2026-06-16
 
 ### Added
