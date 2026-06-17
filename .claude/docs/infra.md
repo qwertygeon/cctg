@@ -18,10 +18,10 @@
 
 ## 2. 인프라 토폴로지
 
-- **tmux 서버** 위에 봇당 세션 `cctg-<name>` 1개. 각 세션은 `caffeinate -is` 로 래핑된 `claude --channels plugin:telegram@claude-plugins-official` 프로세스 1개를 실행.
+- **tmux 서버** 위에 봇당 세션 `cctg-<name>` 1개. 각 세션은 `caffeinate -is` 로 래핑된 `claude --channels plugin:<ch>@claude-plugins-official` 프로세스 1개를 실행(채널별 descriptor 조회 — telegram/discord).
 - 각 봇은 상태 디렉터리 `~/.claude/channels/<name>/`(토큰·allowlist·로그)와 작업 디렉터리(cwd)를 가진다.
 - 공통 권한 설정 `cctg-shared.settings.json` 이 전 봇에 `--settings` 로 주입된다.
-- 외부 의존: Telegram Bot API(플러그인이 통신), Claude Code 런타임. 컨테이너·DB·메시지 브로커 없음.
+- 외부 의존: 채널 플러그인이 통신하는 채널 API(Telegram Bot API / Discord Gateway), Claude Code 런타임. 컨테이너·DB·메시지 브로커 없음.
 
 ## 3. 배포 방식
 
@@ -42,7 +42,7 @@
 
 ## 5. 연결 실패 재시도 동작
 
-- CCTG 자체는 외부 연결 재시도 로직을 두지 않는다. Telegram API 연결·재시도는 Claude Code Telegram 플러그인 책임.
+- CCTG 자체는 외부 연결 재시도 로직을 두지 않는다. 채널 API 연결·재시도는 Claude Code 채널 플러그인(telegram/discord) 책임.
 - tmux 세션/`claude` 프로세스가 비정상 종료하면 자동 재기동하지 않으며, `status` 에서 stopped/BROKEN 으로 표면화된다(사용자가 `up`/`restart`).
 
 ## 6. 로컬 개발 환경 / 테스트 실행 정책
@@ -72,6 +72,6 @@
 | 항목 | 내용 | 영향 범위 | 관련 spec |
 |---|---|---|---|
 | macOS 한정 | `caffeinate` 등 macOS 의존 — Linux/WSL 미지원(의도된 범위) | 설치·기동 | — |
-| 단일 게이트웨이 | Telegram 플러그인 하드코딩 | 기동 | (예정) 다중 게이트웨이 |
+| 다중 게이트웨이 | telegram/discord 지원. 플러그인 ID 는 descriptor(`channel_spec <ch> plugin`) 경유 — 하드코딩 제거. imessage/fakechat 는 미구현 | 기동 | v0.4.0/001 |
 | 컨테이너/서버 부재 | Docker·서버 배포 없음. 사용자 머신 직접 실행 | 배포 | — |
 | CI 트리거 범위 | `ci.yml` 는 `main` push/PR 에만 실행 — `develop` push 는 CI 미실행(검증은 develop→main PR 시점) | CI | — |

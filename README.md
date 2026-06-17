@@ -8,19 +8,21 @@
 
 It never touches the global bot (`~/.claude/channels/telegram/`). Each project bot has its own state directory, token, and working directory, and runs in an isolated tmux session.
 
-> **Supported channel scope** — CCTG's state directory follows Claude Code's **channels** (`~/.claude/channels/`) layout: each channel plugin keeps its global bot under `~/.claude/channels/<channel>/` (`.env`, `access.json`, `approved/`, `inbox/`), overridable per-process via that plugin's `<CHANNEL>_STATE_DIR`. CCTG drives **Telegram only** today; the others are not connectable yet.
+> **Supported channel scope** — CCTG's state directory follows Claude Code's **channels** (`~/.claude/channels/`) layout: each channel plugin keeps its global bot under `~/.claude/channels/<channel>/` (`.env`, `access.json`, `approved/`, `inbox/`), overridable per-process via that plugin's `<CHANNEL>_STATE_DIR`. CCTG drives **Telegram and Discord** today; the others are not connectable yet.
 
 **Supported gateways:**
 
 | Gateway | Claude Code plugin | Global state dir | Per-process state override | CCTG support |
 |---|---|---|---|---|
 | **Telegram** | `telegram@claude-plugins-official` | `~/.claude/channels/telegram/` | `TELEGRAM_STATE_DIR` | ✅ **Supported** — `add`/`up` launch isolated per-project bots |
-| Discord | `discord@claude-plugins-official` | `~/.claude/channels/discord/` | `DISCORD_STATE_DIR` | ⛔ Planned — name **reserved** to avoid clobbering the global bot |
+| **Discord** | `discord@claude-plugins-official` | `~/.claude/channels/discord/` | `DISCORD_STATE_DIR` | ✅ **Supported** — `add --channel discord`; DM uses pairing by default, server channels seedable via `--group` |
 | iMessage | `imessage@claude-plugins-official` | `~/.claude/channels/imessage/` | `IMESSAGE_STATE_DIR` | ⛔ Planned — name **reserved** |
 | fakechat (local test) | `fakechat@claude-plugins-official` | `~/.claude/channels/fakechat/` | — (hard-coded) | ⛔ Not applicable — name **reserved** |
 | Slack | `slack@claude-plugins-official` | — (MCP search/read, no bot state dir) | — | ➖ Out of scope — not a tmux-hosted message bridge |
 
 > Because every channel plugin's global bot lives at `~/.claude/channels/<channel>/`, CCTG **reserves** the names `telegram`, `discord`, `imessage`, and `fakechat`: `cctg add <reserved>` / `cctg rename ... <reserved>` are refused so a project bot can never overwrite a global channel bot's token or allowlist. CCTG also refuses to reuse any state directory that already holds a non-CCTG channel bot's state (an `.env`/`access.json` without a CCTG `launch.env`), so even a future channel name is protected.
+
+> **Adding a channel** — each channel is described by a `channel_spec` case block in `lib/channels.sh` (8 fields: `plugin` / `statedir_env` / `token_key` / `token_required` / `display` / `id_label` / `id_required` / `seed_policy`). Wiring up a new channel (e.g. iMessage) is a localized change: add its `channel_spec` arms and list it in `IMPLEMENTED_CHANNELS`, then `add` / `status` / `doctor` / completions pick it up automatically — pending verification of that plugin's id and access conventions. (The bash/zsh completions mirror `IMPLEMENTED_CHANNELS` in a local variable, so update that mirror in step.)
 
 > ⚠️ **Privacy — data flow notice** — CCTG relays messages received over Telegram to a Claude Code process running in the bot's working directory, and Claude Code **sends that content to the Anthropic API** for processing. In other words, the conversations, code, and file contents exchanged with the bot pass through a third party (Anthropic) and through Telegram's infrastructure. Keep this in mind before attaching a bot to a repository that handles sensitive data, and strictly limit who can reach the bot via the `access.json` allowlist (yourself, or trusted users only).
 
@@ -129,7 +131,7 @@ Example session (token input is masked):
 ```console
 $ cctg add myproject ~/work/myproject
 Bot token (issued by @BotFather, must be a NEW bot): ********
-Your numeric Telegram ID (DM @userinfobot if unknown): 123456789
+Your Telegram numeric ID: 123456789
 Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
@@ -141,10 +143,12 @@ Pass flags to skip the prompts. Supplying a **token flag** (`--token-env` or `--
 
 | Flag | Meaning |
 |---|---|
-| `--id <num>` | Numeric Telegram ID for the allowlist (required when non-interactive) |
+| `--channel <name>` | Channel to register for (`telegram` or `discord`; default `telegram`) |
+| `--id <num>` | Numeric channel user ID for the allowlist (Telegram ID / Discord user snowflake). Required for Telegram when non-interactive; optional for Discord |
 | `--token-env <VAR>` | Read the bot token from environment variable `VAR` |
 | `--token-stdin` | Read the bot token from stdin (one line) |
 | `--mode <m>` | Permission mode (`acceptEdits`/`auto`/`bypassPermissions`/`default`/`dontAsk`/`plan`) |
+| `--group <id>[:nomention][:allow=m1,m2]` | (Discord) Pre-seed a server channel into `access.json` `groups`. Repeatable. See below |
 
 > The token is **never taken as a command-line argument** (it would leak via the process list). Use `--token-env` or `--token-stdin`.
 
@@ -156,6 +160,28 @@ BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
 # from stdin (e.g. piped from a secrets manager)
 secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
 ```
+
+#### Discord bots (`--channel discord`)
+
+Register a Discord channel bot the same way, with `--channel discord`. The token is stored as `DISCORD_BOT_TOKEN` in the bot's `.env`. Discord's access model differs from Telegram:
+
+- **DM access uses pairing by default** — without `--id`, the seeded `access.json` has `dmPolicy: "pairing"` and an empty allowlist. On the first DM the plugin returns a pairing code that you approve in your terminal with `/discord:access pair <code>`. Pass `--id <your user snowflake>` to skip pairing and seed `dmPolicy: "allowlist"` directly.
+- **Server channels are seeded with `--group`** — each `--group` seeds one channel snowflake into `access.json` `groups`. The compound token sets per-channel behavior:
+  - `--group 846209781206941736` → require an @mention, allow all members
+  - `--group 846209781206941736:nomention` → respond without an @mention (`requireMention: false`)
+  - `--group 846209781206941736:allow=184695080709324800,221773638772129792` → only those member snowflakes can trigger the bot
+  - combine modifiers: `--group <id>:nomention:allow=<m1>,<m2>`
+  - repeat `--group` for multiple channels. Channel and member IDs must be numeric (`^[0-9]+$`); a non-numeric value is refused and the bot is **not** registered.
+
+```bash
+# Discord bot, pairing DM access, two server channels pre-seeded
+DISCORD_TOKEN="..." cctg add mybot ~/work/mybot --channel discord \
+  --token-env DISCORD_TOKEN \
+  --group 846209781206941736:nomention \
+  --group 900111222333444555:allow=184695080709324800
+```
+
+> Runtime access management (approving pairings, adding/removing groups) belongs to the `/discord:access` skill that the user runs in their terminal. `cctg add` only seeds the initial `access.json`.
 
 By default `rm` **keeps** the state directory containing the token and allowlist (reusable on re-registration). A running bot must be stopped with `down` first. `--purge` also deletes the state directory, but for safety it never touches the global bot directory or paths outside `CHANNELS_DIR`.
 
@@ -226,6 +252,8 @@ Global bot: /Users/you/.claude/channels/telegram (not managed by this script)
             mode=shared
 ```
 
+> Each bot row shows its **channel** (`Telegram` / `Discord`). When `jq` is available and the bot has an `access.json`, the row also shows the connection topology — the DM policy and the number of seeded server channels, e.g. `channel=Discord (pairing, 0 groups)` or `channel=Discord (allowlist, 2 groups)`. Without `jq`, only the channel display name is shown.
+
 ### 4. Diagnostics (doctor)
 
 ```bash
@@ -249,7 +277,7 @@ cctg doctor (vX.Y.Z)
   file: /Users/you/.claude/channels/cctg-shared.settings.json
   defaultMode: bypassPermissions
   deny: 5 / allow: 0
-  (the telegram plugin must be installed globally: /plugin install telegram@claude-plugins-official)
+  (the channel plugins must be installed globally, e.g. /plugin install <channel>@claude-plugins-official for: telegram discord)
 ```
 
 ## Language
