@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-17
+
 ### Added
 - **Discord channel support** (`cctg add --channel discord`): the channel abstraction now drives Discord bots end to end (`add`/`up`/`down`/`logs`/`status`), not just Telegram. The token is stored as `DISCORD_BOT_TOKEN`. Because Discord's access model differs from Telegram's, the per-channel `channel_spec` descriptor grew from 4 to 8 fields (`display`, `id_label`, `id_required`, `seed_policy`) so `add` branches on them: Discord seeds `access.json` with `dmPolicy: "pairing"` and an empty allowlist by default (the plugin returns a pairing code approved later via `/discord:access pair`), while passing `--id <user snowflake>` seeds `dmPolicy: "allowlist"` directly. Telegram keeps requiring `--id` non-interactively.
 - **`cctg add --group <id>[:nomention][:allow=m1,m2,...]`** (Discord server channels): pre-seed server channels into `access.json` `groups` at registration time. Repeatable; the compound token sets per-channel `requireMention` (default true, `:nomention` flips it) and `allowFrom` (default all members, `:allow=...` restricts to listed member snowflakes). Channel and member IDs are validated as numeric before any registry write — a non-numeric value is refused and nothing is registered. bash/zsh completions list `--group`.
@@ -77,7 +79,8 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/qwertygeon/cctg/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/qwertygeon/cctg/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/qwertygeon/cctg/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/qwertygeon/cctg/compare/v0.1.0...v0.1.1
