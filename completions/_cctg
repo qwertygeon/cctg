@@ -40,29 +40,36 @@ _cctg() {
   case "${words[2]}" in
     rm)
       (( CURRENT == 3 )) && _cctg_names
-      (( CURRENT >= 4 )) && compadd -- --purge ;;
+      (( CURRENT >= 4 )) && compadd -- --purge --help ;;
     logs|attach)
-      (( CURRENT == 3 )) && _cctg_names ;;
+      (( CURRENT == 3 )) && _cctg_names
+      (( CURRENT == 3 )) || compadd -- --help ;;
     rename)
       # 3번째 인자(old)만 보완. 4번째(new name)는 자유 입력. 5번째 이후 --keep-dir.
       (( CURRENT == 3 )) && _cctg_names
-      (( CURRENT >= 5 )) && compadd -- --keep-dir ;;
+      (( CURRENT >= 5 )) && compadd -- --keep-dir --help ;;
     up|down|restart)
       if (( CURRENT == 3 )); then
-        compadd -- all
+        compadd -- all --help
         _cctg_names
       fi ;;
     config)
-      # config <name> <action> — 3번째=봇명, 4번째=동작
+      # config <name> <action> — 3번째=봇명, 4번째=동작, 5번째=값(mode/cwd/token 별 보완)
       if (( CURRENT == 3 )); then
         _cctg_names
       elif (( CURRENT == 4 )); then
-        compadd -- show edit mode args snapshot
+        compadd -- show edit mode args snapshot cwd token --help
+      elif (( CURRENT == 5 )); then
+        case "${words[4]}" in
+          mode) compadd -- acceptEdits auto bypassPermissions default dontAsk plan clear ;;
+          cwd)  _files -/ ;;
+          token) compadd -- --token-env --token-stdin --help ;;
+        esac
       fi ;;
     common)
       # common <action> [...]
       if (( CURRENT == 3 )); then
-        compadd -- show edit mode deny allow
+        compadd -- show edit mode deny allow --help
       elif (( CURRENT == 4 )); then
         case "${words[3]}" in
           deny|allow) compadd -- add rm ;;
@@ -80,13 +87,13 @@ _cctg() {
           --channel)   compadd -- ${=CCTG_COMPLETION_CHANNELS} ;;
           --id)        ;; # 자유 입력(숫자)
           --group)     ;; # 자유 입력(컴파운드 토큰 <id>[:nomention][:allow=...])
-          *)           compadd -- --id --token-env --token-stdin --mode --channel --group ;;
+          *)           compadd -- --id --token-env --token-stdin --mode --channel --group --help ;;
         esac
       fi ;;
     status)
-      (( CURRENT == 3 )) && compadd -- --json ;;
+      (( CURRENT == 3 )) && compadd -- --json --help ;;
     lang)
-      (( CURRENT == 3 )) && compadd -- show en ko clear ;;
+      (( CURRENT == 3 )) && compadd -- show en ko clear --help ;;
   esac
 }
 

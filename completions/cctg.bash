@@ -27,17 +27,25 @@ _cctg() {
         case "$cmd" in up|down|restart) extra="all" ;; *) extra="" ;; esac
         COMPREPLY=( $(compgen -W "$names $extra" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
-        COMPREPLY=( $(compgen -W "show edit mode args snapshot" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show edit mode args snapshot cwd token --help" -- "$cur") )
+      elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 4 ]; then
+        case "${COMP_WORDS[3]}" in
+          mode)  COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan clear" -- "$cur") ) ;;
+          cwd)   COMPREPLY=( $(compgen -d -- "$cur") ) ;;
+          token) COMPREPLY=( $(compgen -W "--token-env --token-stdin --help" -- "$cur") ) ;;
+        esac
       elif [ "$cmd" = rm ] && [ "$COMP_CWORD" -ge 3 ]; then
-        COMPREPLY=( $(compgen -W "--purge" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--purge --help" -- "$cur") )
       elif [ "$cmd" = rename ] && [ "$COMP_CWORD" -ge 4 ]; then
-        COMPREPLY=( $(compgen -W "--keep-dir" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--keep-dir --help" -- "$cur") )
+      elif [ "$cmd" = up ] || [ "$cmd" = down ] || [ "$cmd" = restart ] || [ "$cmd" = logs ] || [ "$cmd" = attach ]; then
+        [ "$COMP_CWORD" -ge 3 ] && COMPREPLY=( $(compgen -W "--help" -- "$cur") )
       fi
       ;;
     common)
       # common <action> [...]
       if [ "$COMP_CWORD" -eq 2 ]; then
-        COMPREPLY=( $(compgen -W "show edit mode deny allow" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show edit mode deny allow --help" -- "$cur") )
       elif [ "$COMP_CWORD" -eq 3 ]; then
         case "${COMP_WORDS[2]}" in
           deny|allow) COMPREPLY=( $(compgen -W "add rm" -- "$cur") ) ;;
@@ -56,20 +64,20 @@ _cctg() {
           --channel)   COMPREPLY=( $(compgen -W "$channels" -- "$cur") ) ;;
           --id)        ;; # 자유 입력(숫자)
           --group)     ;; # 자유 입력(컴파운드 토큰 <id>[:nomention][:allow=...])
-          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode --channel --group" -- "$cur") ) ;;
+          *)           COMPREPLY=( $(compgen -W "--id --token-env --token-stdin --mode --channel --group --help" -- "$cur") ) ;;
         esac
       fi
       ;;
     status)
       # status [--json]
       if [ "$COMP_CWORD" -eq 2 ]; then
-        COMPREPLY=( $(compgen -W "--json" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--json --help" -- "$cur") )
       fi
       ;;
     lang)
       # lang [show|en|ko|clear]
       if [ "$COMP_CWORD" -eq 2 ]; then
-        COMPREPLY=( $(compgen -W "show en ko clear" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show en ko clear --help" -- "$cur") )
       fi
       ;;
   esac

@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-17
+
+### Added
+- **`cctg config <name> cwd <path>`**: change the working directory of a registered bot without re-registering. The registry is updated atomically (awk+mktemp+mv, same pattern as the existing registry mutations). An error is printed if the target path does not exist; if the bot is running, a restart reminder is shown (FR-001).
+- **`cctg config <name> token`**: replace a registered bot's token. The `.env` file is rewritten with the channel-specific key (`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`) and the file mode is set to `600`. Token input accepts the same three forms as `add`: interactive masked prompt, `--token-env <VAR>`, or `--token-stdin`. Passing the token as a plain argument remains refused (constitution P-003). If the bot is running, a restart reminder is shown (FR-002).
+- **`--help` / `-h` per subcommand**: every subcommand now accepts `--help` or `-h` and prints a one-line usage summary, then exits `0`. Implemented via a pre-dispatch inspection loop in `cc-tg.sh` and a new `sub_usage()` function in `lib/util.sh`; the usage text is drawn from the i18n catalog (`USAGE_<SUBCMD>` keys) so it follows the active language (FR-005).
+- **Shell completion improvements**: `cctg config <name> mode <TAB>` now completes to the six valid mode values (`acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`); `cctg config <name> <TAB>` includes the new `cwd` and `token` actions; every subcommand's flag list includes `--help`. Updated in both `completions/_cctg` (zsh) and `completions/cctg.bash` (bash) without sourcing `lib/channels.sh` (local literal mirror, ADR-003) (FR-003, FR-004, FR-005).
+- **Reserved-name runtime: `up` / `down` / `restart` / `status` / `logs` for `telegram` and `discord`**: the four commands that previously refused the reserved names with `ERR_NOT_REGISTERED` now route through a dedicated code path that uses the global channel state directory (`~/.claude/channels/<channel>/`) instead of the registry. Details:
+  - `cctg up telegram|discord` starts a `cctg-<channel>` tmux session. The working directory (`cwd`) is the caller's `$PWD` at invocation time (DEC-001). A **sole-owner guard** refuses startup if a `cctg-<channel>` session already exists or if `bot.pid` in the state directory holds a living PID (plugin runner active). A missing `.env` is also refused (FR-006).
+  - `cctg down telegram|discord` kills only the `cctg-<channel>` tmux session. The plugin's own runner (`bot.pid` process) is **not** stopped — this limit is surfaced in the output message (NFR-003, FR-007).
+  - `cctg restart telegram|discord` runs `down` then `up` in sequence (FR-008).
+  - `cctg status` output now includes a `--- global channel bots ---` section for each reserved channel whose state directory (`~/.claude/channels/<channel>/`) exists. Status, mode, cwd (`$PWD`), and channel are shown in the same format as project bots (FR-009).
+  - `cctg logs telegram|discord [N]` reads the live tmux pane when the session is running, or falls back to `last-session.log` if it exists (FR-010).
+  - `cctg add`, `rm`, and `rename` still refuse reserved names with `ERR_RESERVED` (FR-011).
+
+### Changed
+- `cctg config <name>` synopsis updated to include the new `cwd` and `token` actions.
+- Message catalog (`messages/en.sh`, `messages/ko.sh`) extended with 33 new keys covering the new actions and error/success messages; key parity between the two files is maintained (154 keys total).
+
 ## [0.4.0] - 2026-06-17
 
 ### Added

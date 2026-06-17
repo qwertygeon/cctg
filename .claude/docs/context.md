@@ -15,7 +15,7 @@
 
 - **프로젝트명**: CCTG (Claude Code Tmux Gateway)
 - **목적**: macOS에서 프로젝트별 Claude Code 채널 봇(Telegram/Discord)을 각자의 tmux 세션으로 띄우고 관리하는 CLI 런처. 명령은 `cctg`.
-- **현재 버전**: v0.3.0
+- **현재 버전**: 루트 `VERSION` 파일이 단일 소스(SoT) — 문서에 버전을 하드코딩하지 않는다(`cctg version` 으로 확인)
 - **주요 기술 스택**: Bash(3.2 호환, 단일 진입점 `cc-tg.sh`), tmux, jq, `caffeinate`(macOS), Claude Code CLI(`claude --channels`), 채널 플러그인(Telegram/Discord — `claude --channels plugin:<ch>@claude-plugins-official`). 패키지 매니저 없음(순수 셸).
 
 ---
@@ -94,7 +94,7 @@
 | managed block (관리 블록) | install 이 셸 rc 에 마커(`# >>> cctg >>>`)로 넣는 PATH/완성 블록 | |
 | snapshot (스냅샷) | tmux pane 텍스트를 `last-session.log` 로 저장한 것 | |
 | BROKEN | 등록됐으나 cwd/토큰 부재 등으로 정상 기동 불가한 상태 | |
-| reserved name (예약 이름) | 전역 채널 봇 이름(telegram/discord/imessage/fakechat) — 봇 이름으로 거부 | |
+| reserved name (예약 이름) | 전역 채널 봇 이름(telegram/discord/imessage/fakechat). 레지스트리 동사(add/rm/rename)는 ERR_RESERVED 로 거부하나, 런타임 동사(up/down/restart/status/logs)는 전역 봇 디렉터리(`~/.claude/channels/<ch>/`)를 상태 디렉터리로 사용하여 허용(v0.5.0/001) | |
 
 ---
 
@@ -103,6 +103,7 @@
 | 항목 | 내용 | 영향 범위 | 관련 spec |
 |---|---|---|---|
 | 구현 채널 telegram + discord | 채널 추상화(`lib/channels.sh` descriptor 8필드 + 레지스트리 `channel` 컬럼 + `add --channel`)로 telegram·discord 활성. imessage/fakechat 는 미구현 — `channel_spec` 케이스 추가 + `IMPLEMENTED_CHANNELS` 등재로 활성화 | `lib/channels.sh` | v0.4.0/001 |
+| 전역 봇 cwd = $PWD | 예약어 전역 봇(telegram/discord) 런타임 기동/상태표시의 cwd 는 레지스트리에 없으므로 cctg 호출 시점 현재 작업 디렉터리(`$PWD`)를 사용(DEC-001, v0.5.0/001). 프로젝트 봇은 레지스트리 2번 컬럼 cwd 사용 — 전역 봇만 $PWD. $PWD 가 삭제된 디렉터리이면 ERR_NO_CWD 로 기동 거부(up_one 동형 가드) | `lib/session.sh`·`lib/commands.sh` | v0.5.0/001 |
 | 완성 채널 미러 수동 동기화 | `completions/_cctg`(`CCTG_COMPLETION_CHANNELS`)·`completions/cctg.bash`(`channels=`)는 `lib/channels.sh` 를 source 하지 않고 `IMPLEMENTED_CHANNELS` 를 로컬 리터럴로 미러(ADR-003). 채널 추가 시 3곳을 함께 갱신해야 함(자동 동기화 아님) | `completions/*` | v0.4.0/001 |
 | `--group` 파싱 Bash 3.2 제약 | 연관배열 불가로 서버채널 컴파운드 토큰(`<id>[:nomention][:allow=...]`)을 스칼라 누적 + `:` split 으로 처리(DEC-001) | `lib/commands.sh` | v0.4.0/001 |
 | Bash 3.2 제약 | 연관 배열 불가 → 메시지 카탈로그·채널 descriptor 가 스칼라/case 기반. macOS BSD 도구 의존 | 전체 | — |
