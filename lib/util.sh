@@ -53,5 +53,29 @@ jq_inplace() {
 }
 
 usage() { t USAGE "$PROG"; }
+
+# 서브커맨드별 1행 사용법 출력(FR-005 / ADR-005). cc-tg.sh 에서 --help/-h 선검사 시 호출.
+sub_usage() {
+  case "$1" in
+    add)     t USAGE_ADD     "$PROG" ;;
+    rm)      t USAGE_RM      "$PROG" ;;
+    rename)  t USAGE_RENAME  "$PROG" ;;
+    config)  t USAGE_CONFIG  "$PROG" ;;
+    common)  t USAGE_COMMON  "$PROG" ;;
+    up)      t USAGE_UP      "$PROG" ;;
+    down)    t USAGE_DOWN    "$PROG" ;;
+    restart) t USAGE_RESTART "$PROG" ;;
+    status)  t USAGE_STATUS  "$PROG" ;;
+    logs)    t USAGE_LOGS    "$PROG" ;;
+    attach)  t USAGE_ATTACH  "$PROG" ;;
+    lang)    t USAGE_LANG    "$PROG" ;;
+    doctor)  t USAGE_DOCTOR  "$PROG" ;;
+    update)  t USAGE_UPDATE  "$PROG" ;;
+    version) t USAGE_VERSION "$PROG" ;;
+    help)    t USAGE_HELP    "$PROG" ;;
+    *)       usage ;;
+  esac
+}
+
 # 봇 이름 검증 — tmux 세션명·레지스트리(|) 충돌 방지를 위해 영숫자/_/- 만 허용
 valid_name() { printf '%s' "$1" | grep -qE '^[A-Za-z0-9_-]+$'; }

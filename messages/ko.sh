@@ -150,6 +150,40 @@ CCTG_MSG_DOCTOR_NOJQ="  (jq 없음 — 'cctg common show' 로 확인)\n"
 CCTG_MSG_DOCTOR_SHARED_NONE="  (아직 없음 — 첫 add/up 시 생성)\n"
 CCTG_MSG_DOCTOR_PLUGIN_HINT="  (채널 플러그인은 전역 설치 필요, 예: /plugin install <channel>@claude-plugins-official — 대상: %s)\n"
 
+# config cwd / token (신규 — FR-001/002)
+CCTG_MSG_ERR_CONFIG_CWD_USAGE="사용법: %s config %s cwd <경로>\n"
+CCTG_MSG_ERR_NO_SUCH_DIR="ERROR: 디렉터리 없음: %s\n"
+CCTG_MSG_ERR_CONFIG_CWD_RESERVED="ERROR: '%s' 는 전역 채널 봇입니다 — 현재 디렉터리에서 기동하며 저장된 cwd 가 없습니다.\n"
+CCTG_MSG_CFG_CWD_SET="%s cwd: %s\n"
+CCTG_MSG_ERR_CONFIG_TOKEN_USAGE="사용법: %s config %s token [--token-env VAR|--token-stdin]\n"
+CCTG_MSG_CFG_TOKEN_SET="%s 토큰 갱신됨.\n"
+
+# reserved runtime (신규 — FR-006/007/009)
+CCTG_MSG_RESERVED_UP="UP %s (전역 봇, tmux=%s)\n"
+CCTG_MSG_ERR_RESERVED_UP_OCCUPIED="ERROR: 이미 실행 중: %s\n"
+CCTG_MSG_ERR_RESERVED_UP_RUNNER="ERROR: 전역 봇 플러그인 러너 실행 중 (bot.pid): %s\n"
+CCTG_MSG_ERR_RESERVED_UNSUPPORTED="ERROR: 예약어 런타임 미지원 채널: %s\n"
+CCTG_MSG_RESERVED_DOWN_NONE="%s 세션 없음. cctg 가 시작한 tmux 세션만 중지 가능 — 플러그인 러너(bot.pid)는 cctg 가 관리하지 않습니다 (NFR-003 한계).\n"
+CCTG_MSG_STATUS_RESERVED_HEADER="--- 전역 채널 봇 ---\n"
+
+# sub-command usage (신규 — FR-005, 16개 서브커맨드)
+CCTG_MSG_USAGE_ADD="사용법: %s add <이름> <cwd> [--id <번호>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n"
+CCTG_MSG_USAGE_RM="사용법: %s rm <이름> [--purge]\n"
+CCTG_MSG_USAGE_RENAME="사용법: %s rename <이전> <새이름> [--keep-dir]\n"
+CCTG_MSG_USAGE_CONFIG="사용법: %s config <이름> [show | edit | mode <모드|clear> | args <문자열> | snapshot <초|off> | cwd <경로> | token [--token-env VAR|--token-stdin]]\n"
+CCTG_MSG_USAGE_COMMON="사용법: %s common [show | edit | mode <모드> | deny add|rm <규칙> | allow add|rm <규칙>]\n"
+CCTG_MSG_USAGE_UP="사용법: %s up <이름|all>\n"
+CCTG_MSG_USAGE_DOWN="사용법: %s down <이름|all>\n"
+CCTG_MSG_USAGE_RESTART="사용법: %s restart <이름|all>\n"
+CCTG_MSG_USAGE_STATUS="사용법: %s status [--json]\n"
+CCTG_MSG_USAGE_LOGS="사용법: %s logs <이름> [N]\n"
+CCTG_MSG_USAGE_ATTACH="사용법: %s attach <이름>\n"
+CCTG_MSG_USAGE_LANG="사용법: %s lang [show | en | ko | clear]\n"
+CCTG_MSG_USAGE_DOCTOR="사용법: %s doctor\n"
+CCTG_MSG_USAGE_UPDATE="사용법: %s update\n"
+CCTG_MSG_USAGE_VERSION="사용법: %s version\n"
+CCTG_MSG_USAGE_HELP="사용법: %s help\n"
+
 # version / 디스패처
 CCTG_MSG_VERSION_LINE="%s %s\n"
 CCTG_MSG_ERR_UNKNOWN_CMD="ERROR: 알 수 없는 명령: %s\n"

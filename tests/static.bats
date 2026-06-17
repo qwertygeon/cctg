@@ -100,3 +100,90 @@ msg_val() { grep -E "^CCTG_MSG_$2=" "$1" | head -n1; }
   run bash -n "$REPO_ROOT/lib/commands.sh"
   [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# SC-007/008/009/012/013/022/023 (v0.5.0/001-cli-convenience-patches)
+# ---------------------------------------------------------------------------
+
+# SC-007: zsh completion offers all 6 permission modes for "config <name> mode"
+@test "completions/_cctg: config mode offers 6 modes (SC-007)" {
+  local f="$REPO_ROOT/completions/_cctg"
+  grep -q 'acceptEdits' "$f"
+  grep -q 'bypassPermissions' "$f"
+  grep -q 'dontAsk' "$f"
+  grep -q 'plan' "$f"
+  # All six must appear together in the mode completion section; count them.
+  local count
+  count=$(grep -oE 'acceptEdits|auto|bypassPermissions|default|dontAsk|plan' "$f" | sort -u | wc -l | tr -d ' ')
+  [ "$count" -ge 6 ]
+}
+
+# SC-008: bash completion offers all 6 permission modes for "config <name> mode"
+@test "completions/cctg.bash: config mode offers 6 modes (SC-008)" {
+  local f="$REPO_ROOT/completions/cctg.bash"
+  local count
+  count=$(grep -oE 'acceptEdits|auto|bypassPermissions|default|dontAsk|plan' "$f" | sort -u | wc -l | tr -d ' ')
+  [ "$count" -ge 6 ]
+}
+
+# SC-009: both completion files include cwd and token in the config action list
+@test "completions: config actions include cwd and token (SC-009)" {
+  grep -q 'cwd' "$REPO_ROOT/completions/_cctg"
+  grep -q 'token' "$REPO_ROOT/completions/_cctg"
+  grep -q 'cwd' "$REPO_ROOT/completions/cctg.bash"
+  grep -q 'token' "$REPO_ROOT/completions/cctg.bash"
+}
+
+# SC-012: both completion files include --help in subcommand flag candidates
+@test "completions: subcommand flags include --help (SC-012)" {
+  grep -q -- '--help' "$REPO_ROOT/completions/_cctg"
+  grep -q -- '--help' "$REPO_ROOT/completions/cctg.bash"
+}
+
+# SC-013: en.sh / ko.sh key parity (check-i18n-keys.sh exits 0)
+@test "i18n: en/ko key parity (SC-013)" {
+  run bash "$REPO_ROOT/scripts/check-i18n-keys.sh"
+  [ "$status" -eq 0 ]
+}
+
+# SC-022: reserved name (telegram/discord) is still blocked from add/rm/rename
+@test "reserved: add telegram still rejected (SC-022)" {
+  run cctg add telegram "$WORK" --id 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"reserved"* ]]
+}
+
+@test "reserved: add discord still rejected (SC-022 discord)" {
+  run cctg add discord "$WORK"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"reserved"* ]]
+}
+
+# SC-023: no Bash 4+ associative arrays in new source files
+@test "syntax: no associative arrays / Bash4+ in new code (SC-023)" {
+  local f
+  for f in lib/commands.sh lib/session.sh lib/registry.sh lib/util.sh cc-tg.sh; do
+    # declare -A is the canonical Bash 4+ associative array declaration.
+    run grep -c 'declare -A' "$REPO_ROOT/$f"
+    # Exit code 1 from grep means no matches — that is what we want.
+    [ "$status" -ne 0 ] || [ "$output" = "0" ]
+  done
+}
+
+@test "syntax: posix -n passes for new lib files (SC-023)" {
+  local f
+  for f in lib/registry.sh lib/session.sh lib/util.sh messages/en.sh messages/ko.sh; do
+    run bash --norc --noprofile --posix -n "$REPO_ROOT/$f"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "syntax: bash -n passes for commands.sh after v0.5.0 changes (SC-023)" {
+  run bash -n "$REPO_ROOT/lib/commands.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "syntax: bash -n passes for cc-tg.sh after v0.5.0 changes (SC-023)" {
+  run bash -n "$REPO_ROOT/cc-tg.sh"
+  [ "$status" -eq 0 ]
+}
