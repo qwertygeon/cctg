@@ -35,10 +35,13 @@ take_snapshot() {
 # 세션이 사라지면 watcher 가 스스로 종료한다. PID 는 <sd>/.snapshotter.pid 로 추적해 down 시 정지.
 # nohup + fd 리다이렉트로 호출 셸과 분리되어 cctg 종료 후에도 계속 동작한다.
 start_snapshotter() {
-  local name="$1" sd="$2" interval="$3" sess pidf
+  local name="$1" sd="$2" interval="$3" sess pidf marker
   sess="$(sess_of "$name")"; pidf="$sd/.snapshotter.pid"
+  # 식별 마커: 이 watcher 프로세스 argv 에 박아 stop 시 PID 재사용 오살을 막는다(대조용).
+  marker="cctg-snapshotter:$sess"
   stop_snapshotter "$sd"   # 재기동 시 기존 watcher 정리
   # 루프 본문은 단일 인용 문자열이라 부모 셸 확장과 무관(인자로 값 전달).
+  # $0 자리에 marker 를 두어 ps 명령줄로 식별 가능하게 한다($0 는 본문에서 미사용).
   nohup bash -c '
     sess="$1"; sd="$2"; interval="$3"; snap="$sd/last-session.log"
     while tmux has-session -t "=$sess" 2>/dev/null; do
@@ -50,17 +53,26 @@ start_snapshotter() {
       sleep "$interval"
     done
     rm -f "$sd/.snapshotter.pid"
-  ' cctg-snapshotter "$sess" "$sd" "$interval" >/dev/null 2>&1 &
-  printf '%s\n' "$!" > "$pidf"
+  ' "$marker" "$sess" "$sd" "$interval" >/dev/null 2>&1 &
+  # PID(1행) + 마커(2행) 기록 — stop 이 PID 와 마커를 대조해 우리 watcher 일 때만 kill.
+  { printf '%s\n' "$!"; printf '%s\n' "$marker"; } > "$pidf"
   chmod 600 "$pidf" 2>/dev/null
 }
 
 # watcher 정지(있으면). PID 파일을 읽어 종료하고 파일 제거. 없으면 무동작.
 stop_snapshotter() {
-  local pidf="$1/.snapshotter.pid" pid
+  local pidf="$1/.snapshotter.pid" pid marker
   [ -f "$pidf" ] || return 0
-  pid="$(head -n1 "$pidf" 2>/dev/null)"
-  [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  pid="$(sed -n '1p' "$pidf" 2>/dev/null)"
+  marker="$(sed -n '2p' "$pidf" 2>/dev/null)"
+  # PID 재사용 오살 방지: PID 의 명령줄에 우리 watcher 마커가 있을 때만 kill.
+  # 마커 미기록(구버전 pidf)이면 기존 동작(존재 시 kill)으로 폴백한다.
+  # ps -ww: 명령줄 truncation 방지(마커는 긴 스크립트 본문 뒤 argv 에 위치).
+  if [ -n "$pid" ]; then
+    if [ -z "$marker" ] || ps -ww -p "$pid" -o command= 2>/dev/null | grep -qF "$marker"; then
+      kill "$pid" 2>/dev/null
+    fi
+  fi
   rm -f "$pidf"
 }
 
