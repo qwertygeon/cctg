@@ -36,6 +36,9 @@ CCTG_MSG_UP_OK="UP   %s  (cwd=%s, state=%s, tmux=%s)\n"
 CCTG_MSG_UP_SNAPSHOT_ON="  log snapshot: every %ss → state/last-session.log (survives crash/reboot)\n"
 CCTG_MSG_DOWN_OK="DOWN %s\n"
 CCTG_MSG_DOWN_STOPPED="Stopped: %s\n"
+CCTG_MSG_ERR_NEED_TARGET="ERROR: needs at least one <name> or 'all'\n"
+CCTG_MSG_MULTI_SUMMARY_OK="— %s: %d succeeded —\n"
+CCTG_MSG_MULTI_SUMMARY_FAIL="— %s: %d succeeded, %d failed (failed: %s) —\n"
 
 # add
 CCTG_MSG_ADD_PROMPT_TOKEN="Bot token (issued by @BotFather, must be a NEW bot): "
@@ -150,6 +153,40 @@ CCTG_MSG_DOCTOR_DENYALLOW="  deny: %s / allow: %s\n"
 CCTG_MSG_DOCTOR_NOJQ="  (no jq — check with 'cctg common show')\n"
 CCTG_MSG_DOCTOR_SHARED_NONE="  (none yet — created on first add/up)\n"
 CCTG_MSG_DOCTOR_PLUGIN_HINT="  (the channel plugins must be installed globally, e.g. /plugin install <channel>@claude-plugins-official for: %s)\n"
+
+# config cwd / token (신규 — FR-001/002)
+CCTG_MSG_ERR_CONFIG_CWD_USAGE="Usage: %s config %s cwd <path>\n"
+CCTG_MSG_ERR_NO_SUCH_DIR="ERROR: no such directory: %s\n"
+CCTG_MSG_ERR_CONFIG_CWD_RESERVED="ERROR: '%s' is a global channel bot — it launches in the current directory and has no stored cwd.\n"
+CCTG_MSG_CFG_CWD_SET="%s cwd: %s\n"
+CCTG_MSG_ERR_CONFIG_TOKEN_USAGE="Usage: %s config %s token [--token-env VAR|--token-stdin]\n"
+CCTG_MSG_CFG_TOKEN_SET="%s token updated.\n"
+
+# reserved runtime (신규 — FR-006/007/009)
+CCTG_MSG_RESERVED_UP="UP %s (global bot, tmux=%s)\n"
+CCTG_MSG_ERR_RESERVED_UP_OCCUPIED="ERROR: already running: %s\n"
+CCTG_MSG_ERR_RESERVED_UP_RUNNER="ERROR: global bot plugin runner active (bot.pid): %s\n"
+CCTG_MSG_ERR_RESERVED_UNSUPPORTED="ERROR: reserved runtime not supported for channel: %s\n"
+CCTG_MSG_RESERVED_DOWN_NONE="No session: %s. Only tmux sessions started by cctg can be stopped — plugin runner (bot.pid) is not managed by cctg (NFR-003 limit).\n"
+CCTG_MSG_STATUS_RESERVED_HEADER="--- global channel bots ---\n"
+
+# sub-command usage (신규 — FR-005, 16개 서브커맨드)
+CCTG_MSG_USAGE_ADD="Usage: %s add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n"
+CCTG_MSG_USAGE_RM="Usage: %s rm <name> [--purge]\n"
+CCTG_MSG_USAGE_RENAME="Usage: %s rename <old> <new> [--keep-dir]\n"
+CCTG_MSG_USAGE_CONFIG="Usage: %s config <name> [show | edit | mode <mode|clear> | args <string> | snapshot <seconds|off> | cwd <path> | token [--token-env VAR|--token-stdin]]\n"
+CCTG_MSG_USAGE_COMMON="Usage: %s common [show | edit | mode <mode> | deny add|rm <rule> | allow add|rm <rule>]\n"
+CCTG_MSG_USAGE_UP="Usage: %s up <name...|all>\n"
+CCTG_MSG_USAGE_DOWN="Usage: %s down <name...|all>\n"
+CCTG_MSG_USAGE_RESTART="Usage: %s restart <name...|all>\n"
+CCTG_MSG_USAGE_STATUS="Usage: %s status [--json]\n"
+CCTG_MSG_USAGE_LOGS="Usage: %s logs <name> [N]\n"
+CCTG_MSG_USAGE_ATTACH="Usage: %s attach <name>\n"
+CCTG_MSG_USAGE_LANG="Usage: %s lang [show | en | ko | clear]\n"
+CCTG_MSG_USAGE_DOCTOR="Usage: %s doctor\n"
+CCTG_MSG_USAGE_UPDATE="Usage: %s update\n"
+CCTG_MSG_USAGE_VERSION="Usage: %s version\n"
+CCTG_MSG_USAGE_HELP="Usage: %s help\n"
 
 # version / dispatcher
 CCTG_MSG_VERSION_LINE="%s %s\n"

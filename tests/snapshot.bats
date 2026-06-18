@@ -79,3 +79,19 @@ load test_helper
   [ ! -f "$pidf" ]
   ! kill -0 "$pid" 2>/dev/null        # watcher process is gone
 }
+
+@test "down: does not kill an unrelated process when the pid was recycled (marker mismatch)" {
+  seed_bot ghost
+  # An unrelated long-lived process that happens to hold the recycled PID.
+  sleep 30 &
+  local unrel=$!
+  # Stale pid file: recycled PID + our snapshotter marker, which the unrelated
+  # `sleep` command line does NOT contain -> stop must refuse to kill it.
+  local pidf="$CC_CHANNELS_DIR/ghost/.snapshotter.pid"
+  printf '%s\ncctg-snapshotter:cctg-ghost\n' "$unrel" > "$pidf"
+  run cctg down ghost
+  [ "$status" -eq 0 ]
+  [ ! -f "$pidf" ]                    # stale pid file is cleaned up regardless
+  kill -0 "$unrel" 2>/dev/null        # unrelated process survives (not killed)
+  kill "$unrel" 2>/dev/null || true   # cleanup
+}

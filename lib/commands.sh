@@ -66,8 +66,8 @@ cmd_add() {
     [ -n "$TGID" ] && { printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"; }
 
     # 3) 토큰 → .env (600). 키 이름은 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN).
-    printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env"
-    chmod 600 "$SD/.env"
+    #    umask 077 서브셸로 생성 — 먼저 만들고 chmod 하면 그 사이 world-readable 창이 생긴다.
+    ( umask 077; printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env" )
 
     # 4) access.json → 채널 시드 정책에 따라 생성.
     #    dmPolicy/allowFrom 를 단일 가드로 동시 결정한다(동일 가드 중복 평가 제거):
@@ -228,8 +228,18 @@ cmd_rename() {
 cmd_config() {
     # 봇별 옵션(launch.env) 보기·수정
     NAME="${1:?name 필요}"; ACTION="${2:-show}"
-    row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
-    sd="$(expand "$(cut -f2 <<<"$row")")"
+    local cfg_channel
+    if is_reserved_name "$NAME"; then
+      # 예약어 전역 봇: 레지스트리 없이 고정 좌표 사용(ADR-006/010). channel_spec 정의 채널만 지원.
+      # up/down/logs/status 와 동일하게 config(token·mode·args·snapshot) 도 전역 봇을 다룬다.
+      channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
+      sd="$CHANNELS_DIR/$NAME"; mkdir -p "$sd"
+      cfg_channel="$NAME"                          # 예약어는 채널명 == 봇명
+    else
+      row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
+      sd="$(expand "$(cut -f2 <<<"$row")")"
+      cfg_channel="$(channel_of "$NAME")"
+    fi
     LE="$sd/launch.env"
     # 이 기능 도입 전 등록된 봇엔 키가 없을 수 있으므로 템플릿 보강
     if [ ! -f "$LE" ]; then
@@ -253,7 +263,7 @@ ENV
         local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
         t CFG_SHOW_HEADER "$NAME" "$LE"
-        t CFG_SHOW_CHANNEL "$(channel_of "$NAME")"
+        t CFG_SHOW_CHANNEL "$cfg_channel"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
         t CFG_SHOW_LAUNCHENV
@@ -290,6 +300,38 @@ ENV
           set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL "$S"
           t CFG_SNAPSHOT_SET "$NAME" "$S"
         fi
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      cwd)
+        # 예약어 전역 봇은 $PWD 에서 기동하며 레지스트리에 저장된 cwd 가 없다(DEC-001).
+        is_reserved_name "$NAME" && die ERR_CONFIG_CWD_RESERVED "$NAME"
+        NEWCWD="${3-}"
+        [ -z "$NEWCWD" ] && die ERR_CONFIG_CWD_USAGE "$PROG" "$NAME"
+        NEWCWD="$(expand "$NEWCWD")"
+        [ -d "$NEWCWD" ] || die ERR_NO_SUCH_DIR "$NEWCWD"
+        set_registry_cwd "$NAME" "$NEWCWD" || die ERR_REGISTRY_UPDATE "$NAME"
+        t CFG_CWD_SET "$NAME" "$NEWCWD"
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      token)
+        # $3 이후를 플래그로 파싱: --token-env <VAR> | --token-stdin (argv 토큰 직접 전달 금지 — P-003)
+        shift 2
+        local t_env="" t_stdin=0 NEWTOK
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --token-env)   [ $# -ge 2 ] || die ERR_ADD_FLAG_VALUE "--token-env"; t_env="$2"; shift 2 ;;
+            --token-stdin) t_stdin=1; shift ;;
+            *)             die ERR_CONFIG_TOKEN_USAGE "$PROG" "$NAME" ;;
+          esac
+        done
+        if [ "$t_stdin" = 1 ]; then IFS= read -r NEWTOK || true
+        elif [ -n "$t_env" ]; then
+          printf '%s' "$t_env" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$' || die ERR_ADD_BAD_ENVNAME "$t_env"
+          NEWTOK="${!t_env-}"
+        else t ADD_PROMPT_TOKEN; read -rs NEWTOK; echo; fi
+        [ -z "$NEWTOK" ] && die ERR_EMPTY_TOKEN
+        local tk; tk="$(channel_spec "$cfg_channel" token_key)"
+        # umask 077 서브셸로 생성 — chmod 후행 시의 순간 world-readable 창 제거.
+        ( umask 077; printf '%s=%s\n' "$tk" "$NEWTOK" > "$sd/.env" )
+        t CFG_TOKEN_SET "$NAME"
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
         te ERR_CONFIG_UNKNOWN "$ACTION"
@@ -334,32 +376,47 @@ cmd_common() {
     esac
 }
 
-cmd_up() {
-    TARGET="${1:?name|all 필요}"
-    if [ "$TARGET" = "all" ]; then
-      while IFS= read -r n; do [ -n "$n" ] && up_one "$n"; done < <(all_names)
-    else
-      up_one "$TARGET"
-    fi
+# 한 타겟에 라이프사이클 action 적용 — 예약어(telegram/discord)는 전용 경로로 라우팅(ADR-006).
+# 성공 0 / 실패 비0 (피호출 *_one/*_reserved 의 반환을 그대로 전파).
+# restart 는 down 후 up 이며 성공 판정=up 결과(기존 cmd_restart 의미 보존).
+_lifecycle_apply() {
+  local action="$1" name="$2"
+  case "$action" in
+    up)      if is_reserved_name "$name"; then up_reserved "$name"; else up_one "$name"; fi ;;
+    down)    if is_reserved_name "$name"; then down_reserved "$name"; else down_one "$name"; fi ;;
+    restart) if is_reserved_name "$name"; then down_reserved "$name"; up_reserved "$name"
+             else down_one "$name"; up_one "$name"; fi ;;
+  esac
 }
 
-cmd_down() {
-    TARGET="${1:?name|all 필요}"
-    if [ "$TARGET" = "all" ]; then
-      while IFS= read -r n; do [ -n "$n" ] && down_one "$n"; done < <(all_names)
+# 다중 타겟 순차 처리(좌→우) + continue-on-error. 각 인자는 이름/예약어/all 로 라우팅한다.
+# 처리 건수 ≥2 면 성공/실패 요약 1줄 출력. 하나라도 실패하면 비0 반환(전부 성공 0).
+_lifecycle_run() {
+  local action="$1"; shift
+  local ok=0 fail=0 failed="" arg n
+  for arg in "$@"; do
+    if [ "$arg" = all ]; then
+      while IFS= read -r n; do
+        [ -n "$n" ] || continue
+        if _lifecycle_apply "$action" "$n"; then ok=$((ok+1)); else fail=$((fail+1)); failed="${failed:+$failed }$n"; fi
+      done < <(all_names)
+    elif _lifecycle_apply "$action" "$arg"; then
+      ok=$((ok+1))
     else
-      down_one "$TARGET"
+      fail=$((fail+1)); failed="${failed:+$failed }$arg"
     fi
+  done
+  # 단일 타겟은 per-target 출력으로 충분 — 요약은 2건 이상일 때만(하위호환, FR-005).
+  if [ $((ok+fail)) -ge 2 ]; then
+    if [ "$fail" -eq 0 ]; then t MULTI_SUMMARY_OK "$action" "$ok"
+    else t MULTI_SUMMARY_FAIL "$action" "$ok" "$fail" "$failed"; fi
+  fi
+  [ "$fail" -eq 0 ]
 }
 
-cmd_restart() {
-    TARGET="${1:?name|all 필요}"
-    if [ "$TARGET" = "all" ]; then
-      while IFS= read -r n; do [ -n "$n" ] && { down_one "$n"; up_one "$n"; }; done < <(all_names)
-    else
-      down_one "$TARGET"; up_one "$TARGET"
-    fi
-}
+cmd_up()      { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run up "$@"; }
+cmd_down()    { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run down "$@"; }
+cmd_restart() { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run restart "$@"; }
 
 cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
@@ -378,7 +435,7 @@ cmd_status() {
       [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
       [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
       if is_running "$n"; then
-        created="$(tmux display-message -p -t "$(sess_of "$n")" '#{session_created}' 2>/dev/null)"
+        created="$(tmux display-message -p -t "$(sess_t "$n")" '#{session_created}' 2>/dev/null)"
         up=""
         if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
           up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
@@ -410,6 +467,38 @@ cmd_status() {
       fi
     done < <(all_names)
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
+
+    # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010)
+    local ch_found=0
+    for ch in $RESERVED_NAMES; do
+      channel_spec "$ch" plugin >/dev/null 2>&1 || continue
+      sd="$CHANNELS_DIR/$ch"; [ -d "$sd" ] || continue
+      if [ "$ch_found" = 0 ]; then t STATUS_RESERVED_HEADER; ch_found=1; fi
+      # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
+      # 그 외(STOPPED 등 세션 부재)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
+      cwd="—"
+      issues=""
+      [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
+      if is_running "$ch"; then
+        local sess; sess="$(sess_of "$ch")"
+        cwd="$(tmux display-message -p -t "=$sess" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
+        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
+        up=""
+        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+          up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+        fi
+        t STATUS_RUNNING "$ch" "$up" "$sess"
+      elif [ -n "$issues" ]; then
+        t STATUS_BROKEN "$ch" "$issues"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
+      else
+        t STATUS_STOPPED "$ch"
+      fi
+      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
+      t STATUS_PATHS "$cwd" "$sd"
+      t STATUS_MODE "$pm"
+      t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+    done
 }
 
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
@@ -429,7 +518,7 @@ status_json() {
       up_s=-1
       if is_running "$n"; then
         running=true; state="running"
-        created="$(tmux display-message -p -t "$sess" '#{session_created}' 2>/dev/null)"
+        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
         printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
       elif [ "${#iss[@]}" -gt 0 ]; then
         running=false; state="broken"
@@ -450,8 +539,24 @@ status_json() {
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
+    # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
+    if is_reserved_name "$NAME"; then
+      # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
+      channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
+      if is_running "$NAME"; then
+        tmux capture-pane -p -S -2000 -t "$(sess_t "$NAME")" | tail -n "$N"
+        return
+      fi
+      local snap="$CHANNELS_DIR/$NAME/last-session.log"
+      if [ -f "$snap" ]; then
+        t LOGS_SNAPSHOT "$NAME"
+        tail -n "$N" "$snap"
+        return
+      fi
+      die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
+    fi
     if is_running "$NAME"; then
-      tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+      tmux capture-pane -p -S -2000 -t "$(sess_t "$NAME")" | tail -n "$N"
       return
     fi
     # 정지 상태: down 시 저장한 마지막 세션 스냅샷이 있으면 보여준다.
@@ -471,7 +576,7 @@ cmd_attach() {
     NAME="${1:?name 필요}"
     is_running "$NAME" || die ERR_NOT_RUNNING "$NAME" "$PROG" "$NAME"
     t ATTACH_DETACH_HINT
-    tmux attach -t "$(sess_of "$NAME")"
+    tmux attach -t "$(sess_t "$NAME")"
 }
 
 cmd_lang() {

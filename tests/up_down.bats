@@ -68,6 +68,33 @@ load test_helper
   [ ! -s "$FAKE_TMUX_STATE" ]
 }
 
+# --- prefix-collision regression (exact-match '-t =name') ---
+# tmux resolves a plain '-t name' by prefix when no exact session exists, so a
+# bot whose name is a prefix of another (cc-tg vs cc-tg-discord) used to control
+# the wrong session. cctg now passes '=' targets for all lookups/kills.
+# These run against the isolated fake tmux only — never a real tmux server.
+
+@test "up: a prefix-named bot starts even when only its longer sibling runs" {
+  seed_bot cc-tg
+  seed_bot cc-tg-discord
+  cctg up cc-tg-discord >/dev/null      # only the longer-named sibling is up
+  run cctg up cc-tg                      # shorter name must NOT match the longer
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"UP   cc-tg"* ]]      # actually started (not "Already running")
+  grep -qxF "cctg-cc-tg" "$FAKE_TMUX_STATE"
+  grep -qxF "cctg-cc-tg-discord" "$FAKE_TMUX_STATE"
+}
+
+@test "down: a stopped prefix-named bot must not kill its running longer sibling" {
+  seed_bot cc-tg
+  seed_bot cc-tg-discord
+  cctg up cc-tg-discord >/dev/null      # only the longer-named sibling is up
+  run cctg down cc-tg                    # shorter name is not running
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Stopped: cc-tg"* ]]  # reports stopped, does not kill anything
+  grep -qxF "cctg-cc-tg-discord" "$FAKE_TMUX_STATE"   # longer sibling untouched
+}
+
 @test "restart: stops then starts again, leaving the session running" {
   seed_bot mybot
   cctg up mybot >/dev/null
@@ -76,4 +103,66 @@ load test_helper
   [[ "$output" == *"DOWN mybot"* ]]
   [[ "$output" == *"UP   mybot"* ]]
   grep -qxF "cctg-mybot" "$FAKE_TMUX_STATE"
+}
+
+# --- multi-target lifecycle (v0.6.0): up/down/restart accept several targets ---
+
+@test "up: starts multiple targets sequentially with a summary (SC-001/004)" {
+  seed_bot a; seed_bot b
+  run cctg up a b
+  [ "$status" -eq 0 ]
+  grep -qxF "cctg-a" "$FAKE_TMUX_STATE"
+  grep -qxF "cctg-b" "$FAKE_TMUX_STATE"
+  [[ "$output" == *"2 succeeded"* ]]          # multi-target summary line
+}
+
+@test "down: stops multiple targets sequentially (SC-002)" {
+  seed_bot a; seed_bot b
+  cctg up a b >/dev/null
+  run cctg down a b
+  [ "$status" -eq 0 ]
+  ! grep -qxF "cctg-a" "$FAKE_TMUX_STATE"
+  ! grep -qxF "cctg-b" "$FAKE_TMUX_STATE"
+}
+
+@test "up: continues past a failing target and exits non-zero (SC-003)" {
+  seed_bot a
+  run cctg up a ghost                          # ghost is unregistered -> fails
+  [ "$status" -ne 0 ]                          # any failure -> non-zero exit
+  grep -qxF "cctg-a" "$FAKE_TMUX_STATE"        # a still started despite ghost failing
+  [[ "$output" == *"not a registered project: ghost"* ]]
+  [[ "$output" == *"1 succeeded, 1 failed"* ]]
+  [[ "$output" == *"failed: ghost"* ]]
+}
+
+@test "up: mixes reserved + project targets, routing each (SC-006)" {
+  seed_bot myproj
+  mkdir -p "$CC_CHANNELS_DIR/telegram"
+  printf 'TELEGRAM_BOT_TOKEN=tok\n' > "$CC_CHANNELS_DIR/telegram/.env"
+  run cctg up myproj telegram
+  [ "$status" -eq 0 ]
+  grep -qxF "cctg-myproj" "$FAKE_TMUX_STATE"
+  grep -qxF "cctg-telegram" "$FAKE_TMUX_STATE"
+  [[ "$output" == *"2 succeeded"* ]]
+}
+
+@test "restart: accepts multiple targets (SC-001 via restart)" {
+  seed_bot a; seed_bot b
+  run cctg restart a b
+  [ "$status" -eq 0 ]
+  grep -qxF "cctg-a" "$FAKE_TMUX_STATE"
+  grep -qxF "cctg-b" "$FAKE_TMUX_STATE"
+}
+
+@test "up: single target prints no multi-target summary (SC-005 backward-compat)" {
+  seed_bot a
+  run cctg up a
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"succeeded"* ]]             # summary suppressed for a single target
+}
+
+@test "up: with no target errors out and prints usage (FR-007)" {
+  run cctg up
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"at least one"* ]]
 }

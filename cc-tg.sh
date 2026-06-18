@@ -80,6 +80,27 @@ mkdir -p "$CHANNELS_DIR"
 
 CMD="${1:-}"
 shift || true
+
+# 서브커맨드 --help/-h 선검사: 인자 중 --help/-h 가 있으면 해당 sub_usage 출력 후 exit 0 (ADR-005).
+# top-level `cctg --help` (CMD=""/"help") 는 아래 case 의 help 분기가 처리하므로 충돌 없음.
+# 예외: `config <name> args <value>` 의 <value> 는 임의 문자열이므로(예: `args -h`,
+# `args --help`) 선스캔 대상에서 제외한다 — 값으로 온 --help/-h 가 usage 를 가리지 않게.
+case "$CMD" in
+  config)
+    if [ "${2:-}" = args ]; then
+      # config <name> args 까지(=$1 $2)만 검사하고 $3(값)부터는 건너뛴다.
+      case "${1:-}" in --help|-h) sub_usage config; exit 0 ;; esac
+    else
+      for _a in "$@"; do
+        case "$_a" in --help|-h) sub_usage config; exit 0 ;; esac
+      done
+    fi ;;
+  add|rm|rename|common|up|down|restart|status|logs|attach|lang|doctor|update|version|help)
+    for _a in "$@"; do
+      case "$_a" in --help|-h) sub_usage "$CMD"; exit 0 ;; esac
+    done ;;
+esac
+
 case "$CMD" in
   add)                  cmd_add "$@" ;;
   rm)                   cmd_rm "$@" ;;
