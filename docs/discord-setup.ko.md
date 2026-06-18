@@ -240,6 +240,10 @@ channel=Discord (allowlist, 2 groups)
 - **`status` 에서 BROKEN?** 작업 디렉터리가 없거나 `.env` 토큰 파일이 없다. 작업 디렉터리를 다시 만들거나 봇을 재등록한다.
 - **권한 프롬프트나 멈춤?** [permissions.ko.md](permissions.ko.md) 참조.
 
+## 운영자 책임
+
+이 봇을 운영하면 당신은 Discord 봇 운영자이자 Anthropic API 사용자가 된다. Discord 개발자 약관은 모든 봇에 개인정보처리방침 공개를 **요구**하며 플랫폼 "API data" 의 상업화를 금지한다. 또한 다른 사람이 봇에 접근 가능하면 봇이 AI임을 고지하고, 사용은 본인 Anthropic 플랜 약관과 Usage Policy의 적용을 받음을 유의한다. **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)** 참조.
+
 ## 관련 문서
 
 - [installation.ko.md](installation.ko.md)

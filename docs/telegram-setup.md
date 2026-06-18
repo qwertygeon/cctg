@@ -158,6 +158,10 @@ If the bot does not respond:
 - **Shows BROKEN in `status`?** The working directory is missing, or the `.env` token file is absent. Recreate the working directory or re-register the bot.
 - **Permission prompts or stalling?** See [permissions.md](permissions.md).
 
+## Operator responsibilities
+
+Running this bot makes you a Telegram bot operator and a user of the Anthropic API. A few obligations come from those services: disclose that the bot is an AI if anyone but you can reach it, publish a privacy policy if others use it, and note that your use is subject to your own Anthropic plan terms and Usage Policy. See **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)**.
+
 ## See also
 
 - [installation.md](installation.md)

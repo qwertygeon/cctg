@@ -17,3 +17,14 @@ CCTG launches Claude Code bots that act on a project working directory in respon
 - **Data flow**: Messages, code, and file contents are relayed to the Anthropic API and pass through Telegram's infrastructure. See the privacy notice in the [README](README.md).
 
 Reports about weaknesses in these areas (e.g. token exposure, allowlist bypass, deny-rule escape) are in scope.
+
+## Your responsibilities as a bot operator
+
+Running a CCTG bot makes **you** the operator of a Telegram/Discord bot and a user of the Anthropic API. Some obligations come from those upstream services rather than from CCTG — surfaced here so you can comply. This is not legal advice; consult each service's current official terms before relying on it.
+
+- **Anthropic terms govern your use.** Content you exchange with a bot is sent to the Anthropic API. Your use is governed by the terms of your own Anthropic plan — the [Commercial Terms](https://www.anthropic.com/legal/commercial-terms) (paid API) or the Consumer Terms (Claude subscriptions) — and the [Usage Policy](https://www.anthropic.com/legal/aup). CCTG invokes the official `claude` CLI; it does not extract, store, or reuse your Anthropic credentials.
+- **Disclose that it's an AI.** Anthropic's Usage Policy requires consumer-facing chatbots to tell people they are interacting with AI. If anyone other than you can reach your bot, make that disclosure.
+- **Provide a privacy policy.** Discord's developer terms **require** every bot/app to publish and follow a privacy policy, and prohibit selling or commercializing platform "API data". Telegram likewise expects bot operators to handle user data lawfully. If others use your bot, publish a privacy policy and handle their data accordingly.
+- **Keep the allowlist tight.** The simplest way to limit all of the above is to keep `access.json` restricted to yourself or people you trust (see the threat model above).
+
+> CCTG is an unofficial, third-party tool not affiliated with or endorsed by Anthropic; "Claude" and "Claude Code" are trademarks of Anthropic.
