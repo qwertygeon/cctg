@@ -166,3 +166,51 @@ load test_helper
   [ "$status" -ne 0 ]
   [[ "$output" == *"at least one"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# v0.5.1/003-robustness-hardening — gateway reliability guards.
+# Fault injection: FAKE_TMUX_FAIL_NEWSESSION / FAKE_TMUX_FAIL_KILL (tmux stub);
+# PATH surgery for need_tmux / need_claude. coreutils live in /usr/bin:/bin.
+# ---------------------------------------------------------------------------
+
+@test "up: tmux new-session failure is reported, not a false UP (R1)" {
+  seed_bot mybot
+  FAKE_TMUX_FAIL_NEWSESSION=1 run cctg up mybot
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed to start"* ]]
+  [[ "$output" != *"UP   mybot"* ]]            # no false UP
+  ! grep -qxF "cctg-mybot" "$FAKE_TMUX_STATE"  # nothing recorded as running
+}
+
+@test "up: refuses when tmux is absent (need_tmux, R2)" {
+  seed_bot mybot
+  local nodir="$BATS_TEST_TMPDIR/notmux"; mkdir -p "$nodir"
+  run env PATH="$nodir:/usr/bin:/bin" bash "$CCTG" up mybot
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tmux not found"* ]]
+}
+
+@test "up: refuses when claude is absent (need_claude, R2)" {
+  seed_bot mybot
+  local nodir="$BATS_TEST_TMPDIR/noclaude"; mkdir -p "$nodir"
+  ln -s "$REPO_ROOT/tests/stubs/tmux" "$nodir/tmux"   # tmux present so need_tmux passes
+  run env PATH="$nodir:/usr/bin:/bin" bash "$CCTG" up mybot
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"claude CLI not found"* ]]
+}
+
+@test "down: tmux kill-session failure is reported, not a false DOWN (R3)" {
+  seed_bot mybot
+  mark_running mybot
+  FAKE_TMUX_FAIL_KILL=1 run cctg down mybot
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed to stop"* ]]
+  grep -qxF "cctg-mybot" "$FAKE_TMUX_STATE"    # still considered running
+}
+
+@test "logs: non-numeric line count is rejected (R4)" {
+  seed_bot mybot
+  run cctg logs mybot abc
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"must be a number"* ]]
+}

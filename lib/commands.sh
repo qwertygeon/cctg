@@ -426,6 +426,7 @@ _lifecycle_apply() {
 # 처리 건수 ≥2 면 성공/실패 요약 1줄 출력. 하나라도 실패하면 비0 반환(전부 성공 0).
 _lifecycle_run() {
   local action="$1"; shift
+  need_tmux || return 1
   local ok=0 fail=0 failed="" arg n
   for arg in "$@"; do
     if [ "$arg" = all ]; then
@@ -572,6 +573,7 @@ status_json() {
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
+    printf '%s' "$N" | grep -qE '^[0-9]+$' || die ERR_BAD_LOG_N "$N"
     # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
     if is_reserved_name "$NAME"; then
       # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
@@ -607,6 +609,7 @@ cmd_logs() {
 
 cmd_attach() {
     NAME="${1:?name 필요}"
+    need_tmux || exit 1
     is_running "$NAME" || die ERR_NOT_RUNNING "$NAME" "$PROG" "$NAME"
     t ATTACH_DETACH_HINT
     tmux attach -t "$(sess_t "$NAME")"
