@@ -3,7 +3,12 @@
 
 
 sess_of() { printf '%s%s' "$SESS_PREFIX" "$1"; }
-is_running() { tmux has-session -t "$(sess_of "$1")" 2>/dev/null; }
+# tmux 타겟('-t')은 정확 일치가 없으면 접두(prefix)·fnmatch 로 매칭되어, 한 봇 이름이
+# 다른 봇 이름의 접두인 경우(cc-tg vs cc-tg-discord) 엉뚱한 세션에 매칭된다. '=' 접두로
+# 정확 일치를 강제해 오매칭을 차단한다. 세션을 *찾는* 모든 -t(조회/종료/캡처/attach)에 사용.
+# 세션을 *만드는* new-session -s 는 리터럴 이름이므로 적용하지 않는다.
+sess_t() { printf '=%s' "$(sess_of "$1")"; }
+is_running() { tmux has-session -t "$(sess_t "$1")" 2>/dev/null; }
 
 # 초 → 사람이 읽는 기간 (예: 2d3h / 4h5m / 7m)
 fmt_dur() {
@@ -19,7 +24,7 @@ fmt_dur() {
 take_snapshot() {
   local sess="$1" sd="$2" snap="$2/last-session.log"
   [ -d "$sd" ] || return 0
-  if tmux capture-pane -p -S -2000 -t "$sess" > "$snap.tmp" 2>/dev/null; then
+  if tmux capture-pane -p -S -2000 -t "=$sess" > "$snap.tmp" 2>/dev/null; then
     mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
   else
     rm -f "$snap.tmp"
@@ -36,8 +41,8 @@ start_snapshotter() {
   # 루프 본문은 단일 인용 문자열이라 부모 셸 확장과 무관(인자로 값 전달).
   nohup bash -c '
     sess="$1"; sd="$2"; interval="$3"; snap="$sd/last-session.log"
-    while tmux has-session -t "$sess" 2>/dev/null; do
-      if tmux capture-pane -p -S -2000 -t "$sess" > "$snap.tmp" 2>/dev/null; then
+    while tmux has-session -t "=$sess" 2>/dev/null; do
+      if tmux capture-pane -p -S -2000 -t "=$sess" > "$snap.tmp" 2>/dev/null; then
         mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
       else
         rm -f "$snap.tmp"
@@ -111,7 +116,7 @@ down_one() {
     [ -n "$sd" ] && stop_snapshotter "$sd"
     # 종료 전 마지막 세션 출력을 보존한다 — 종료 후에도 `cctg logs` 로 조회 가능.
     [ -n "$sd" ] && take_snapshot "$(sess_of "$name")" "$sd"
-    tmux kill-session -t "$(sess_of "$name")"
+    tmux kill-session -t "$(sess_t "$name")"
     t DOWN_OK "$name"
   else
     # 세션이 외부에서 종료된 경우 남아 있을 수 있는 watcher PID 파일을 정리한다.
@@ -172,7 +177,7 @@ up_reserved() {
 down_reserved() {
   local ch="$1"
   if is_running "$ch"; then
-    tmux kill-session -t "$(sess_of "$ch")"
+    tmux kill-session -t "$(sess_t "$ch")"
     t DOWN_OK "$ch"
   else
     t RESERVED_DOWN_NONE "$ch"

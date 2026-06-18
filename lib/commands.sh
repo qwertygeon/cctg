@@ -424,7 +424,7 @@ cmd_status() {
       [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
       [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
       if is_running "$n"; then
-        created="$(tmux display-message -p -t "$(sess_of "$n")" '#{session_created}' 2>/dev/null)"
+        created="$(tmux display-message -p -t "$(sess_t "$n")" '#{session_created}' 2>/dev/null)"
         up=""
         if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
           up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
@@ -470,8 +470,8 @@ cmd_status() {
       [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
       if is_running "$ch"; then
         local sess; sess="$(sess_of "$ch")"
-        cwd="$(tmux display-message -p -t "$sess" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
-        created="$(tmux display-message -p -t "$sess" '#{session_created}' 2>/dev/null)"
+        cwd="$(tmux display-message -p -t "=$sess" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
+        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
         up=""
         if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
           up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
@@ -507,7 +507,7 @@ status_json() {
       up_s=-1
       if is_running "$n"; then
         running=true; state="running"
-        created="$(tmux display-message -p -t "$sess" '#{session_created}' 2>/dev/null)"
+        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
         printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
       elif [ "${#iss[@]}" -gt 0 ]; then
         running=false; state="broken"
@@ -533,7 +533,7 @@ cmd_logs() {
       # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
       channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
       if is_running "$NAME"; then
-        tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+        tmux capture-pane -p -S -2000 -t "$(sess_t "$NAME")" | tail -n "$N"
         return
       fi
       local snap="$CHANNELS_DIR/$NAME/last-session.log"
@@ -545,7 +545,7 @@ cmd_logs() {
       die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
     fi
     if is_running "$NAME"; then
-      tmux capture-pane -p -S -2000 -t "$(sess_of "$NAME")" | tail -n "$N"
+      tmux capture-pane -p -S -2000 -t "$(sess_t "$NAME")" | tail -n "$N"
       return
     fi
     # 정지 상태: down 시 저장한 마지막 세션 스냅샷이 있으면 보여준다.
@@ -565,7 +565,7 @@ cmd_attach() {
     NAME="${1:?name 필요}"
     is_running "$NAME" || die ERR_NOT_RUNNING "$NAME" "$PROG" "$NAME"
     t ATTACH_DETACH_HINT
-    tmux attach -t "$(sess_of "$NAME")"
+    tmux attach -t "$(sess_t "$NAME")"
 }
 
 cmd_lang() {
