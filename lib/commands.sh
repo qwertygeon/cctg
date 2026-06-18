@@ -195,7 +195,7 @@ ENV
     CCTG_ADD_CLEANUP_DIR=""
     trap - EXIT
 
-    t ADD_DONE "$NAME" "$CWD" "$SD"
+    t ADD_DONE "$NAME" "$(tilde "$CWD")" "$(tilde "$SD")"
     # allowlist(ID 시드) → 페어링 불필요 안내 / pairing(ID 미제공) → 페어링 절차 안내(ADR-004)
     if [ "$policy" = allowlist ]; then t ADD_DONE_ALLOWLIST "$TGID"; else t ADD_DONE_PAIRING; fi
     local pmshow="${PMODE:-$(t FOLLOW_SHARED)}"
@@ -216,14 +216,14 @@ cmd_rm() {
       case "$sd" in
         "$CHANNELS_DIR"/*)
           if is_reserved_channel_dir "$sd"; then
-            t RM_PURGE_REFUSE_GLOBAL "$sd"
+            t RM_PURGE_REFUSE_GLOBAL "$(tilde "$sd")"
           else
-            rm -rf "$sd" && t RM_PURGE_DELETED "$sd"
+            rm -rf "$sd" && t RM_PURGE_DELETED "$(tilde "$sd")"
           fi ;;
-        *) t RM_PURGE_OUTSIDE "$sd" ;;
+        *) t RM_PURGE_OUTSIDE "$(tilde "$sd")" ;;
       esac
     else
-      t RM_KEEP "$sd"
+      t RM_KEEP "$(tilde "$sd")"
     fi
 }
 
@@ -243,8 +243,8 @@ cmd_rename() {
     new_sd="$sd_raw"; local moved=0
     if [ "$KEEPDIR" = 0 ] && [ "$sd" = "$CHANNELS_DIR/$OLD" ]; then
       target="$CHANNELS_DIR/$NEW"
-      [ -e "$target" ] && die ERR_TARGET_EXISTS "$target"
-      mv "$sd" "$target" || die ERR_MOVE_FAILED "$sd" "$target"
+      [ -e "$target" ] && die ERR_TARGET_EXISTS "$(tilde "$target")"
+      mv "$sd" "$target" || die ERR_MOVE_FAILED "$(tilde "$sd")" "$(tilde "$target")"
       new_sd="$target"; moved=1
     fi
     # 레지스트리 갱신 실패 시 이미 옮긴 디렉터리를 원위치로 롤백 — 디렉터리는 새 경로인데 레지스트리는
@@ -253,7 +253,7 @@ cmd_rename() {
       [ "$moved" = 1 ] && mv "$target" "$sd" 2>/dev/null
       die ERR_REGISTRY_UPDATE
     fi
-    if [ "$moved" = 1 ]; then t RENAME_MOVED "$sd" "$target"; else t RENAME_KEPT "$sd"; fi
+    if [ "$moved" = 1 ]; then t RENAME_MOVED "$(tilde "$sd")" "$(tilde "$target")"; else t RENAME_KEPT "$(tilde "$sd")"; fi
     t RENAME_DONE "$OLD" "$NEW"
     t RENAME_NEXT "$PROG" "$NEW"
 }
@@ -295,7 +295,7 @@ ENV
       show)
         local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
-        t CFG_SHOW_HEADER "$NAME" "$LE"
+        t CFG_SHOW_HEADER "$NAME" "$(tilde "$LE")"
         t CFG_SHOW_CHANNEL "$cfg_channel"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
@@ -340,9 +340,9 @@ ENV
         NEWCWD="${3-}"
         [ -z "$NEWCWD" ] && die ERR_CONFIG_CWD_USAGE "$PROG" "$NAME"
         NEWCWD="$(expand "$NEWCWD")"
-        [ -d "$NEWCWD" ] || die ERR_NO_SUCH_DIR "$NEWCWD"
+        [ -d "$NEWCWD" ] || die ERR_NO_SUCH_DIR "$(tilde "$NEWCWD")"
         set_registry_cwd "$NAME" "$NEWCWD" || die ERR_REGISTRY_UPDATE "$NAME"
-        t CFG_CWD_SET "$NAME" "$NEWCWD"
+        t CFG_CWD_SET "$NAME" "$(tilde "$NEWCWD")"
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       token)
         # $3 이후를 플래그로 파싱: --token-env <VAR> | --token-stdin (argv 토큰 직접 전달 금지 — P-003)
@@ -478,13 +478,13 @@ cmd_status() {
       elif [ -n "$issues" ]; then
         t STATUS_BROKEN "$n" "$issues"
         # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
-        [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$cwd" "$PROG" "$n"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
+        [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$(tilde "$cwd")" "$PROG" "$n"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
       else
         t STATUS_STOPPED "$n"
       fi
       pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
-      t STATUS_PATHS "$cwd" "$sd"
+      t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
       t STATUS_MODE "$pm"
       # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
       ch_disp="$(channel_spec "$(channel_of "$n")" display)"
@@ -524,12 +524,12 @@ cmd_status() {
         t STATUS_RUNNING "$ch" "$up" "$sess"
       elif [ -n "$issues" ]; then
         t STATUS_BROKEN "$ch" "$issues"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
+        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
       else
         t STATUS_STOPPED "$ch"
       fi
       pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
-      t STATUS_PATHS "$cwd" "$sd"
+      t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
       t STATUS_MODE "$pm"
       t STATUS_CHANNEL "$(channel_spec "$ch" display)"
     done
@@ -706,12 +706,12 @@ cmd_doctor() {
       *) t DOCTOR_PATH_WARN ;;
     esac
     t DOCTOR_REGISTRY
-    t DOCTOR_FILE "$REGISTRY"
+    t DOCTOR_FILE "$(tilde "$REGISTRY")"
     cnt=0
     while IFS= read -r n; do [ -n "$n" ] && cnt=$((cnt+1)); done < <(all_names)
     t DOCTOR_REGISTRY_COUNT "$cnt"
     t DOCTOR_SHARED
-    t DOCTOR_FILE "$SHARED_SETTINGS"
+    t DOCTOR_FILE "$(tilde "$SHARED_SETTINGS")"
     if [ -f "$SHARED_SETTINGS" ]; then
       if command -v jq >/dev/null 2>&1; then
         t DOCTOR_DEFAULTMODE "$(jq -r '.permissions.defaultMode // "default"' "$SHARED_SETTINGS" 2>/dev/null)"

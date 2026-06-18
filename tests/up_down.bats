@@ -214,3 +214,13 @@ load test_helper
   [ "$status" -ne 0 ]
   [[ "$output" == *"must be a number"* ]]
 }
+
+@test "up: UP_OK renders ~ paths on separate aligned lines (F1)" {
+  mkdir -p "$HOME/proj"
+  seed_bot upbot "$HOME/proj"
+  run cctg up upbot
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"UP   upbot"* ]]      # header line preserved
+  [[ "$output" == *"~/proj"* ]]          # cwd tilde-shortened
+  ! grep -qE 'cwd.*state' <<<"$output"   # cwd and state on separate lines
+}
