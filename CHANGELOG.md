@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `cctg up` — the success line is now a `cwd`/`state`/`tmux` block instead of one long parenthesized line.
   - `cctg add` success, `rm`/`rename`/`config`/`doctor` path messages, and `up` error hints all render `~`-shortened paths for consistency.
   - These are text presentation changes only; `status --json` is unchanged. (`lib/commands.sh`, `lib/session.sh`, `lib/registry.sh`, `messages/*.sh`)
+- **`cctg status` sorts bots by state**: running bots are listed first, then BROKEN (registered but missing cwd/token), then stopped — instead of raw registry order. Within each state group the registry order is preserved (stable sort). Applies to both the project-bots and global-channel-bots sections; `status --json` keeps registry order. (`lib/commands.sh`)
 - **Interactive `cctg add` permission-mode prompt is now a numbered menu**: instead of free-typing a mode name, the interactive prompt lists the choices `1) bypassPermissions  2) acceptEdits  3) auto  4) default  5) dontAsk  6) plan  7) (follow shared)` and reads a number. An invalid entry re-prompts instead of aborting; pressing Enter or `7` follows the shared policy; typing a mode name still works. Shell tab-completion cannot reach a running `read` prompt, so a menu is the only way to make the fixed value set selectable inline. The display order is fixed with `bypassPermissions` first and `acceptEdits` second (independent of the validation set order). (`lib/commands.sh`, `messages/*.sh`, docs)
 
 ### Fixed

@@ -452,6 +452,98 @@ cmd_up()      { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lif
 cmd_down()    { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run down "$@"; }
 cmd_restart() { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run restart "$@"; }
 
+# status 정렬: 봇을 상태로 분류해 stdout 으로 running/broken/stopped 를 반환(정렬 키).
+# RUNNING(위) → BROKEN(주의) → stopped(아래) 순으로 렌더하기 위한 1차 분류.
+_status_class() {
+  local n="$1" row cwd sd
+  if is_running "$n"; then printf 'running'; return; fi
+  row="$(lookup "$n")"
+  cwd="$(expand "$(cut -f1 <<<"$row")")"
+  sd="$(expand "$(cut -f2 <<<"$row")")"
+  if [ ! -d "$cwd" ] || [ ! -f "$sd/.env" ]; then printf 'broken'; else printf 'stopped'; fi
+}
+
+# status 정렬(예약어 전역 봇): 전역 봇은 cwd 가 없으므로 .env 유무로만 broken 판정.
+_status_class_reserved() {
+  local ch="$1" sd="$CHANNELS_DIR/$1"
+  if is_running "$ch"; then printf 'running'; return; fi
+  [ -f "$sd/.env" ] || { printf 'broken'; return; }
+  printf 'stopped'
+}
+
+# status: 프로젝트 봇 1건 렌더(RUNNING/BROKEN/stopped + paths/mode/channel). 정렬은 호출측이 버킷 순서로 제어.
+_status_render_project_bot() {
+  local n="$1" row cwd sd issues created up pm ch_disp dm gc
+  row="$(lookup "$n")"
+  cwd="$(expand "$(cut -f1 <<<"$row")")"
+  sd="$(expand "$(cut -f2 <<<"$row")")"
+  # 깨진 상태 감지: 작업 디렉터리·토큰 파일 존재 여부
+  issues=""
+  [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
+  [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
+  if is_running "$n"; then
+    created="$(tmux display-message -p -t "$(sess_t "$n")" '#{session_created}' 2>/dev/null)"
+    up=""
+    if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+      up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+    fi
+    t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
+  elif [ -n "$issues" ]; then
+    t STATUS_BROKEN "$n" "$issues"
+    # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
+    [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$(tilde "$cwd")" "$PROG" "$n"
+    [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
+  else
+    t STATUS_STOPPED "$n"
+  fi
+  pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
+  t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
+  t STATUS_MODE "$pm"
+  # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
+  ch_disp="$(channel_spec "$(channel_of "$n")" display)"
+  if command -v jq >/dev/null 2>&1 && [ -f "$sd/access.json" ]; then
+    dm="$(jq -r '.dmPolicy // "?"' "$sd/access.json" 2>/dev/null)"
+    gc="$(jq -r '(.groups // {}) | length' "$sd/access.json" 2>/dev/null)"
+    if [ -n "$dm" ] && [ -n "$gc" ]; then
+      t STATUS_CHANNEL_TOPO "$ch_disp" "$dm" "$gc"
+    else
+      t STATUS_CHANNEL "$ch_disp"
+    fi
+  else
+    t STATUS_CHANNEL "$ch_disp"
+  fi
+}
+
+# status: 예약어 전역 봇 1건 렌더.
+_status_render_reserved_bot() {
+  local ch="$1" sd cwd issues sess created up pm
+  sd="$CHANNELS_DIR/$ch"
+  # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
+  # 그 외(STOPPED 등 세션 부재)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
+  cwd="—"
+  issues=""
+  [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
+  if is_running "$ch"; then
+    sess="$(sess_of "$ch")"
+    cwd="$(tmux display-message -p -t "=$sess" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
+    created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
+    up=""
+    if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+      up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+    fi
+    t STATUS_RUNNING "$ch" "$up" "$sess"
+  elif [ -n "$issues" ]; then
+    t STATUS_BROKEN "$ch" "$issues"
+    [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
+  else
+    t STATUS_STOPPED "$ch"
+  fi
+  pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
+  t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
+  t STATUS_MODE "$pm"
+  t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+}
+
 cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
     if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
@@ -459,80 +551,41 @@ cmd_status() {
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
+    # 1차 분류 → running/broken/stopped 버킷(개행 구분). 버킷 안은 등록 순서 유지(안정 정렬).
+    local p_running="" p_broken="" p_stopped=""
     while IFS= read -r n; do
       [ -z "$n" ] && continue; found=1
-      row="$(lookup "$n")"
-      cwd="$(expand "$(cut -f1 <<<"$row")")"
-      sd="$(expand "$(cut -f2 <<<"$row")")"
-      # 깨진 상태 감지: 작업 디렉터리·토큰 파일 존재 여부
-      issues=""
-      [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
-      [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
-      if is_running "$n"; then
-        created="$(tmux display-message -p -t "$(sess_t "$n")" '#{session_created}' 2>/dev/null)"
-        up=""
-        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
-          up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
-        fi
-        t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
-      elif [ -n "$issues" ]; then
-        t STATUS_BROKEN "$n" "$issues"
-        # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
-        [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$(tilde "$cwd")" "$PROG" "$n"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
-      else
-        t STATUS_STOPPED "$n"
-      fi
-      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
-      t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
-      t STATUS_MODE "$pm"
-      # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
-      ch_disp="$(channel_spec "$(channel_of "$n")" display)"
-      if command -v jq >/dev/null 2>&1 && [ -f "$sd/access.json" ]; then
-        dm="$(jq -r '.dmPolicy // "?"' "$sd/access.json" 2>/dev/null)"
-        gc="$(jq -r '(.groups // {}) | length' "$sd/access.json" 2>/dev/null)"
-        if [ -n "$dm" ] && [ -n "$gc" ]; then
-          t STATUS_CHANNEL_TOPO "$ch_disp" "$dm" "$gc"
-        else
-          t STATUS_CHANNEL "$ch_disp"
-        fi
-      else
-        t STATUS_CHANNEL "$ch_disp"
-      fi
+      case "$(_status_class "$n")" in
+        running) p_running="${p_running}${n}"$'\n' ;;
+        broken)  p_broken="${p_broken}${n}"$'\n' ;;
+        *)       p_stopped="${p_stopped}${n}"$'\n' ;;
+      esac
     done < <(all_names)
+    # RUNNING(위) → BROKEN(주의) → stopped(아래) 순으로 렌더. here-string 이라 현재 셸에서 실행.
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      _status_render_project_bot "$n"
+    done <<< "$p_running$p_broken$p_stopped"
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
 
-    # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010)
-    local ch_found=0
+    # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010).
+    # 프로젝트 봇과 동일하게 running → broken → stopped 순으로 정렬한다(전역 봇은 소수).
+    local r_running="" r_broken="" r_stopped=""
     for ch in $RESERVED_NAMES; do
       channel_spec "$ch" plugin >/dev/null 2>&1 || continue
-      sd="$CHANNELS_DIR/$ch"; [ -d "$sd" ] || continue
-      if [ "$ch_found" = 0 ]; then t STATUS_RESERVED_HEADER; ch_found=1; fi
-      # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
-      # 그 외(STOPPED 등 세션 부재)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
-      cwd="—"
-      issues=""
-      [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
-      if is_running "$ch"; then
-        local sess; sess="$(sess_of "$ch")"
-        cwd="$(tmux display-message -p -t "=$sess" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
-        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
-        up=""
-        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
-          up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
-        fi
-        t STATUS_RUNNING "$ch" "$up" "$sess"
-      elif [ -n "$issues" ]; then
-        t STATUS_BROKEN "$ch" "$issues"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
-      else
-        t STATUS_STOPPED "$ch"
-      fi
-      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
-      t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
-      t STATUS_MODE "$pm"
-      t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+      [ -d "$CHANNELS_DIR/$ch" ] || continue
+      case "$(_status_class_reserved "$ch")" in
+        running) r_running="${r_running}${ch}"$'\n' ;;
+        broken)  r_broken="${r_broken}${ch}"$'\n' ;;
+        *)       r_stopped="${r_stopped}${ch}"$'\n' ;;
+      esac
     done
+    local ch_found=0
+    while IFS= read -r ch; do
+      [ -z "$ch" ] && continue
+      [ "$ch_found" = 0 ] && { t STATUS_RESERVED_HEADER; ch_found=1; }
+      _status_render_reserved_bot "$ch"
+    done <<< "$r_running$r_broken$r_stopped"
 }
 
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
