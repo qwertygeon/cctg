@@ -45,6 +45,22 @@ need_jq() {
   return 1
 }
 
+# tmux 필요 동작 가드 — 없으면 is_running 이 조용히 false 가 되고 new-session 도 실패해 cryptic 하다.
+# lifecycle(up/down/restart/attach) 진입에서 명확히 거부한다.
+need_tmux() {
+  command -v tmux >/dev/null 2>&1 && return 0
+  te ERR_NO_TMUX
+  return 1
+}
+
+# claude CLI 필요 가드 — 없으면 tmux 세션은 launch 끝의 `exec bash` 로 살아남아 UP 처럼 보이지만
+# 봇은 동작하지 않는다(거짓 UP). 기동 전에 거부한다.
+need_claude() {
+  command -v claude >/dev/null 2>&1 && return 0
+  te ERR_NO_CLAUDE
+  return 1
+}
+
 # jq in-place 편집
 jq_inplace() {
   local f="$1"; shift; local tmp

@@ -58,6 +58,10 @@ case "$cmd" in
     [ -n "$(resolve "$target")" ] && exit 0
     exit 1 ;;
   new-session)
+    # Fault injection: a non-empty FAKE_TMUX_FAIL_NEWSESSION makes new-session fail
+    # (models tmux server-unavailable / resource exhaustion) so cctg's up-failure
+    # guard can be exercised. Nothing is recorded as running.
+    [ -n "${FAKE_TMUX_FAIL_NEWSESSION:-}" ] && exit 1
     name="$(flag_val -s "$@")" || exit 0
     if [ -n "$state" ]; then
       grep -qxF "$name" "$state" 2>/dev/null || printf '%s\n' "$name" >> "$state"
@@ -70,6 +74,9 @@ case "$cmd" in
       printf '%s\n' "$@" > "$FAKE_TMUX_LASTCMD"
     fi ;;
   kill-session)
+    # Fault injection: FAKE_TMUX_FAIL_KILL makes kill-session fail (the session is
+    # left as running) so cctg's down-failure guard can be exercised.
+    [ -n "${FAKE_TMUX_FAIL_KILL:-}" ] && exit 1
     target="$(flag_val -t "$@")" || exit 0
     if [ -n "$state" ] && [ -f "$state" ]; then
       # Remove exactly the session(s) the target resolves to (faithful to tmux:
