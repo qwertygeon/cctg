@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Documented bot-operator legal responsibilities**: a new "Your responsibilities as a bot operator" section in [SECURITY.md](SECURITY.md) surfaces obligations that come from the upstream services rather than from CCTG — your use is governed by your own Anthropic plan terms (Commercial/Consumer) and Usage Policy (CCTG only invokes the official `claude` CLI and never extracts/reuses credentials); consumer-facing bots must disclose they are AI; Discord **requires** a per-bot privacy policy and prohibits commercializing platform "API data"; Telegram expects lawful data handling. The README privacy/disclaimer callout (en/ko) gained a pointer, and the Telegram/Discord setup guides (en/ko) gained an "Operator responsibilities" note. Documentation only; not legal advice. (`SECURITY.md`, `README.md`, `README.ko.md`, `docs/telegram-setup*.md`, `docs/discord-setup*.md`)
+
 ### Changed
 - **Path-heavy command output is easier to read**: paths under `$HOME` are now shown shortened to `~` across the CLI (a new display-only `tilde()` helper), and multi-value lines that used to cram several long absolute paths together are laid out as separate, label-aligned lines:
   - `cctg status` — `cwd`/`state` split onto their own lines and aligned with `mode`/`channel` (a tidy left-aligned column).

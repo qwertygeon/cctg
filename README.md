@@ -11,6 +11,8 @@ Each project bot has its own state directory, token, working directory, and isol
 > ⚠️ **Privacy — read this first.** A bot relays the messages it receives to a Claude Code process running in its working directory, and Claude Code **sends that content to the Anthropic API** for processing. Conversations, code, and file contents you exchange with the bot therefore pass through a third party (Anthropic) and through Telegram/Discord infrastructure. Think twice before attaching a bot to a sensitive repository, and strictly limit who can reach it via the `access.json` allowlist (yourself, or trusted users only).
 >
 > ℹ️ **Unofficial tool.** CCTG is an unofficial, third‑party tool not built or endorsed by Anthropic. "Claude Code" and "Claude" are trademarks of Anthropic; this project is not affiliated with Anthropic.
+>
+> 📜 **Your use is subject to upstream terms.** Talking to a bot sends content to the Anthropic API, so your use is governed by your own Anthropic plan terms and Usage Policy; running a bot also makes you a Telegram/Discord bot operator (e.g. Discord requires a privacy policy, and you should disclose the bot is an AI if others can reach it). See **[SECURITY.md → Your responsibilities as a bot operator](SECURITY.md#your-responsibilities-as-a-bot-operator)**.
 
 ## Table of Contents
 

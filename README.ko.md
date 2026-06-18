@@ -11,6 +11,8 @@
 > ⚠️ **프라이버시 — 먼저 읽으세요.** 봇은 받은 메시지를 자신의 작업 디렉터리에서 실행되는 Claude Code 프로세스로 중계하며, Claude Code는 그 내용을 처리를 위해 **Anthropic API로 전송**한다. 즉 봇과 주고받는 대화·코드·파일 내용이 제3자(Anthropic) 및 Telegram/Discord 인프라를 거친다. 민감한 저장소에 봇을 붙이기 전에 한 번 더 생각하고, `access.json` allowlist로 접근 주체를 본인(또는 신뢰된 사용자)으로 엄격히 제한하라.
 >
 > ℹ️ **비공식 도구.** CCTG는 Anthropic이 만들거나 보증하지 않은 비공식 서드파티 도구다. "Claude Code"·"Claude"는 Anthropic의 상표이며, 본 프로젝트는 Anthropic과 무관하다.
+>
+> 📜 **사용은 상위 서비스 약관에 종속된다.** 봇과의 대화 내용은 Anthropic API로 전송되므로, 사용은 본인 Anthropic 플랜 약관과 Usage Policy의 적용을 받는다. 또한 봇 운영은 곧 Telegram/Discord 봇 운영자가 됨을 뜻한다(예: Discord는 개인정보처리방침을 요구하며, 본인 외 다른 사람이 봇에 접근 가능하면 AI임을 고지해야 한다). 의미는 **[SECURITY.md → Your responsibilities as a bot operator](SECURITY.md#your-responsibilities-as-a-bot-operator)** 참조.
 
 ## 목차
 
