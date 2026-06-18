@@ -145,7 +145,7 @@ cctg <command> [args]
 | Command | What it does |
 |---|---|
 | `add` / `rm` / `rename` | Register, unregister, or rename a bot |
-| `up` / `down` / `restart` | Start / stop / restart a bot (or `all`) |
+| `up` / `down` / `restart` | Start / stop / restart one or more bots (names, `telegram`/`discord`, or `all`) |
 | `status` / `logs` / `attach` | See state and uptime / read logs / attach to the live session |
 | `config` / `common` | Per‑bot options / shared permission policy |
 | `lang` | Switch CLI output language (English/Korean) |
