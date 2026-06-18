@@ -129,10 +129,11 @@ EOF
     elif [ "$noninteractive" = 1 ]; then
       PMODE=""
     else
-      t ADD_MODE_MENU "$(t FOLLOW_SHARED)"
       local _choice
       PMODE=""
+      # 메뉴를 매 반복 출력 — 잘못 입력해 재입력할 때도 옵션을 다시 보여준다.
       while :; do
+        t ADD_MODE_MENU "$(t FOLLOW_SHARED)"
         t ADD_PROMPT_MODE_PS3
         read -r _choice || { PMODE=""; break; }
         case "$_choice" in
@@ -187,7 +188,7 @@ CLAUDE_EXTRA_ARGS=
 # 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
 CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
-    [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
+    [ -n "$PMODE" ] && { set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE" || die ERR_ADD_WRITE "$SD/launch.env"; }
 
     # 레지스트리 등록 (4번째 컬럼 = 채널 타입) — point of no return. 이후 cleanup 해제.
     printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY" || die ERR_ADD_WRITE "$REGISTRY"
