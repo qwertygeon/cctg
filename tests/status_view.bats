@@ -48,3 +48,24 @@ make_jqless_path() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Discord"* ]]
 }
+
+# --- v0.5.1/004: cwd/state readability (B aligned split + C ~ shortening) ---
+
+@test "status: cwd and state render on separate lines (B)" {
+  seed_bot mybot
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cwd"* ]]
+  [[ "$output" == *"state"* ]]
+  # they used to share one line; now no single line carries both
+  ! grep -qE 'cwd.*state' <<<"$output"
+}
+
+@test "status: home paths are shortened to ~ (C)" {
+  mkdir -p "$HOME/proj"
+  seed_bot hbot "$HOME/proj"
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"~/proj"* ]]          # cwd shown tilde-shortened
+  [[ "$output" != *"$HOME/proj"* ]]      # not the full absolute home path
+}

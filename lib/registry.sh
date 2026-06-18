@@ -67,6 +67,9 @@ set_registry_cwd() {
 # 선행 ~ 확장
 expand() { case "$1" in "~"*) printf '%s' "${HOME}${1#\~}";; *) printf '%s' "$1";; esac; }
 
+# $HOME 접두를 ~ 로 축약(표시 전용 — expand 의 역). 그 외 경로/문자열("—" 등)은 그대로 둔다.
+tilde() { case "$1" in "$HOME"/*) printf '~%s' "${1#"$HOME"}";; "$HOME") printf '~';; *) printf '%s' "$1";; esac; }
+
 # 레지스트리에서 name으로 한 줄 찾기 → "cwd<TAB>statedir"
 lookup() {
   awk -F'|' -v n="$1" '
