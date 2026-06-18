@@ -376,36 +376,47 @@ cmd_common() {
     esac
 }
 
-cmd_up() {
-    TARGET="${1:?name|all 필요}"
-    # 예약어(telegram/discord)는 레지스트리 없는 전용 경로로 라우팅(ADR-006)
-    if is_reserved_name "$TARGET"; then up_reserved "$TARGET"; return; fi
-    if [ "$TARGET" = "all" ]; then
-      while IFS= read -r n; do [ -n "$n" ] && up_one "$n"; done < <(all_names)
-    else
-      up_one "$TARGET"
-    fi
+# 한 타겟에 라이프사이클 action 적용 — 예약어(telegram/discord)는 전용 경로로 라우팅(ADR-006).
+# 성공 0 / 실패 비0 (피호출 *_one/*_reserved 의 반환을 그대로 전파).
+# restart 는 down 후 up 이며 성공 판정=up 결과(기존 cmd_restart 의미 보존).
+_lifecycle_apply() {
+  local action="$1" name="$2"
+  case "$action" in
+    up)      if is_reserved_name "$name"; then up_reserved "$name"; else up_one "$name"; fi ;;
+    down)    if is_reserved_name "$name"; then down_reserved "$name"; else down_one "$name"; fi ;;
+    restart) if is_reserved_name "$name"; then down_reserved "$name"; up_reserved "$name"
+             else down_one "$name"; up_one "$name"; fi ;;
+  esac
 }
 
-cmd_down() {
-    TARGET="${1:?name|all 필요}"
-    if is_reserved_name "$TARGET"; then down_reserved "$TARGET"; return; fi
-    if [ "$TARGET" = "all" ]; then
-      while IFS= read -r n; do [ -n "$n" ] && down_one "$n"; done < <(all_names)
+# 다중 타겟 순차 처리(좌→우) + continue-on-error. 각 인자는 이름/예약어/all 로 라우팅한다.
+# 처리 건수 ≥2 면 성공/실패 요약 1줄 출력. 하나라도 실패하면 비0 반환(전부 성공 0).
+_lifecycle_run() {
+  local action="$1"; shift
+  local ok=0 fail=0 failed="" arg n
+  for arg in "$@"; do
+    if [ "$arg" = all ]; then
+      while IFS= read -r n; do
+        [ -n "$n" ] || continue
+        if _lifecycle_apply "$action" "$n"; then ok=$((ok+1)); else fail=$((fail+1)); failed="${failed:+$failed }$n"; fi
+      done < <(all_names)
+    elif _lifecycle_apply "$action" "$arg"; then
+      ok=$((ok+1))
     else
-      down_one "$TARGET"
+      fail=$((fail+1)); failed="${failed:+$failed }$arg"
     fi
+  done
+  # 단일 타겟은 per-target 출력으로 충분 — 요약은 2건 이상일 때만(하위호환, FR-005).
+  if [ $((ok+fail)) -ge 2 ]; then
+    if [ "$fail" -eq 0 ]; then t MULTI_SUMMARY_OK "$action" "$ok"
+    else t MULTI_SUMMARY_FAIL "$action" "$ok" "$fail" "$failed"; fi
+  fi
+  [ "$fail" -eq 0 ]
 }
 
-cmd_restart() {
-    TARGET="${1:?name|all 필요}"
-    if is_reserved_name "$TARGET"; then down_reserved "$TARGET"; up_reserved "$TARGET"; return; fi
-    if [ "$TARGET" = "all" ]; then
-      while IFS= read -r n; do [ -n "$n" ] && { down_one "$n"; up_one "$n"; }; done < <(all_names)
-    else
-      down_one "$TARGET"; up_one "$TARGET"
-    fi
-}
+cmd_up()      { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run up "$@"; }
+cmd_down()    { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run down "$@"; }
+cmd_restart() { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run restart "$@"; }
 
 cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
