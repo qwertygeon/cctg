@@ -136,7 +136,7 @@ cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>]
                    [--token-env <VAR>|--token-stdin] [--mode <m>] [--group ...]
   rm <name> [--purge]      rename <old> <new> [--keep-dir]
-  up <name|all>            down <name|all>          restart <name|all>
+  up <name...|all>         down <name...|all>       restart <name...|all>
   status [--json]          logs <name> [N]          attach <name>
   config <name> [...]      common [...]             lang [show|en|ko|clear]
   doctor    update    version    help
@@ -145,7 +145,7 @@ cctg <command> [args]
 | Command | What it does |
 |---|---|
 | `add` / `rm` / `rename` | Register, unregister, or rename a bot |
-| `up` / `down` / `restart` | Start / stop / restart a bot (or `all`) |
+| `up` / `down` / `restart` | Start / stop / restart one or more bots (names, `telegram`/`discord`, or `all`) |
 | `status` / `logs` / `attach` | See state and uptime / read logs / attach to the live session |
 | `config` / `common` | Per‑bot options / shared permission policy |
 | `lang` | Switch CLI output language (English/Korean) |

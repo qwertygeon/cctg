@@ -136,7 +136,7 @@ cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>]
                    [--token-env <VAR>|--token-stdin] [--mode <m>] [--group ...]
   rm <name> [--purge]      rename <old> <new> [--keep-dir]
-  up <name|all>            down <name|all>          restart <name|all>
+  up <name...|all>         down <name...|all>       restart <name...|all>
   status [--json]          logs <name> [N]          attach <name>
   config <name> [...]      common [...]             lang [show|en|ko|clear]
   doctor    update    version    help
@@ -145,7 +145,7 @@ cctg <command> [args]
 | 명령 | 하는 일 |
 |---|---|
 | `add` / `rm` / `rename` | 봇 등록·해제·이름 변경 |
-| `up` / `down` / `restart` | 봇 기동 / 정지 / 재기동 (`all` 가능) |
+| `up` / `down` / `restart` | 봇 기동 / 정지 / 재기동 — 여러 타겟(이름·`telegram`/`discord`·`all`) 한 번에 |
 | `status` / `logs` / `attach` | 상태·가동시간 / 로그 조회 / 라이브 세션 attach |
 | `config` / `common` | 봇별 옵션 / 공통 권한 정책 |
 | `lang` | CLI 출력 언어 전환(영/한) |
