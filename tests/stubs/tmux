@@ -108,7 +108,14 @@ case "$cmd" in
     # (faithful to real tmux; this is the silent status/uptime bug's signature).
     target="$(flag_val -t "$@")" || true
     if [ -n "$target" ] && [ -z "$(resolve_pane "$target")" ]; then exit 0; fi
-    printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
+    # Format-aware: '#{pane_pid}' (liveness check) returns FAKE_TMUX_PANE_PID so a test
+    # can point claude_alive's process walk at a tree it controls; everything else
+    # (session_created / pane_current_path) returns FAKE_TMUX_CREATED as before.
+    fmt=""; for fmt in "$@"; do :; done
+    case "$fmt" in
+      *pane_pid*) printf '%s\n' "${FAKE_TMUX_PANE_PID:-0}" ;;
+      *)          printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
+    esac ;;
   capture-pane)
     # target-pane: a bare '=NAME' can't be resolved -> "can't find pane", rc 1.
     target="$(flag_val -t "$@")" || { printf "no target\n" >&2; exit 1; }

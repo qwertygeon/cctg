@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Fake ps for the cctg test suite — fakes ONLY the process-tree walk.
+#
+# cctg makes two distinct ps calls:
+#   claude_alive():     ps -ax -o pid=,ppid=,comm=   (walk a pane's descendant tree)
+#   stop_snapshotter(): ps -ww -p <pid> -o command=  (single-pid marker check)
+#
+# Only the tree-walk shape (recognised by the `comm=` column; the snapshotter uses
+# `command=`) is intercepted, so claude_alive becomes deterministic regardless of
+# what real processes happen to run on the host (CI has no live `claude`). The
+# snapshotter's `command=` call passes through to the real ps, so those tests keep
+# exercising the genuine process table.
+#
+# Tree fixture: tests set FAKE_PS_TREE to "pid ppid comm" lines to control the walk
+# (e.g. omit the claude line to simulate DEAD). When unset, a default *healthy* tree
+# is emitted — FAKE_TMUX_PANE_PID has a `claude` child — so a session marked running
+# in the fake tmux reads as RUNNING by default.
+
+case "$*" in
+  *comm=*)
+    if [ -n "${FAKE_PS_TREE:-}" ]; then
+      printf '%s\n' "$FAKE_PS_TREE"
+    else
+      pp="${FAKE_TMUX_PANE_PID:-700001}"
+      printf '%s 1 bash\n%s %s claude\n' "$pp" "$((pp + 1))" "$pp"
+    fi
+    exit 0 ;;
+esac
+
+# Everything else (snapshotter's `-p <pid> -o command=`): real ps.
+exec /bin/ps "$@"

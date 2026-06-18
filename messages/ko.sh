@@ -117,6 +117,8 @@ CCTG_MSG_STATUS_GLOBAL="전역 봇: %s (이 스크립트는 관리하지 않음)
 CCTG_MSG_STATUS_PROJECT_HEADER="--- 프로젝트 봇 ---\n"
 CCTG_MSG_STATUS_RUNNING="  [RUNNING] %s%s  (tmux=%s)\n"
 CCTG_MSG_STATUS_BROKEN="  [BROKEN ] %s  (%s)\n"
+CCTG_MSG_STATUS_DEAD="  [DEAD   ] %s  (tmux=%s)\n"
+CCTG_MSG_STATUS_HINT_DEAD="            ↳ claude 종료됨(tmux 세션은 생존) — '%s restart %s' 로 복구\n"
 CCTG_MSG_STATUS_CHANNEL="            채널     %s\n"
 CCTG_MSG_STATUS_CHANNEL_TOPO="            채널     %s (%s, 그룹 %s개)\n"
 CCTG_MSG_STATUS_HINT_NO_CWD="            ↳ 작업 디렉터리 없음: %s — 디렉터리를 만들거나 '%s rm %s' 후 올바른 경로로 다시 add\n"

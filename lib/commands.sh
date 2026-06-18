@@ -456,7 +456,10 @@ cmd_restart() { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lif
 # RUNNING(위) → BROKEN(주의) → stopped(아래) 순으로 렌더하기 위한 1차 분류.
 _status_class() {
   local n="$1" row cwd sd
-  if is_running "$n"; then printf 'running'; return; fi
+  if is_running "$n"; then
+    if claude_alive "$n"; then printf 'running'; else printf 'dead'; fi
+    return
+  fi
   row="$(lookup "$n")"
   cwd="$(expand "$(cut -f1 <<<"$row")")"
   sd="$(expand "$(cut -f2 <<<"$row")")"
@@ -466,7 +469,10 @@ _status_class() {
 # status 정렬(예약어 전역 봇): 전역 봇은 cwd 가 없으므로 .env 유무로만 broken 판정.
 _status_class_reserved() {
   local ch="$1" sd="$CHANNELS_DIR/$1"
-  if is_running "$ch"; then printf 'running'; return; fi
+  if is_running "$ch"; then
+    if claude_alive "$ch"; then printf 'running'; else printf 'dead'; fi
+    return
+  fi
   [ -f "$sd/.env" ] || { printf 'broken'; return; }
   printf 'stopped'
 }
@@ -482,12 +488,18 @@ _status_render_project_bot() {
   [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
   [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
   if is_running "$n"; then
-    created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
-    up=""
-    if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
-      up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+    if claude_alive "$n"; then
+      created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
+      up=""
+      if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+        up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+      fi
+      t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
+    else
+      # 세션은 살아있으나 claude 종료됨(거짓 UP). 사용자 수동 restart 유도(DEC-001).
+      t STATUS_DEAD "$n" "$(sess_of "$n")"
+      t STATUS_HINT_DEAD "$PROG" "$n"
     fi
-    t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
   elif [ -n "$issues" ]; then
     t STATUS_BROKEN "$n" "$issues"
     # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
@@ -525,13 +537,18 @@ _status_render_reserved_bot() {
   [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
   if is_running "$ch"; then
     sess="$(sess_of "$ch")"
-    cwd="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
-    created="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{session_created}' 2>/dev/null)"
-    up=""
-    if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
-      up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+    if claude_alive "$ch"; then
+      cwd="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
+      created="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{session_created}' 2>/dev/null)"
+      up=""
+      if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+        up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+      fi
+      t STATUS_RUNNING "$ch" "$up" "$sess"
+    else
+      t STATUS_DEAD "$ch" "$sess"
+      t STATUS_HINT_DEAD "$PROG" "$ch"
     fi
-    t STATUS_RUNNING "$ch" "$up" "$sess"
   elif [ -n "$issues" ]; then
     t STATUS_BROKEN "$ch" "$issues"
     [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
@@ -552,30 +569,32 @@ cmd_status() {
     t STATUS_PROJECT_HEADER
     found=0
     # 1차 분류 → running/broken/stopped 버킷(개행 구분). 버킷 안은 등록 순서 유지(안정 정렬).
-    local p_running="" p_broken="" p_stopped=""
+    local p_running="" p_dead="" p_broken="" p_stopped=""
     while IFS= read -r n; do
       [ -z "$n" ] && continue; found=1
       case "$(_status_class "$n")" in
         running) p_running="${p_running}${n}"$'\n' ;;
+        dead)    p_dead="${p_dead}${n}"$'\n' ;;
         broken)  p_broken="${p_broken}${n}"$'\n' ;;
         *)       p_stopped="${p_stopped}${n}"$'\n' ;;
       esac
     done < <(all_names)
-    # RUNNING(위) → BROKEN(주의) → stopped(아래) 순으로 렌더. here-string 이라 현재 셸에서 실행.
+    # RUNNING(위) → DEAD(크래시) → BROKEN(설정결손) → stopped(아래) 순. here-string 이라 현재 셸에서 실행.
     while IFS= read -r n; do
       [ -z "$n" ] && continue
       _status_render_project_bot "$n"
-    done <<< "$p_running$p_broken$p_stopped"
+    done <<< "$p_running$p_dead$p_broken$p_stopped"
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
 
     # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010).
     # 프로젝트 봇과 동일하게 running → broken → stopped 순으로 정렬한다(전역 봇은 소수).
-    local r_running="" r_broken="" r_stopped=""
+    local r_running="" r_dead="" r_broken="" r_stopped=""
     for ch in $RESERVED_NAMES; do
       channel_spec "$ch" plugin >/dev/null 2>&1 || continue
       [ -d "$CHANNELS_DIR/$ch" ] || continue
       case "$(_status_class_reserved "$ch")" in
         running) r_running="${r_running}${ch}"$'\n' ;;
+        dead)    r_dead="${r_dead}${ch}"$'\n' ;;
         broken)  r_broken="${r_broken}${ch}"$'\n' ;;
         *)       r_stopped="${r_stopped}${ch}"$'\n' ;;
       esac
@@ -585,7 +604,7 @@ cmd_status() {
       [ -z "$ch" ] && continue
       [ "$ch_found" = 0 ] && { t STATUS_RESERVED_HEADER; ch_found=1; }
       _status_render_reserved_bot "$ch"
-    done <<< "$r_running$r_broken$r_stopped"
+    done <<< "$r_running$r_dead$r_broken$r_stopped"
 }
 
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
@@ -604,9 +623,14 @@ status_json() {
       [ -f "$sd/.env" ] || iss+=("no-token")
       up_s=-1
       if is_running "$n"; then
-        running=true; state="running"
-        created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
-        printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
+        if claude_alive "$n"; then
+          running=true; state="running"
+          created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
+          printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
+        else
+          # 세션 생존·claude 종료 = dead. running=false, uptime 은 봇 기준 무의미 → null(up_s=-1 유지).
+          running=false; state="dead"
+        fi
       elif [ "${#iss[@]}" -gt 0 ]; then
         running=false; state="broken"
       else
