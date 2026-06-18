@@ -68,6 +68,33 @@ load test_helper
   [ ! -s "$FAKE_TMUX_STATE" ]
 }
 
+# --- prefix-collision regression (exact-match '-t =name') ---
+# tmux resolves a plain '-t name' by prefix when no exact session exists, so a
+# bot whose name is a prefix of another (cc-tg vs cc-tg-discord) used to control
+# the wrong session. cctg now passes '=' targets for all lookups/kills.
+# These run against the isolated fake tmux only — never a real tmux server.
+
+@test "up: a prefix-named bot starts even when only its longer sibling runs" {
+  seed_bot cc-tg
+  seed_bot cc-tg-discord
+  cctg up cc-tg-discord >/dev/null      # only the longer-named sibling is up
+  run cctg up cc-tg                      # shorter name must NOT match the longer
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"UP   cc-tg"* ]]      # actually started (not "Already running")
+  grep -qxF "cctg-cc-tg" "$FAKE_TMUX_STATE"
+  grep -qxF "cctg-cc-tg-discord" "$FAKE_TMUX_STATE"
+}
+
+@test "down: a stopped prefix-named bot must not kill its running longer sibling" {
+  seed_bot cc-tg
+  seed_bot cc-tg-discord
+  cctg up cc-tg-discord >/dev/null      # only the longer-named sibling is up
+  run cctg down cc-tg                    # shorter name is not running
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Stopped: cc-tg"* ]]  # reports stopped, does not kill anything
+  grep -qxF "cctg-cc-tg-discord" "$FAKE_TMUX_STATE"   # longer sibling untouched
+}
+
 @test "restart: stops then starts again, leaving the session running" {
   seed_bot mybot
   cctg up mybot >/dev/null
