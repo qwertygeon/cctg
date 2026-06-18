@@ -158,6 +158,10 @@ cctg status
 - **`status` 에서 BROKEN 표시?** 작업 디렉터리가 없거나 `.env` 토큰 파일이 없다. 작업 디렉터리를 다시 만들거나 봇을 재등록한다.
 - **권한 프롬프트나 멈춤?** [permissions.ko.md](permissions.ko.md) 를 참조한다.
 
+## 운영자 책임
+
+이 봇을 운영하면 당신은 Telegram 봇 운영자이자 Anthropic API 사용자가 된다. 상위 서비스에서 비롯되는 몇 가지 의무가 있다: 본인 외 누군가가 봇에 접근 가능하면 봇이 AI임을 고지하고, 다른 사람이 사용하면 개인정보처리방침을 공개하며, 사용은 본인 Anthropic 플랜 약관과 Usage Policy의 적용을 받음을 유의한다. **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)** 참조.
+
 ## 함께 보기
 
 - [installation.ko.md](installation.ko.md)
