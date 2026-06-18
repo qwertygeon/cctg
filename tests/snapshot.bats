@@ -95,3 +95,23 @@ load test_helper
   kill -0 "$unrel" 2>/dev/null        # unrelated process survives (not killed)
   kill "$unrel" 2>/dev/null || true   # cleanup
 }
+
+@test "down: marker match is exact-token, not substring — spares a sibling's recycled watcher" {
+  # Regression: 'cctg-snapshotter:cctg-cc-tg' is a substring prefix of a sibling's
+  # marker 'cctg-snapshotter:cctg-cc-tg-discord'. A substring (grep -F) match would
+  # mis-kill the sibling's watcher when the PID was recycled; the match must be on a
+  # whole whitespace-delimited argv token. (Same exact-match class as the tmux '=' fix.)
+  seed_bot cc-tg
+  # A live process whose argv carries the SIBLING's marker as a token (resident bash
+  # loop so it isn't exec-optimized away, mirroring the real snapshotter shape).
+  bash -c 'while :; do sleep 1; done' "cctg-snapshotter:cctg-cc-tg-discord" x x x &
+  local sib=$!
+  # Stale pid file for cc-tg: recycled PID + cc-tg's marker (a prefix of the sibling's).
+  local pidf="$CC_CHANNELS_DIR/cc-tg/.snapshotter.pid"
+  printf '%s\ncctg-snapshotter:cctg-cc-tg\n' "$sib" > "$pidf"
+  run cctg down cc-tg
+  [ "$status" -eq 0 ]
+  [ ! -f "$pidf" ]                    # stale pid file cleaned up regardless
+  kill -0 "$sib" 2>/dev/null          # sibling watcher must survive (not mis-killed)
+  kill "$sib" 2>/dev/null || true     # cleanup
+}

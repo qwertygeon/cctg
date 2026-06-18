@@ -5,10 +5,26 @@
 sess_of() { printf '%s%s' "$SESS_PREFIX" "$1"; }
 # tmux 타겟('-t')은 정확 일치가 없으면 접두(prefix)·fnmatch 로 매칭되어, 한 봇 이름이
 # 다른 봇 이름의 접두인 경우(cc-tg vs cc-tg-discord) 엉뚱한 세션에 매칭된다. '=' 접두로
-# 정확 일치를 강제해 오매칭을 차단한다. 세션을 *찾는* 모든 -t(조회/종료/캡처/attach)에 사용.
-# 세션을 *만드는* new-session -s 는 리터럴 이름이므로 적용하지 않는다.
-sess_t() { printf '=%s' "$(sess_of "$1")"; }
+# 정확 일치를 강제해 오매칭을 차단한다. 세션을 *만드는* new-session -s 는 리터럴 이름이므로 미적용.
+#
+# 단, '=NAME' 단독은 **target-session** 문법(has-session/kill-session/attach)에서만 유효하다.
+# capture-pane/display-message 는 **target-pane** 을 받는데, target-pane 문법에선 '=NAME'
+# 만으로는 pane 으로 해석되지 않아 capture-pane 은 "can't find pane", display-message 는 빈
+# 결과를 낸다. pane 타겟은 뒤에 ':' 를 붙여 "정확매칭 세션의 기본 window/pane" 으로 해석시킨다.
+# 따라서 두 헬퍼를 구분한다: sess_t(세션 타겟), sess_pt(pane 타겟).
+sess_t()  { printf '=%s'  "$(sess_of "$1")"; }
+sess_pt() { printf '=%s:' "$(sess_of "$1")"; }
 is_running() { tmux has-session -t "$(sess_t "$1")" 2>/dev/null; }
+
+# detached 세션 기동 공통 경로(일반봇·예약봇 공용). 호출자가 동일 launch 문자열을 만들고
+# 본 함수로 위임한다 — 채널 종류가 늘어도 기동 형식/폭을 한 곳에서 관리한다.
+#   - 명령 전달은 다중 인자 직접형(bash -lc "$launch")으로 통일한다: 단일 인자형은 tmux 가
+#     sh -c 로 한 겹 더 감싸 불필요한 셸 계층·이식성 부담을 만든다.
+#   - -x "$SESS_WIDTH": detached 기본 80 폭으로 캡처가 잘리지 않도록 폭을 고정한다.
+# $1=세션명(sess_of 결과), $2=launch 문자열. 반환코드는 tmux new-session 그대로 전파.
+start_session() {
+  tmux new-session -d -x "$SESS_WIDTH" -s "$1" bash -lc "$2"
+}
 
 # 초 → 사람이 읽는 기간 (예: 2d3h / 4h5m / 7m)
 fmt_dur() {
@@ -24,7 +40,7 @@ fmt_dur() {
 take_snapshot() {
   local sess="$1" sd="$2" snap="$2/last-session.log"
   [ -d "$sd" ] || return 0
-  if tmux capture-pane -p -S -2000 -t "=$sess" > "$snap.tmp" 2>/dev/null; then
+  if tmux capture-pane -p -S -2000 -t "=$sess:" > "$snap.tmp" 2>/dev/null; then
     mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
   else
     rm -f "$snap.tmp"
@@ -45,7 +61,7 @@ start_snapshotter() {
   nohup bash -c '
     sess="$1"; sd="$2"; interval="$3"; snap="$sd/last-session.log"
     while tmux has-session -t "=$sess" 2>/dev/null; do
-      if tmux capture-pane -p -S -2000 -t "=$sess" > "$snap.tmp" 2>/dev/null; then
+      if tmux capture-pane -p -S -2000 -t "=$sess:" > "$snap.tmp" 2>/dev/null; then
         mv "$snap.tmp" "$snap" && chmod 600 "$snap" 2>/dev/null
       else
         rm -f "$snap.tmp"
@@ -72,8 +88,12 @@ stop_snapshotter() {
   # PID 재사용 오살 방지: PID 의 명령줄에 우리 watcher 마커가 있을 때만 kill.
   # 마커 미기록(구버전 pidf)이면 기존 동작(존재 시 kill)으로 폴백한다.
   # ps -ww: 명령줄 truncation 방지(마커는 긴 스크립트 본문 뒤 argv 에 위치).
+  # 매칭은 공백 분리 토큰 *완전 일치*로 한다 — substring(grep -F)이면 형제 봇 마커
+  # (cctg-snapshotter:cctg-cc-tg 가 cctg-snapshotter:cctg-cc-tg-discord 의 접두)를
+  # 오매칭해, PID 재사용 시 형제 watcher 를 오살할 수 있다(tmux '=' 정확매칭과 동류).
   if [ -n "$pid" ]; then
-    if [ -z "$marker" ] || ps -ww -p "$pid" -o command= 2>/dev/null | grep -qF "$marker"; then
+    if [ -z "$marker" ] || ps -ww -p "$pid" -o command= 2>/dev/null \
+         | awk -v m="$marker" '{for(i=1;i<=NF;i++) if($i==m) f=1} END{exit f?0:1}'; then
       kill "$pid" 2>/dev/null
     fi
   fi
@@ -116,7 +136,7 @@ up_one() {
 && caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   # new-session 실패(서버 기동 불가·리소스 부족·직전 race 등)를 확인 — 미확인 시 거짓 UP 보고.
-  if ! tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"; then
+  if ! start_session "$(sess_of "$name")" "$launch"; then
     te ERR_UP_FAILED "$name"; return 1
   fi
   t UP_OK "$name" "$(tilde "$cwd")" "$(tilde "$sd")" "$(sess_of "$name")"
@@ -196,7 +216,7 @@ up_reserved() {
 && { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
 && caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
-  if ! tmux new-session -d -s "$(sess_of "$ch")" bash -lc "$launch"; then
+  if ! start_session "$(sess_of "$ch")" "$launch"; then
     te ERR_UP_FAILED "$ch"; return 1
   fi
   t RESERVED_UP "$ch" "$(sess_of "$ch")"
