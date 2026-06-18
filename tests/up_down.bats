@@ -11,6 +11,22 @@ load test_helper
   grep -qxF "cctg-mybot" "$FAKE_TMUX_STATE"
 }
 
+@test "up: new-session uses the unified direct form with a pinned width (-x)" {
+  # Guards two things routed through start_session: (1) the command is passed as
+  # the direct multi-arg form `bash -lc <launch>` — so 'bash' and '-lc' are their
+  # own argv tokens; the old single-arg 'bash -lc ...' form would record one
+  # combined line and fail the exact-line match. (2) width is pinned with -x so
+  # detached capture (logs/snapshot) isn't truncated at tmux's 80-col default.
+  seed_bot mybot
+  export FAKE_TMUX_LASTCMD="$BATS_TEST_TMPDIR/tmux-lastcmd"
+  run cctg up mybot
+  [ "$status" -eq 0 ]
+  grep -qxF -- '-x'   "$FAKE_TMUX_LASTCMD"   # width flag present
+  grep -qxF -- '200'  "$FAKE_TMUX_LASTCMD"   # default SESS_WIDTH
+  grep -qxF -- 'bash' "$FAKE_TMUX_LASTCMD"   # direct form: bash is its own token
+  grep -qxF -- '-lc'  "$FAKE_TMUX_LASTCMD"
+}
+
 @test "up: a second up is a no-op (already running)" {
   seed_bot mybot
   cctg up mybot >/dev/null
