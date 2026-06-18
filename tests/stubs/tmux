@@ -52,6 +52,22 @@ resolve() {
   esac
 }
 
+# Resolve a target-PANE (capture-pane / display-message). Mirrors the real tmux
+# quirk surfaced in production: the '=' exact-match prefix is only valid for a
+# target-SESSION. As a target-pane, a bare '=NAME' (no ':' window/pane part) is
+# NOT resolvable — real tmux errors "can't find pane" (capture-pane) or yields an
+# empty value (display-message). It must carry a ':' (e.g. '=NAME:') to resolve.
+# A plain (no '=') target still resolves via exact-then-prefix on the session.
+# Without this distinction the stub accepts both forms and the regression that
+# passes a bare '=NAME' to a pane command slips through the suite.
+resolve_pane() {
+  local target="$1"
+  case "$target" in
+    "="*) case "$target" in *:*) ;; *) return 1 ;; esac ;;
+  esac
+  resolve "${target%%:*}"
+}
+
 case "$cmd" in
   has-session)
     target="$(flag_val -t "$@")" || exit 1
@@ -88,8 +104,17 @@ case "$cmd" in
       fi
     fi ;;
   display-message)
+    # target-pane: a bare '=NAME' resolves to nothing -> empty value, rc 0
+    # (faithful to real tmux; this is the silent status/uptime bug's signature).
+    target="$(flag_val -t "$@")" || true
+    if [ -n "$target" ] && [ -z "$(resolve_pane "$target")" ]; then exit 0; fi
     printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
   capture-pane)
+    # target-pane: a bare '=NAME' can't be resolved -> "can't find pane", rc 1.
+    target="$(flag_val -t "$@")" || { printf "no target\n" >&2; exit 1; }
+    if [ -z "$(resolve_pane "$target")" ]; then
+      printf "can't find pane: %s\n" "$target" >&2; exit 1
+    fi
     printf 'fake pane line 1\nfake pane line 2\n' ;;
   attach|send-keys)
     : ;;
