@@ -136,7 +136,7 @@ cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>]
                    [--token-env <VAR>|--token-stdin] [--mode <m>] [--group ...]
   rm <name> [--purge]      rename <old> <new> [--keep-dir]
-  up <name|all>            down <name|all>          restart <name|all>
+  up <name...|all>         down <name...|all>       restart <name...|all>
   status [--json]          logs <name> [N]          attach <name>
   config <name> [...]      common [...]             lang [show|en|ko|clear]
   doctor    update    version    help

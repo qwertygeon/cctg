@@ -41,8 +41,8 @@ cctg <command> [args]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
   config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|cwd <경로>|token]
   common [...]
-  up <name|all|telegram|discord>    down <name|all|telegram|discord>
-  restart <name|all|telegram|discord>
+  up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
+  restart <name...|all|telegram|discord>
   status [--json]              logs <name|telegram|discord> [N]          attach <name>
   lang [show|en|ko|clear]
   doctor    update    version    help
@@ -130,17 +130,20 @@ $ cctg rename proj proj2 --keep-dir
 ### `up`
 
 ```
-cctg up <name|all|telegram|discord>
+cctg up <name...|all|telegram|discord>
 ```
 
 `cctg-<name>` 이름의 detached `tmux` 세션에서 봇을 기동한다. 세션은 `caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] [추가 인자]` 를 실행하며, 채널의 상태 디렉터리는 환경 변수(`TELEGRAM_STATE_DIR` / `DISCORD_STATE_DIR`) 로 주입된다. 공통 권한 정책은 `--settings` 로 주입되고, 봇별 `CCTG_PERMISSION_MODE`(`launch.env`) 가 공통 `defaultMode` 를 override 하며, `CLAUDE_EXTRA_ARGS` 가 뒤에 덧붙는다.
 
 작업 디렉터리와 봇의 `.env`(토큰) 가 존재해야 하며, 없으면 `up` 이 오류를 보고한다. 봇에 `CCTG_LOG_SNAPSHOT_INTERVAL` 이 설정되어 있으면 주기 스냅샷 watcher 도 함께 기동된다. `cctg up all` 은 등록된 모든 봇을 기동한다.
 
+**다중 타겟**: `up`·`down`·`restart` 는 여러 타겟(이름·예약 채널명·`all`)을 한 번에 받아 좌→우 **순차** 처리한다. 처리는 **continue-on-error** — 한 타겟이 실패해도 나머지를 계속 진행한다. 2개 이상 처리하면 요약 1줄(성공/실패 수, 실패 타겟명)을 출력하고, 하나라도 실패하면 비0 으로 종료한다. 단일 타겟은 기존과 동일(요약 없음).
+
 **전역 채널 봇 (`telegram` / `discord`)**: 예약 이름을 전달하면 레지스트리 없이 `~/.claude/channels/<channel>/` 을 상태 디렉터리로 사용한다. 작업 디렉터리(`cwd`)는 `cctg up` 실행 시점의 현재 디렉터리(`$PWD`)다. **단독소유자 가드**: `cctg-<channel>` tmux 세션이 이미 존재하거나 상태 디렉터리의 `bot.pid` 에 살아 있는 PID 가 있으면(플러그인 러너 활성) 기동을 거부한다. `.env` 가 없어도 거부한다.
 
 ```console
 $ cctg up proj
+$ cctg up proj1 proj2 telegram   # 여러 타겟 순차 기동
 $ cctg up all
 $ cctg up telegram
 $ cctg up discord
@@ -149,7 +152,7 @@ $ cctg up discord
 ### `down`
 
 ```
-cctg down <name|all|telegram|discord>
+cctg down <name...|all|telegram|discord>
 ```
 
 봇을 정지한다. `tmux` 세션을 종료하기 전에 세션 화면 스냅샷을 `<state>/last-session.log` 에 저장하여(정지 후에도 [`logs`](#logs) 가 동작하도록) 두고, 실행 중인 스냅샷 watcher 가 있으면 정지한다. `cctg down all` 은 등록된 모든 봇을 정지한다. 이미 정지된 봇을 정지해도 남아 있는 스냅샷 watcher PID 파일을 정리한다.
@@ -165,7 +168,7 @@ $ cctg down telegram
 ### `restart`
 
 ```
-cctg restart <name|all|telegram|discord>
+cctg restart <name...|all|telegram|discord>
 ```
 
 `down` 후 `up`. 실행 중인 봇에 설정 변경(권한 모드·추가 인자·스냅샷 주기·공통 정책)을 적용할 때 사용한다. 예약 이름 `telegram`·`discord` 를 써서 전역 채널 봇을 재기동할 수 있다.

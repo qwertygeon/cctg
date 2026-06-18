@@ -41,8 +41,8 @@ cctg <command> [args]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
   config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>|cwd <path>|token]
   common [...]
-  up <name|all|telegram|discord>    down <name|all|telegram|discord>
-  restart <name|all|telegram|discord>
+  up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
+  restart <name...|all|telegram|discord>
   status [--json]              logs <name|telegram|discord> [N]          attach <name>
   lang [show|en|ko|clear]
   doctor    update    version    help
@@ -130,17 +130,20 @@ $ cctg rename proj proj2 --keep-dir
 ### `up`
 
 ```
-cctg up <name|all|telegram|discord>
+cctg up <name...|all|telegram|discord>
 ```
 
 Starts a bot in a detached `tmux` session named `cctg-<name>`. The session runs `caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] [extra args]`, where the channel's state directory is injected via its environment variable (`TELEGRAM_STATE_DIR` / `DISCORD_STATE_DIR`). The shared permission policy is injected with `--settings`; a per-bot `CCTG_PERMISSION_MODE` (from `launch.env`) overrides the shared `defaultMode`, and `CLAUDE_EXTRA_ARGS` is appended.
 
 The working directory and the bot's `.env` (token) must exist, or `up` reports an error. If `CCTG_LOG_SNAPSHOT_INTERVAL` is set for the bot, a periodic snapshot watcher is also started. `cctg up all` starts every registered bot.
 
+**Multiple targets**: `up`, `down`, and `restart` accept several targets at once (names, reserved channel names, and/or `all`), processed sequentially left to right. Processing is **continue-on-error** — a failing target does not stop the rest. When two or more targets are processed, a summary line (succeeded / failed counts, with failed names) is printed, and the command exits non-zero if any target failed. A single target behaves exactly as before (no summary line).
+
 **Global channel bots (`telegram` / `discord`)**: passing a reserved channel name bypasses the registry and uses `~/.claude/channels/<channel>/` as the state directory. The working directory (`cwd`) is whatever directory you run `cctg up` from at that moment. A **sole-owner guard** refuses startup if a `cctg-<channel>` tmux session already exists or if `bot.pid` in the state directory holds a live PID (the plugin's own runner is active). A missing `.env` is also refused.
 
 ```console
 $ cctg up proj
+$ cctg up proj1 proj2 telegram   # several targets, sequential
 $ cctg up all
 $ cctg up telegram
 $ cctg up discord
@@ -149,7 +152,7 @@ $ cctg up discord
 ### `down`
 
 ```
-cctg down <name|all|telegram|discord>
+cctg down <name...|all|telegram|discord>
 ```
 
 Stops a bot. Before killing the `tmux` session it saves a snapshot of the session pane to `<state>/last-session.log` (so [`logs`](#logs) keeps working after the bot is stopped) and stops any running snapshot watcher. `cctg down all` stops every registered bot. Stopping an already-stopped bot still cleans up any leftover snapshot-watcher PID file.
@@ -165,7 +168,7 @@ $ cctg down telegram
 ### `restart`
 
 ```
-cctg restart <name|all|telegram|discord>
+cctg restart <name...|all|telegram|discord>
 ```
 
 `down` followed by `up`. Use it to apply configuration changes (permission mode, extra args, snapshot interval, shared policy) to a running bot. Accepts the reserved names `telegram` and `discord` to restart a global channel bot.

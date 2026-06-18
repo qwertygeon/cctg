@@ -49,7 +49,8 @@ _cctg() {
       (( CURRENT == 3 )) && _cctg_names
       (( CURRENT >= 5 )) && compadd -- --keep-dir --help ;;
     up|down|restart)
-      if (( CURRENT == 3 )); then
+      # 다중 타겟: 모든 인자 위치에서 이름·all·--help 보완
+      if (( CURRENT >= 3 )); then
         compadd -- all --help
         _cctg_names
       fi ;;

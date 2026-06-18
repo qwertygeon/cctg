@@ -3,7 +3,7 @@
 # macOS 기본 bash 3.2 호환을 위해 _init_completion 에 의존하지 않는다.
 
 _cctg() {
-  local cur prev cmd cmds names extra reg channels
+  local cur prev cmd cmds names reg channels
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   cmds="add rm rename config common up down restart status logs attach lang doctor update version help"
@@ -19,13 +19,17 @@ _cctg() {
 
   cmd="${COMP_WORDS[1]}"
   case "$cmd" in
-    rm|rename|config|up|down|restart|logs|attach)
-      # 두 번째 인자: 등록된 봇 이름 (up/down/restart 는 all 도)
+    up|down|restart)
+      # 다중 타겟: 모든 인자 위치에서 등록된 봇 이름·all·--help 를 보완한다.
+      names=$(awk -F'|' '/^[[:space:]]*#/{next}/^[[:space:]]*$/{next}{gsub(/^[ \t]+|[ \t]+$/,"",$1);print $1}' "$reg" 2>/dev/null)
+      COMPREPLY=( $(compgen -W "$names all --help" -- "$cur") )
+      ;;
+    rm|rename|config|logs|attach)
+      # 두 번째 인자: 등록된 봇 이름 (단일 타겟).
       # rename 의 세 번째(new name)·config 의 인자는 자유 입력이라 보완하지 않는다.
       if [ "$COMP_CWORD" -eq 2 ]; then
         names=$(awk -F'|' '/^[[:space:]]*#/{next}/^[[:space:]]*$/{next}{gsub(/^[ \t]+|[ \t]+$/,"",$1);print $1}' "$reg" 2>/dev/null)
-        case "$cmd" in up|down|restart) extra="all" ;; *) extra="" ;; esac
-        COMPREPLY=( $(compgen -W "$names $extra" -- "$cur") )
+        COMPREPLY=( $(compgen -W "$names" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -W "show edit mode args snapshot cwd token --help" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 4 ]; then
@@ -38,7 +42,7 @@ _cctg() {
         COMPREPLY=( $(compgen -W "--purge --help" -- "$cur") )
       elif [ "$cmd" = rename ] && [ "$COMP_CWORD" -ge 4 ]; then
         COMPREPLY=( $(compgen -W "--keep-dir --help" -- "$cur") )
-      elif [ "$cmd" = up ] || [ "$cmd" = down ] || [ "$cmd" = restart ] || [ "$cmd" = logs ] || [ "$cmd" = attach ]; then
+      elif [ "$cmd" = logs ] || [ "$cmd" = attach ]; then
         [ "$COMP_CWORD" -ge 3 ] && COMPREPLY=( $(compgen -W "--help" -- "$cur") )
       fi
       ;;
