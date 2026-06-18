@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Interactive `cctg add` permission-mode prompt is now a numbered menu**: instead of free-typing a mode name, the interactive prompt lists the choices `1) bypassPermissions  2) acceptEdits  3) auto  4) default  5) dontAsk  6) plan  7) (follow shared)` and reads a number. An invalid entry re-prompts instead of aborting; pressing Enter or `7` follows the shared policy; typing a mode name still works. Shell tab-completion cannot reach a running `read` prompt, so a menu is the only way to make the fixed value set selectable inline. The display order is fixed with `bypassPermissions` first and `acceptEdits` second (independent of the validation set order). (`lib/commands.sh`, `messages/*.sh`, docs)
+
+### Fixed
+- **`cctg add` no longer leaves a half-created bot on bad input**: all interactive inputs (token, channel ID, group specs, permission mode) are now collected and validated *before* anything is written to disk (validate-before-write). Previously a mistyped permission mode aborted *after* `.env`/`access.json` were written but *before* registration, leaving an unregistered state directory that the foreign-statedir guard then refused to overwrite on retry (a dead-end). As a defense-in-depth net, the state directory is created inside an `EXIT` trap that removes it if the process exits before registration completes — but only when `add` created the directory itself (a pre-existing directory is never deleted, per constitution P-002). (`lib/commands.sh`)
+
 ## [0.5.0] - 2026-06-18
 
 ### Added

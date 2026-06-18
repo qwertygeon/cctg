@@ -36,7 +36,11 @@ cmd_add() {
     if [ -d "$SD" ] && [ ! -f "$SD/launch.env" ] && { [ -f "$SD/.env" ] || [ -f "$SD/access.json" ]; }; then
       die ERR_FOREIGN_STATEDIR "$SD"
     fi
-    mkdir -p "$SD/inbox"
+    # ── 입력 수집·검증 (파일 생성 전) ──────────────────────────────────────────
+    # 모든 입력(토큰·ID·groups·권한모드)을 검증한 뒤에만 디스크에 쓴다(DEC-003). 기존 흐름은
+    # mkdir·.env·access.json 을 먼저 쓰고 권한모드를 나중에 검증해, 오입력 시 launch.env·등록이
+    # 빠진 반쪽 상태를 남겼다 — 그 반쪽 상태는 위의 foreign-statedir 가드에 걸려 같은 이름 재시도까지
+    # 막았다. 검증을 선행시켜 반쪽 상태를 원천 제거한다.
 
     # 1) 봇 토큰 — stdin/env(비대화형) 또는 가려서 입력(대화형)
     if [ "$opt_token_stdin" = 1 ]; then
@@ -65,28 +69,18 @@ cmd_add() {
     fi
     [ -n "$TGID" ] && { printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"; }
 
-    # 3) 토큰 → .env (600). 키 이름은 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN).
-    #    umask 077 서브셸로 생성 — 먼저 만들고 chmod 하면 그 사이 world-readable 창이 생긴다.
-    ( umask 077; printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env" )
-
-    # 4) access.json → 채널 시드 정책에 따라 생성.
-    #    dmPolicy/allowFrom 를 단일 가드로 동시 결정한다(동일 가드 중복 평가 제거):
-    #      ID 제공 → allowlist + [<id>] / 미제공 → 채널 seed_policy(예: discord=pairing) + []
+    # 3) access.json 정책 + groups JSON 사전 구성(검증만). 실제 파일 쓰기는 커밋 구간으로 미룬다.
+    #    dmPolicy/allowFrom: ID 제공 → allowlist + [<id>] / 미제공 → 채널 seed_policy(예: discord=pairing) + []
     #    TGID·group id·member id 는 모두 ^[0-9]+$ 통과분만 JSON 에 주입한다(P-003 주입 방어).
-    local sp policy af
+    local sp policy af groups_json
     sp="$(channel_spec "$CH" seed_policy)"
     if [ -n "$TGID" ]; then policy=allowlist; af='["'"$TGID"'"]'; else policy="$sp"; af='[]'; fi
-
-    if [ -z "$opt_groups" ]; then
-      # groups 미지정: heredoc 으로 작성(jq 불요 — jq 없는 환경의 일반 add 동작 보존).
-      cat > "$SD/access.json" <<JSON
-{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
-JSON
-    else
-      # groups 지정: 가변 키 JSON 객체 구성을 위해 jq 사용. 검증·jq 가드는 레지스트리 등록 전(ADR-006)
-      # 에서 수행하므로 실패 시 봇은 미등록 상태로 남는다.
+    groups_json=""
+    if [ -n "$opt_groups" ]; then
+      # groups 지정: 가변 키 JSON 객체 구성을 위해 jq 사용. need_jq·검증을 쓰기 전에 끝내
+      # 미설치/오입력 시 봇이 미등록·무흔적으로 남도록 한다(ADR-006).
       need_jq || exit 1
-      local groups_json gtok gid grest gmod rm_flag allow_csv allow_json gm first
+      local gtok gid grest gmod rm_flag allow_csv allow_json gm first saved_ifs
       groups_json='{}'
       # 토큰을 줄 단위로 변환해(구분자=탭→개행) read 로 순회 — 루프 본문에서 IFS 를 자유롭게 바꾼다.
       while IFS= read -r gtok; do
@@ -95,7 +89,7 @@ JSON
         printf '%s' "$gid" | grep -qE '^[0-9]+$' || die ERR_ADD_BAD_GROUP_ID "$gid"
         rm_flag=true; allow_csv=""
         # 수식어(`:` 구분): nomention / allow=csv
-        local saved_ifs="$IFS"; IFS=':'
+        saved_ifs="$IFS"; IFS=':'
         for gmod in $grest; do
           case "$gmod" in
             "")        : ;;
@@ -124,29 +118,62 @@ JSON
       done <<EOF
 $(printf '%s' "$opt_groups" | tr "$GROUP_SEP" '\n')
 EOF
-      jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
-        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}' > "$SD/access.json"
     fi
 
-    # 4.5) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음), 아니면 대화형
+    # 4) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음),
+    #    대화형이면 번호 선택 메뉴(오타 차단 + 재입력 루프, DEC-002). 빈 입력/7 = 공통 따름.
+    #    셸 자동완성은 실행 중 read 프롬프트엔 동작하지 않으므로(셸이 아닌 cctg 가 stdin 을 읽음)
+    #    번호 메뉴로 오타를 원천 차단한다. 번호 외에 모드명 직접 입력도 수용.
     if [ -n "$opt_mode" ]; then
       PMODE="$opt_mode"
     elif [ "$noninteractive" = 1 ]; then
       PMODE=""
     else
-      t ADD_PROMPT_MODE "$VALID_MODES"
-      read -r PMODE
-      if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
-        die ERR_BAD_MODE_ADD "$PMODE" "$VALID_MODES"
-      fi
+      t ADD_MODE_MENU "$(t FOLLOW_SHARED)"
+      local _choice
+      PMODE=""
+      while :; do
+        t ADD_PROMPT_MODE_PS3
+        read -r _choice || { PMODE=""; break; }
+        case "$_choice" in
+          1) PMODE=bypassPermissions; break ;;
+          2) PMODE=acceptEdits; break ;;
+          3) PMODE=auto; break ;;
+          4) PMODE=default; break ;;
+          5) PMODE=dontAsk; break ;;
+          6) PMODE=plan; break ;;
+          7|"") PMODE=""; break ;;
+          acceptEdits|auto|bypassPermissions|default|dontAsk|plan) PMODE="$_choice"; break ;;
+          *) te ERR_ADD_MODE_CHOICE ;;
+        esac
+      done
     fi
 
-    # 4.6) 공통 설정 파일 시드 (없으면)
+    # ── 커밋 구간: 모든 입력이 검증됨. 이제부터만 디스크에 쓴다. ──────────────────
+    # 등록 전 비정상 종료(쓰기 실패 등) 시 우리가 새로 만든 SD 만 정리한다(DEC-004, EXIT trap).
+    # 사전에 존재하던 디렉터리는 절대 건드리지 않는다(P-002). 등록(point of no return) 후 trap 해제.
     ensure_shared_settings
+    CCTG_ADD_CLEANUP_DIR=""
+    trap '[ -n "${CCTG_ADD_CLEANUP_DIR:-}" ] && rm -rf "$CCTG_ADD_CLEANUP_DIR"' EXIT
+    [ -e "$SD" ] || CCTG_ADD_CLEANUP_DIR="$SD"
+    mkdir -p "$SD/inbox" || die ERR_ADD_WRITE "$SD/inbox"
 
-    # 5) launch.env 템플릿 (봇 전용 옵션 — cctg config <name> 로 수정)
-    #    템플릿 주석은 봇 상태 디렉터리에 기록되는 파일 내용이라 언어 분리 대상이 아니다.
-    cat > "$SD/launch.env" <<'ENV'
+    # 토큰 → .env (600). umask 077 서브셸로 생성 — 먼저 만들고 chmod 하면 그 사이 world-readable 창이 생긴다.
+    ( umask 077; printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env" ) || die ERR_ADD_WRITE "$SD/.env"
+
+    # access.json — groups 미지정은 heredoc(jq 불요 — jq 없는 환경의 일반 add 동작 보존), 지정 시 사전 구성한 groups_json 으로 jq -n.
+    if [ -z "$opt_groups" ]; then
+      cat > "$SD/access.json" <<JSON || die ERR_ADD_WRITE "$SD/access.json"
+{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
+JSON
+    else
+      jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
+        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}' > "$SD/access.json" || die ERR_ADD_WRITE "$SD/access.json"
+    fi
+
+    # launch.env 템플릿 (봇 전용 옵션 — cctg config <name> 로 수정)
+    # 템플릿 주석은 봇 상태 디렉터리에 기록되는 파일 내용이라 언어 분리 대상이 아니다.
+    cat > "$SD/launch.env" <<'ENV' || die ERR_ADD_WRITE "$SD/launch.env"
 # 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
 
 # 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
@@ -162,8 +189,10 @@ CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
     [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
 
-    # 6) 레지스트리 등록 (4번째 컬럼 = 채널 타입)
-    printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY"
+    # 레지스트리 등록 (4번째 컬럼 = 채널 타입) — point of no return. 이후 cleanup 해제.
+    printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY" || die ERR_ADD_WRITE "$REGISTRY"
+    CCTG_ADD_CLEANUP_DIR=""
+    trap - EXIT
 
     t ADD_DONE "$NAME" "$CWD" "$SD"
     # allowlist(ID 시드) → 페어링 불필요 안내 / pairing(ID 미제공) → 페어링 절차 안내(ADR-004)
