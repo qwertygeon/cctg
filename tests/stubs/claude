@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Fake claude CLI for the cctg test suite.
+#
+# cctg's `up` path now refuses to start a bot when `claude` is absent from PATH
+# (need_claude guard), so the suite puts this no-op stub on PATH to satisfy the
+# guard. It is never actually executed by the fake tmux (which records sessions
+# without running their command), so it only needs to exist and exit cleanly.
+exit 0

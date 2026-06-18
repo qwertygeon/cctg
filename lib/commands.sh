@@ -159,8 +159,8 @@ EOF
     [ -e "$SD" ] || CCTG_ADD_CLEANUP_DIR="$SD"
     mkdir -p "$SD/inbox" || die ERR_ADD_WRITE "$SD/inbox"
 
-    # 토큰 → .env (600). umask 077 서브셸로 생성 — 먼저 만들고 chmod 하면 그 사이 world-readable 창이 생긴다.
-    ( umask 077; printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env" ) || die ERR_ADD_WRITE "$SD/.env"
+    # 토큰 → .env (600, 원자적). write_token_env: 임시파일(mktemp 0600)→mv 로 부분/빈 파일·world-readable 창 제거.
+    write_token_env "$SD/.env" "$(channel_spec "$CH" token_key)" "$TOKEN" || die ERR_ADD_WRITE "$SD/.env"
 
     # access.json — groups 미지정은 heredoc(jq 불요 — jq 없는 환경의 일반 add 동작 보존), 지정 시 사전 구성한 groups_json 으로 jq -n.
     if [ -z "$opt_groups" ]; then
@@ -240,17 +240,20 @@ cmd_rename() {
     sd_raw="$(cut -f2 <<<"$row")"
     sd="$(expand "$sd_raw")"
     # 상태 디렉터리가 기본 경로($CHANNELS_DIR/<old>)면 함께 이동, 커스텀 경로면 유지
-    new_sd="$sd_raw"
+    new_sd="$sd_raw"; local moved=0
     if [ "$KEEPDIR" = 0 ] && [ "$sd" = "$CHANNELS_DIR/$OLD" ]; then
       target="$CHANNELS_DIR/$NEW"
       [ -e "$target" ] && die ERR_TARGET_EXISTS "$target"
       mv "$sd" "$target" || die ERR_MOVE_FAILED "$sd" "$target"
-      new_sd="$target"
-      t RENAME_MOVED "$sd" "$target"
-    else
-      t RENAME_KEPT "$sd"
+      new_sd="$target"; moved=1
     fi
-    rename_registry_line "$OLD" "$NEW" "$new_sd" || die ERR_REGISTRY_UPDATE
+    # 레지스트리 갱신 실패 시 이미 옮긴 디렉터리를 원위치로 롤백 — 디렉터리는 새 경로인데 레지스트리는
+    # 옛 경로를 가리키는 불일치(봇 깨짐)를 방지한다. 출력은 등록 확정 후에만 낸다.
+    if ! rename_registry_line "$OLD" "$NEW" "$new_sd"; then
+      [ "$moved" = 1 ] && mv "$target" "$sd" 2>/dev/null
+      die ERR_REGISTRY_UPDATE
+    fi
+    if [ "$moved" = 1 ]; then t RENAME_MOVED "$sd" "$target"; else t RENAME_KEPT "$sd"; fi
     t RENAME_DONE "$OLD" "$NEW"
     t RENAME_NEXT "$PROG" "$NEW"
 }
@@ -359,8 +362,8 @@ ENV
         else t ADD_PROMPT_TOKEN; read -rs NEWTOK; echo; fi
         [ -z "$NEWTOK" ] && die ERR_EMPTY_TOKEN
         local tk; tk="$(channel_spec "$cfg_channel" token_key)"
-        # umask 077 서브셸로 생성 — chmod 후행 시의 순간 world-readable 창 제거.
-        ( umask 077; printf '%s=%s\n' "$tk" "$NEWTOK" > "$sd/.env" )
+        # 원자적 교체(임시파일→mv) + 실패 가드 — 직접 `>` 쓰기는 중단 시 기존 토큰을 빈/부분 파일로 깨뜨린다.
+        write_token_env "$sd/.env" "$tk" "$NEWTOK" || die ERR_ADD_WRITE "$sd/.env"
         t CFG_TOKEN_SET "$NAME"
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
@@ -423,6 +426,7 @@ _lifecycle_apply() {
 # 처리 건수 ≥2 면 성공/실패 요약 1줄 출력. 하나라도 실패하면 비0 반환(전부 성공 0).
 _lifecycle_run() {
   local action="$1"; shift
+  need_tmux || return 1
   local ok=0 fail=0 failed="" arg n
   for arg in "$@"; do
     if [ "$arg" = all ]; then
@@ -569,6 +573,7 @@ status_json() {
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
+    printf '%s' "$N" | grep -qE '^[0-9]+$' || die ERR_BAD_LOG_N "$N"
     # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
     if is_reserved_name "$NAME"; then
       # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
@@ -604,6 +609,7 @@ cmd_logs() {
 
 cmd_attach() {
     NAME="${1:?name 필요}"
+    need_tmux || exit 1
     is_running "$NAME" || die ERR_NOT_RUNNING "$NAME" "$PROG" "$NAME"
     t ATTACH_DETACH_HINT
     tmux attach -t "$(sess_t "$NAME")"

@@ -251,6 +251,16 @@ load test_helper
   [ ! -e "$CC_CHANNELS_DIR/mybot" ]
 }
 
+@test "add: .env written atomically via write_token_env — content, 600, no temp residue" {
+  BOT_TOKEN="atomictok" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 1
+  [ "$status" -eq 0 ]
+  grep -q '^TELEGRAM_BOT_TOKEN=atomictok$' "$CC_CHANNELS_DIR/mybot/.env"
+  [ "$(file_mode "$CC_CHANNELS_DIR/mybot/.env")" = "600" ]
+  # the mktemp staging file must have been mv'd into place (no .env.* residue)
+  run bash -c 'ls "$CC_CHANNELS_DIR/mybot"/.env.* 2>/dev/null'
+  [ -z "$output" ]
+}
+
 @test "add: a failed attempt leaves no foreign-statedir dead-end — retry succeeds (DEC-004)" {
   # First attempt dies on a bad id (after token), creating no state dir.
   run bash -c "printf 'tok\nabc\n' | bash '$CCTG' add mybot '$WORK'"

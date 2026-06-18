@@ -28,6 +28,16 @@ conf_unset() {
   tmp="$(mktemp)" || return 1
   awk -F= -v k="$key" '$1==k{next}{print}' "$file" > "$tmp" && mv "$tmp" "$file"
 }
+# 토큰 .env 를 원자적으로 작성(`KEY=value` 단일 행). 같은 디렉터리의 임시 파일에 쓰고 mv 로 교체해
+# 부분/빈 파일이 남지 않게 한다(`>` 직접 쓰기는 truncate 후 중단 시 토큰이 깨진다). mktemp 가 0600 으로
+# 생성하므로 world-readable 창이 없다. 성공 0 / 실패 비0(호출측이 die 처리). [P-003 / TODO 비원자적 쓰기]
+write_token_env() {
+  local file="$1" key="$2" val="$3" tmp
+  tmp="$(mktemp "${file%/*}/.env.XXXXXX")" || return 1
+  printf '%s=%s\n' "$key" "$val" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+}
+
 # launch.env 에 KEY="value" upsert (있으면 치환, 없으면 추가). 값은 그대로 기록(셸 치환 주의는 호출측 책임).
 set_env_kv() {
   local file="$1" key="$2" val="$3" tmp
