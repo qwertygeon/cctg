@@ -240,6 +240,10 @@ If the bot does not respond:
 - **Shows BROKEN in `status`?** The working directory is missing, or the `.env` token file is absent. Recreate the working directory or re-register the bot.
 - **Permission prompts or stalling?** See [permissions.md](permissions.md).
 
+## Operator responsibilities
+
+Running this bot makes you a Discord bot operator and a user of the Anthropic API. Discord's developer terms **require** every bot to publish a privacy policy (and prohibit commercializing platform "API data"); you should also disclose that the bot is an AI if others can reach it, and note that your use is subject to your own Anthropic plan terms and Usage Policy. See **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)**.
+
 ## See also
 
 - [installation.md](installation.md)

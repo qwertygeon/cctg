@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Documented bot-operator legal responsibilities**: a new "Your responsibilities as a bot operator" section in [SECURITY.md](SECURITY.md) surfaces obligations that come from the upstream services rather than from CCTG — your use is governed by your own Anthropic plan terms (Commercial/Consumer) and Usage Policy (CCTG only invokes the official `claude` CLI and never extracts/reuses credentials); consumer-facing bots must disclose they are AI; Discord **requires** a per-bot privacy policy and prohibits commercializing platform "API data"; Telegram expects lawful data handling. The README privacy/disclaimer callout (en/ko) gained a pointer, and the Telegram/Discord setup guides (en/ko) gained an "Operator responsibilities" note. Documentation only; not legal advice. (`SECURITY.md`, `README.md`, `README.ko.md`, `docs/telegram-setup*.md`, `docs/discord-setup*.md`)
+
 ### Changed
 - **Interactive `cctg add` permission-mode prompt is now a numbered menu**: instead of free-typing a mode name, the interactive prompt lists the choices `1) bypassPermissions  2) acceptEdits  3) auto  4) default  5) dontAsk  6) plan  7) (follow shared)` and reads a number. An invalid entry re-prompts instead of aborting; pressing Enter or `7` follows the shared policy; typing a mode name still works. Shell tab-completion cannot reach a running `read` prompt, so a menu is the only way to make the fixed value set selectable inline. The display order is fixed with `bypassPermissions` first and `acceptEdits` second (independent of the validation set order). (`lib/commands.sh`, `messages/*.sh`, docs)
 
