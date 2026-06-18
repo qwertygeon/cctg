@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **tmux session prefix collision**: when one bot's name was a prefix of another's (e.g. `cc-tg` and `cc-tg-discord`), `up` / `down` / `restart` / `status` / `logs` / `attach` could act on the wrong session. tmux resolves a `-t <name>` target by prefix (and fnmatch) when no exact session exists, so with only the longer-named session running, `status` showed the shorter bot as running and `down cc-tg` killed `cc-tg-discord`. All session *lookup/kill* targets now force exact matching via the `=<name>` prefix (`lib/session.sh`, `lib/commands.sh`); session *creation* (`new-session -s`) is unaffected. The fake-tmux test stub now reproduces real tmux's prefix matching (it previously matched only exactly, masking the bug), and `tests/up_down.bats` gains two prefix-collision regression tests.
+
 ## [0.5.0] - 2026-06-17
 
 ### Added
