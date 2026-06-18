@@ -1,4 +1,4 @@
-# decisions — v0.6.0/001-multi-target-lifecycle
+# decisions — v0.5.0/002-multi-target-lifecycle
 
 > 작성: 2026-06-18 13:12 / 상태: ACTIVE
 
