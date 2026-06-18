@@ -81,7 +81,9 @@ Running `cctg add` with no token flags prompts you for three things, in order:
 
 1. **Bot token** — pasted with masked input (your keystrokes are hidden).
 2. **Your Telegram numeric ID** — must be digits only (`^[0-9]+$`), or `add` refuses it.
-3. **Permission mode** — press Enter to follow the shared policy, or type one of `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`.
+3. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
+
+Nothing is written to disk until all three inputs validate, so a mistyped entry never leaves a half-created bot behind.
 
 Example session (token masked):
 
@@ -89,7 +91,11 @@ Example session (token masked):
 $ cctg add myproject ~/work/myproject
 Bot token (issued by @BotFather, must be a NEW bot): ********
 Your Telegram numeric ID: 123456789
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  1) bypassPermissions   2) acceptEdits   3) auto
+  4) default             5) dontAsk       6) plan
+  7) (follow shared)
+Number [1-7, Enter=follow shared]: 1
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
 ```
