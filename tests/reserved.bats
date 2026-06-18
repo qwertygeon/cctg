@@ -203,7 +203,7 @@ seed_global() {
   [ "$status" -eq 0 ]
   local env="$CC_CHANNELS_DIR/telegram/.env"
   [ "$(cat "$env")" = "TELEGRAM_BOT_TOKEN=SECRET" ]
-  [ "$(stat -f '%Lp' "$env" 2>/dev/null || stat -c '%a' "$env")" = "600" ]
+  [ "$(file_mode "$env")" = "600" ]
 }
 
 @test "config discord token: uses DISCORD_BOT_TOKEN (channel == bot name)" {
