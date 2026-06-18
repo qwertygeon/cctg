@@ -48,3 +48,56 @@ make_jqless_path() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Discord"* ]]
 }
+
+# --- v0.5.1/004: cwd/state readability (B aligned split + C ~ shortening) ---
+
+@test "status: cwd and state render on separate lines (B)" {
+  seed_bot mybot
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cwd"* ]]
+  [[ "$output" == *"state"* ]]
+  # they used to share one line; now no single line carries both
+  ! grep -qE 'cwd.*state' <<<"$output"
+}
+
+@test "status: home paths are shortened to ~ (C)" {
+  mkdir -p "$HOME/proj"
+  seed_bot hbot "$HOME/proj"
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"~/proj"* ]]          # cwd shown tilde-shortened
+  [[ "$output" != *"$HOME/proj"* ]]      # not the full absolute home path
+}
+
+# --- v0.5.1/005: state sort (running → broken → stopped) ---
+
+@test "status: sorts RUNNING above BROKEN above stopped (registry order alpha,bravo,charlie)" {
+  seed_bot alpha       # stopped (token + cwd present, not running)
+  seed_bot bravo       # will be marked running
+  seed_bot charlie     # broken: remove its token
+  mark_running bravo
+  rm -f "$CC_CHANNELS_DIR/charlie/.env"
+  run cctg status
+  [ "$status" -eq 0 ]
+  local r b s
+  r=$(grep -n '\[RUNNING\] bravo'  <<<"$output" | head -1 | cut -d: -f1)
+  b=$(grep -n '\[BROKEN \] charlie' <<<"$output" | head -1 | cut -d: -f1)
+  s=$(grep -n '\[stopped\] alpha'   <<<"$output" | head -1 | cut -d: -f1)
+  [ -n "$r" ] && [ -n "$b" ] && [ -n "$s" ]
+  [ "$r" -lt "$b" ]   # running sorts above broken
+  [ "$b" -lt "$s" ]   # broken sorts above stopped
+}
+
+@test "status: within the same state, registry order is preserved (stable)" {
+  seed_bot one
+  seed_bot two
+  mark_running one
+  mark_running two
+  run cctg status
+  [ "$status" -eq 0 ]
+  local p1 p2
+  p1=$(grep -n '\[RUNNING\] one' <<<"$output" | head -1 | cut -d: -f1)
+  p2=$(grep -n '\[RUNNING\] two' <<<"$output" | head -1 | cut -d: -f1)
+  [ "$p1" -lt "$p2" ]   # one registered before two → stays first
+}

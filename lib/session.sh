@@ -85,8 +85,8 @@ up_one() {
   row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name"; return 1; }
   cwd="$(expand "$(cut -f1 <<<"$row")")"
   sd="$(expand "$(cut -f2 <<<"$row")")"
-  [ -d "$cwd" ] || { te ERR_NO_CWD "$cwd"; return 1; }
-  [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$sd/.env"; return 1; }
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }
+  [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }
   if is_running "$name"; then t ALREADY_RUNNING "$name"; return 0; fi
   # claude 부재 시 세션은 exec bash 로 살아남아 거짓 UP 이 되므로 기동 전에 거부.
   need_claude || return 1
@@ -119,7 +119,7 @@ up_one() {
   if ! tmux new-session -d -s "$(sess_of "$name")" "bash -lc $(printf '%q' "$launch")"; then
     te ERR_UP_FAILED "$name"; return 1
   fi
-  t UP_OK "$name" "$cwd" "$sd" "$(sess_of "$name")"
+  t UP_OK "$name" "$(tilde "$cwd")" "$(tilde "$sd")" "$(sess_of "$name")"
 
   # 옵트인: launch.env 의 CCTG_LOG_SNAPSHOT_INTERVAL(초)가 양수면 주기 스냅샷 watcher 기동.
   local snap_iv; snap_iv="$(snapshot_interval_of "$sd")"
@@ -172,8 +172,8 @@ up_reserved() {
   channel_spec "$ch" plugin >/dev/null 2>&1 || { te ERR_RESERVED_UNSUPPORTED "$ch"; return 1; }
   sd="$CHANNELS_DIR/$ch"
   cwd="$PWD"                                                            # DEC-001: cctg 호출 시점 현재 작업 디렉터리
-  [ -d "$cwd" ] || { te ERR_NO_CWD "$cwd"; return 1; }                 # up_one 과 동형 가드
-  [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$sd/.env"; return 1; }       # SC-017
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }                 # up_one 과 동형 가드
+  [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }       # SC-017
   # 단독소유자 가드: cctg-<ch> tmux 세션 OR bot.pid 생존 (ADR-007)
   if is_running "$ch"; then te ERR_RESERVED_UP_OCCUPIED "$ch"; return 1; fi
   if reserved_runner_alive "$sd"; then te ERR_RESERVED_UP_RUNNER "$ch"; return 1; fi
