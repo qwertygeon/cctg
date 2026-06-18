@@ -83,7 +83,9 @@ cctg add <name> <working_dir> --channel discord
 
 1. **봇 토큰** — 가려진 입력으로 붙여넣는다(입력한 키가 화면에 보이지 않는다).
 2. **본인 Discord user snowflake** — Discord 에서는 *선택 사항*이다. Enter 로 건너뛸 수 있다(이 경우 페어링 모드가 선택된다). 입력한다면 숫자만(`^[0-9]+$`) 가능하며, 아니면 `add` 가 거부한다.
-3. **권한 모드** — Enter 를 누르면 공통 정책을 따르고, 아니면 `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan` 중 하나를 입력한다.
+3. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
+
+모든 입력이 검증되기 전에는 디스크에 아무것도 쓰지 않으므로, 잘못 입력해도 반쪽 생성된 봇이 남지 않는다.
 
 ID 를 건너뛰는 예시 세션(토큰 가려짐):
 
@@ -91,7 +93,11 @@ ID 를 건너뛰는 예시 세션(토큰 가려짐):
 $ cctg add mybot ~/work/mybot --channel discord
 Bot token: ********
 Discord user snowflake:
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  1) bypassPermissions   2) acceptEdits   3) auto
+  4) default             5) dontAsk       6) plan
+  7) (follow shared)
+Number [1-7, Enter=follow shared]: 1
 Registered: mybot → cwd=/Users/you/work/mybot, state=/Users/you/.claude/channels/mybot
 ```
 
