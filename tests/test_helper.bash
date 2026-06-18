@@ -24,6 +24,10 @@ setup() {
   export PATH="$REPO_ROOT/tests/stubs:$PATH"
   export FAKE_TMUX_STATE="$BATS_TEST_TMPDIR/.tmux-sessions"
   : > "$FAKE_TMUX_STATE"
+  # Liveness (claude_alive): the tmux stub returns this as '#{pane_pid}', and the ps
+  # stub's default tree gives that pid a `claude` child — so a running session reads
+  # as RUNNING. Tests simulate DEAD by overriding FAKE_PS_TREE with a claude-less tree.
+  export FAKE_TMUX_PANE_PID="700001"
 
   # Convenience handles to the files the script derives from CC_CHANNELS_DIR.
   REGISTRY="$CC_CHANNELS_DIR/projects.conf"

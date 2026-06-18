@@ -10,7 +10,6 @@
 ## 목차
 
 - [게이트웨이 회복력 / 감독](#게이트웨이-회복력--감독)
-  - [P1 — 헬스 기반 liveness (거짓 UP 제거)](#p1--헬스-기반-liveness-거짓-up-제거)
   - [P2 — 크래시 자동 복구 (restart-on-failure, 옵트인)](#p2--크래시-자동-복구-restart-on-failure-옵트인)
   - [P2 — 재부팅 지속성 (launchd 자동기동, 옵트인)](#p2--재부팅-지속성-launchd-자동기동-옵트인)
   - [P3 — 장애 통지](#p3--장애-통지)
@@ -33,16 +32,9 @@
 
 ## 게이트웨이 회복력 / 감독
 
-> README 의 "저장소에 장기 실행 어시스턴트를 붙여 둔다" 시나리오를 기준으로, 봇이 죽거나 멈추거나 사라졌을 때의 감지·복구·지속성이 현재 가장 약한 영역이다. 4개 항목은 하나의 "supervision" 결손 묶음이다.
-
-### P1 — 헬스 기반 liveness (거짓 UP 제거)
-
-세션 안의 `claude` 프로세스가 죽어도(API 오류·네트워크 끊김·OOM·크래시) 런처가 세션을 살려두어 `status` 가 "RUNNING" 으로 오보한다.
-
-- **위치/근거**: `lib/session.sh:11` `is_running()` 은 `tmux has-session` 만 확인한다. 기동 launch 문자열은 `... caffeinate -is claude ...; exec bash`(`lib/session.sh:116`)로 끝나, `claude` 종료 후에도 pane 에 bash 가 남아 세션이 생존한다(주석 `lib/session.sh:91` 이 이 동작을 인지). `status` 의 uptime 은 `session_created` 기반이라 실제 봇 생존과 무관하다.
-- **무엇**: `status`(및 필요 시 `is_running`)가 tmux 세션 존재뿐 아니라 **세션 내 `claude` 프로세스 생존**을 확인해 `RUNNING` / `DEAD`(세션은 있으나 claude 없음) / `STOPPED` 를 구분. `status` 에 last-activity(예: `last-session.log` mtime) 표기 검토.
-- **주의**: 헤드리스 `claude` 를 tmux pane 에서 식별하는 방법(pane current command, pane pid 트리 탐색)을 BSD `ps`/Bash 3.2 에서 검증해야 한다(P-001). fake tmux stub 이 pane 명령/프로세스 상태를 흉내내도록 테스트 확장 필요.
-- **규모/효과**: 저~중 비용 · 고효과. 게이트웨이 신뢰성의 핵심.
+> README 의 "저장소에 장기 실행 어시스턴트를 붙여 둔다" 시나리오를 기준으로, 봇이 죽거나 멈추거나 사라졌을 때의 감지·복구·지속성이 현재 가장 약한 영역이다. 아래 항목은 하나의 "supervision" 결손 묶음이다.
+>
+> **P1(헬스 기반 liveness, 거짓 UP 제거) 해결됨** — v0.5.1/006-liveness-dead-state: `status`/`--json` 이 pane 자손 트리의 `claude` 생존을 확인해 `DEAD`(세션은 있으나 claude 종료)를 구분한다. 자동복구(아래 P2)·통지(P3)는 그 감지 위에서 이어간다.
 
 ### P2 — 크래시 자동 복구 (restart-on-failure, 옵트인)
 

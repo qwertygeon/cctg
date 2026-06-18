@@ -16,6 +16,28 @@ sess_t()  { printf '=%s'  "$(sess_of "$1")"; }
 sess_pt() { printf '=%s:' "$(sess_of "$1")"; }
 is_running() { tmux has-session -t "$(sess_t "$1")" 2>/dev/null; }
 
+# 세션 안의 claude(채널-무관 게이트웨이 본체)가 살아있는지 — 거짓 UP 판별용.
+# is_running 은 tmux 세션 존재만 본다. launch 가 '...; exec bash' 로 끝나므로 claude 종료 후에도
+# pane 에 bash 가 남아 세션이 생존한다(거짓 UP). pane_current_command 는 claude 생존 중에도 "bash"
+# 로 나와 신뢰할 수 없어(실측), pane_pid 의 프로세스 자손 트리에서 comm==claude 를 찾는다.
+# 모든 채널이 동일 launch(caffeinate -is claude --channels …)로 떠 채널 플러그인이 claude 의
+# 자식으로 동작하므로, claude 가 채널 불문 단일 불변 신호다.
+# BSD ps / Bash 3.2 호환: 맵·BFS 는 awk 가 수행(bash 연관배열 미사용). comm 만 보므로 토큰 비노출.
+claude_alive() {
+  local pp
+  pp="$(tmux display-message -p -t "$(sess_pt "$1")" '#{pane_pid}' 2>/dev/null)"
+  printf '%s' "$pp" | grep -qE '^[0-9]+$' || return 1
+  ps -ax -o pid=,ppid=,comm= 2>/dev/null | awk -v root="$pp" '
+    { ppid[$1]=$2; comm[$1]=$3 }
+    END {
+      n=0; q[n++]=root
+      for (i=0; i<n; i++)
+        for (p in ppid)
+          if (ppid[p]==q[i]) { q[n++]=p; if (comm[p] ~ /(^|\/)claude$/) found=1 }
+      exit found?0:1
+    }'
+}
+
 # detached 세션 기동 공통 경로(일반봇·예약봇 공용). 호출자가 동일 launch 문자열을 만들고
 # 본 함수로 위임한다 — 채널 종류가 늘어도 기동 형식/폭을 한 곳에서 관리한다.
 #   - 명령 전달은 다중 인자 직접형(bash -lc "$launch")으로 통일한다: 단일 인자형은 tmux 가
