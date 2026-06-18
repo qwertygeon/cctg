@@ -136,13 +136,15 @@ down_one() {
   local name="$1" row sd=""
   [ -n "$name" ] && row="$(lookup "$name")" && sd="$(expand "$(cut -f2 <<<"$row")")"
   if is_running "$name"; then
-    # 정지 watcher 가 우리 최종 스냅샷을 덮어쓰지 않도록 먼저 멈춘다.
-    [ -n "$sd" ] && stop_snapshotter "$sd"
-    # 종료 전 마지막 세션 출력을 보존한다 — 종료 후에도 `cctg logs` 로 조회 가능.
+    # 종료 전 마지막 세션 출력을 보존한다(live 캡처) — 종료 후에도 `cctg logs` 로 조회 가능.
     [ -n "$sd" ] && take_snapshot "$(sess_of "$name")" "$sd"
+    # 세션을 실제로 종료한 뒤에만 watcher 를 멈춘다 — kill 실패(드묾) 시 watcher 가 계속 돌아
+    # "watcher 는 멈췄는데 세션은 살아있는" 불일치를 피한다. kill 성공 시 watcher 는 다음 틱에서
+    # has-session=false 로 스스로 멈추지만, 즉시 정지 + pidf 정리를 위해 명시적으로 stop 한다.
     if ! tmux kill-session -t "$(sess_t "$name")"; then
       te ERR_DOWN_FAILED "$name"; return 1
     fi
+    [ -n "$sd" ] && stop_snapshotter "$sd"
     t DOWN_OK "$name"
   else
     # 세션이 외부에서 종료된 경우 남아 있을 수 있는 watcher PID 파일을 정리한다.
