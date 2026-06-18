@@ -6,16 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-18
+
 ### Added
 - **Multiple targets for `up` / `down` / `restart`**: these commands now accept several targets in one call (e.g. `cctg up proj1 proj2 telegram`), processed sequentially left to right. Targets may mix registered bot names, the reserved channel names (`telegram` / `discord`), and `all`. Processing is **continue-on-error** — a failing target does not abort the rest; when two or more targets are processed a summary line is printed (succeeded / failed counts and the failed names), and the command exits non-zero if any target failed. A single target behaves exactly as before (no summary). `logs` / `attach` remain single-target. Shell completions (bash + zsh) now complete bot names at every target position for these three commands. (`lib/commands.sh`, `messages/*.sh`, `completions/*`)
-
-### Fixed
-- **Snapshot watcher PID-reuse guard**: `stop_snapshotter` no longer kills a PID blindly from `.snapshotter.pid`. The watcher is now launched with an identifying marker (`cctg-snapshotter:<session>`) in its argv, recorded as the pid file's second line; on stop, the PID is killed only if its command line (`ps -ww -o command=`) still carries that marker. A stale pid file whose PID was recycled by an unrelated process is cleaned up without killing that process. Pid files without a marker (created before this change) fall back to the previous behaviour. Regression test added in `tests/snapshot.bats`.
-- **tmux session prefix collision**: when one bot's name was a prefix of another's (e.g. `cc-tg` and `cc-tg-discord`), `up` / `down` / `restart` / `status` / `logs` / `attach` could act on the wrong session. tmux resolves a `-t <name>` target by prefix (and fnmatch) when no exact session exists, so with only the longer-named session running, `status` showed the shorter bot as running and `down cc-tg` killed `cc-tg-discord`. All session *lookup/kill* targets now force exact matching via the `=<name>` prefix (`lib/session.sh`, `lib/commands.sh`); session *creation* (`new-session -s`) is unaffected. The fake-tmux test stub now reproduces real tmux's prefix matching (it previously matched only exactly, masking the bug), and `tests/up_down.bats` gains two prefix-collision regression tests.
-
-## [0.5.0] - 2026-06-17
-
-### Added
 - **`cctg config <name> cwd <path>`**: change the working directory of a registered bot without re-registering. The registry is updated atomically (awk+mktemp+mv, same pattern as the existing registry mutations). An error is printed if the target path does not exist; if the bot is running, a restart reminder is shown (FR-001).
 - **`cctg config <name> token`**: replace a registered bot's token. The `.env` file is rewritten with the channel-specific key (`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`) and the file mode is set to `600`. Token input accepts the same three forms as `add`: interactive masked prompt, `--token-env <VAR>`, or `--token-stdin`. Passing the token as a plain argument remains refused (constitution P-003). If the bot is running, a restart reminder is shown (FR-002).
 - **`--help` / `-h` per subcommand**: every subcommand now accepts `--help` or `-h` and prints a one-line usage summary, then exits `0`. Implemented via a pre-dispatch inspection loop in `cc-tg.sh` and a new `sub_usage()` function in `lib/util.sh`; the usage text is drawn from the i18n catalog (`USAGE_<SUBCMD>` keys) so it follows the active language (FR-005).
@@ -31,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `cctg config <name>` synopsis updated to include the new `cwd` and `token` actions.
 - Message catalog (`messages/en.sh`, `messages/ko.sh`) extended with 33 new keys covering the new actions and error/success messages; key parity between the two files is maintained (154 keys total).
+
+### Fixed
+- **Snapshot watcher PID-reuse guard**: `stop_snapshotter` no longer kills a PID blindly from `.snapshotter.pid`. The watcher is now launched with an identifying marker (`cctg-snapshotter:<session>`) in its argv, recorded as the pid file's second line; on stop, the PID is killed only if its command line (`ps -ww -o command=`) still carries that marker. A stale pid file whose PID was recycled by an unrelated process is cleaned up without killing that process. Pid files without a marker (created before this change) fall back to the previous behaviour. Regression test added in `tests/snapshot.bats`.
+- **tmux session prefix collision**: when one bot's name was a prefix of another's (e.g. `cc-tg` and `cc-tg-discord`), `up` / `down` / `restart` / `status` / `logs` / `attach` could act on the wrong session. tmux resolves a `-t <name>` target by prefix (and fnmatch) when no exact session exists, so with only the longer-named session running, `status` showed the shorter bot as running and `down cc-tg` killed `cc-tg-discord`. All session *lookup/kill* targets now force exact matching via the `=<name>` prefix (`lib/session.sh`, `lib/commands.sh`); session *creation* (`new-session -s`) is unaffected. The fake-tmux test stub now reproduces real tmux's prefix matching (it previously matched only exactly, masking the bug), and `tests/up_down.bats` gains two prefix-collision regression tests.
 
 ## [0.4.0] - 2026-06-17
 
