@@ -7,6 +7,12 @@
 
 CCTG_MSG_SHARED_CREATED="Created shared settings: %s (defaultMode=bypassPermissions + deny safety net)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: this action requires jq. Edit directly with 'cctg common edit', or install jq (brew install jq).\n"
+CCTG_MSG_ERR_NO_TMUX="ERROR: tmux not found on PATH — install tmux (brew install tmux).\n"
+CCTG_MSG_ERR_NO_CLAUDE="ERROR: claude CLI not found on PATH — install Claude Code before starting a bot.\n"
+CCTG_MSG_ERR_UP_FAILED="ERROR: failed to start the tmux session for '%s' (tmux new-session error)\n"
+CCTG_MSG_ERR_DOWN_FAILED="ERROR: failed to stop the tmux session for '%s' (tmux kill-session error)\n"
+CCTG_MSG_ERR_BAD_LOG_N="ERROR: line count must be a number: '%s'\n"
+CCTG_MSG_WARN_SNAPSHOT_FAILED="warning: snapshot watcher did not start for '%s' (snapshots disabled this run)\n"
 
 CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n                         register a project bot (flags = non-interactive; telegram needs --id)\n                         --channel telegram|discord; --group seeds a discord server channel (repeatable)\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>]\n                         view/edit per-bot options (permission mode, extra args, log snapshot)\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status [--json]        registration/run status (--json: machine-readable)\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
 
