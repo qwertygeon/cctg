@@ -186,13 +186,15 @@ $ cctg restart telegram
 cctg status [--json]
 ```
 
-Prints per-bot status. For each bot it shows the state — `RUNNING` (with uptime) / `stopped` / `BROKEN` — plus the working and state directory paths, the permission mode (or `shared`), and the channel. When `jq` is present and `access.json` exists, the channel line also shows the DM policy and the number of group entries (topology).
+Prints per-bot status. For each bot it shows the state — `RUNNING` (with uptime) / `DEAD` / `BROKEN` / `stopped` — plus the working and state directory paths, the permission mode (or `shared`), and the channel. When `jq` is present and `access.json` exists, the channel line also shows the DM policy and the number of group entries (topology). Bots are listed `RUNNING → DEAD → BROKEN → stopped`.
+
+A bot is `DEAD` when its `tmux` session is still alive but the `claude` process inside it has exited (a crash/exit leaves a bare `bash` in the pane via the launch's `exec bash` tail, which would otherwise look "running"). The state is detected by walking the session pane's process descendant tree for a `claude` process. A `restart` hint is printed; `up` does not auto-restart it.
 
 A bot is `BROKEN` when it is registered but its working directory is missing or its `.env` (token) is absent; a per-reason recovery hint is printed.
 
 A `--- global channel bots ---` section is appended for each reserved channel whose state directory (`~/.claude/channels/<channel>/`) exists. The displayed `cwd` for global bots is the directory from which `cctg status` was invoked (because global bots have no registered working directory).
 
-`--json` emits a machine-readable array of objects with locale-independent tokens (requires `jq`). Each object has `name`, `state` (`running`/`stopped`/`broken`), `running` (bool), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds` (or `null`), and `issues` (e.g. `no-cwd`, `no-token`).
+`--json` emits a machine-readable array of objects with locale-independent tokens (requires `jq`). Each object has `name`, `state` (`running`/`dead`/`broken`/`stopped`), `running` (bool — `false` for `dead`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds` (or `null`; `null` for `dead`), and `issues` (e.g. `no-cwd`, `no-token`).
 
 ```console
 $ cctg status

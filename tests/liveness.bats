@@ -15,6 +15,14 @@ dead_tree() {
   printf '%s 1 bash\n%s %s node\n' "$FAKE_TMUX_PANE_PID" "$((FAKE_TMUX_PANE_PID + 5))" "$FAKE_TMUX_PANE_PID"
 }
 
+# Seed a global (reserved-name) channel bot's state dir + token, like reserved.bats.
+seed_global() {
+  local ch="${1:-telegram}" sd="$CC_CHANNELS_DIR/${1:-telegram}"
+  mkdir -p "$sd"
+  printf 'TELEGRAM_BOT_TOKEN=tok\n' > "$sd/.env"
+  chmod 600 "$sd/.env"
+}
+
 @test "status: a running session with a live claude shows RUNNING" {
   seed_bot mybot
   mark_running mybot
@@ -54,6 +62,59 @@ dead_tree() {
   [ "$status" -eq 0 ]
   [ "$(jq -r '.[0].state' <<<"$output")" = "running" ]
   [ "$(jq -r '.[0].running' <<<"$output")" = "true" ]
+}
+
+@test "status: a reserved (global) bot whose claude exited shows DEAD" {
+  seed_global telegram
+  mark_running telegram
+  export FAKE_PS_TREE="$(dead_tree)"
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[DEAD   ] telegram"* ]]
+  [[ "$output" == *"restart telegram"* ]]
+}
+
+@test "claude_alive matches a full-path claude comm (/usr/local/bin/claude)" {
+  # ps -o comm= prints the full executable path when claude was invoked by path;
+  # the (^|/)claude$ match must still detect it as RUNNING (not DEAD).
+  seed_bot mybot
+  mark_running mybot
+  export FAKE_PS_TREE="$(printf '%s 1 bash\n%s %s /usr/local/bin/claude\n' \
+    "$FAKE_TMUX_PANE_PID" "$((FAKE_TMUX_PANE_PID + 1))" "$FAKE_TMUX_PANE_PID")"
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[RUNNING] mybot"* ]]
+  [[ "$output" != *"[DEAD"* ]]
+}
+
+@test "up: a DEAD project bot reports DEAD + restart hint (no auto-restart)" {
+  seed_bot mybot
+  mark_running mybot
+  export FAKE_PS_TREE="$(dead_tree)"
+  run cctg up mybot
+  [ "$status" -eq 0 ]                       # idempotent no-op exit, per DEC-001
+  [[ "$output" == *"DEAD"* ]]
+  [[ "$output" == *"restart mybot"* ]]
+  [[ "$output" != *"Already running: mybot"* ]]   # not the plain message
+}
+
+@test "up: a live project bot still reports plain 'Already running'" {
+  seed_bot mybot
+  mark_running mybot
+  run cctg up mybot
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Already running: mybot"* ]]
+  [[ "$output" != *"DEAD"* ]]
+}
+
+@test "up: a DEAD reserved bot is refused with a restart hint" {
+  seed_global telegram
+  mark_running telegram
+  export FAKE_PS_TREE="$(dead_tree)"
+  run cctg up telegram
+  [ "$status" -ne 0 ]                        # sole-owner guard refuses (return 1)
+  [[ "$output" == *"DEAD"* ]]
+  [[ "$output" == *"restart telegram"* ]]
 }
 
 @test "status: DEAD bots sort above stopped (running -> dead -> stopped)" {

@@ -186,13 +186,15 @@ $ cctg restart telegram
 cctg status [--json]
 ```
 
-봇별 상태를 출력한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `stopped` / `BROKEN` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다.
+봇별 상태를 출력한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `DEAD` / `BROKEN` / `stopped` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다. 정렬 순서는 `RUNNING → DEAD → BROKEN → stopped`.
+
+봇의 `tmux` 세션은 살아있으나 내부 `claude` 프로세스가 종료되면 `DEAD` 다(크래시·종료 시 launch 의 `exec bash` 꼬리 때문에 pane 에 bash 만 남아 "실행 중"처럼 보이던 거짓 UP). 세션 pane 의 프로세스 자손 트리에서 `claude` 존재 여부로 감지하며, `restart` 복구 힌트를 출력한다(`up` 은 자동 재기동하지 않음).
 
 봇은 등록되어 있으나 작업 디렉터리가 없거나 `.env`(토큰) 가 없으면 `BROKEN` 이며, 사유별 복구 힌트가 출력된다.
 
 상태 디렉터리(`~/.claude/channels/<channel>/`)가 존재하는 예약 채널에 대해서는 `--- 전역 채널 봇 ---` 섹션이 이어서 출력된다. 전역 봇의 `cwd` 는 `cctg status` 를 실행한 시점의 현재 디렉터리다(전역 봇은 레지스트리에 작업 디렉터리가 없으므로).
 
-`--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`stopped`/`broken`), `running`(불리언), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
+`--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`dead`/`broken`/`stopped`), `running`(불리언 — `dead` 면 `false`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`; `dead` 면 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
 
 ```console
 $ cctg status
