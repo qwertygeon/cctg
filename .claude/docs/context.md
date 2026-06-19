@@ -31,7 +31,7 @@
 | 메시지 카탈로그 | `messages/en.sh`, `messages/ko.sh` | i18n 출력 문자열(`CCTG_MSG_*` 스칼라). `t()`/`te()`/`die()` 가 키로 조회 | en=베이스, 선택언어 overlay |
 | 자동완성 | `completions/cctg.bash`, `completions/_cctg` | bash/zsh 명령·플래그·봇이름 완성 | zsh 는 `#compdef` |
 | 검증 스크립트 | `scripts/check-i18n-keys.sh` | en/ko 키 패리티 + 참조 키 검증 | CI lint |
-| 테스트 | `tests/*.bats`, `tests/test_helper.bash`, `tests/stubs/tmux` | 격리 상태 트리 + stateful fake tmux 로 명령·lifecycle 검증(119) | 실제 봇/tmux 무접촉 |
+| 테스트 | `tests/*.bats`, `tests/test_helper.bash`, `tests/stubs/{tmux,ps,claude}` | 격리 상태 트리 + stateful fake tmux(+조건부 ps stub: liveness 트리) 로 명령·lifecycle 검증(201) | 실제 봇/tmux 무접촉 |
 | 설치/제거 | `install.sh`, `uninstall.sh` | copy(libexec) / `--dev`(symlink) 설치, 매니페스트·완성·셸rc 관리, 대칭 제거 | |
 | 문서 | `docs/` (RELEASING·TODO·i18n·packaging), `README(.ko).md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` | 사용자·기여자 문서 | |
 | CI/릴리스 | `.github/workflows/ci.yml`, `release.yml` | lint+test(main) / VERSION 변경→태그·Release 자동 발행 | |
@@ -54,12 +54,17 @@
 
 ```
 봇: (미등록) → registered → running → stopped
+                              ↘ DEAD   (tmux 세션 생존 · claude 종료)
                               ↘ BROKEN (cwd 없음 / 토큰 없음 등 issue)
   - 미등록 → registered: add
   - registered → running: up (tmux 세션 생성)
   - running → stopped: down (스냅샷 + 세션 kill)
+  - running → DEAD: 세션 launch 의 `exec bash` 꼬리 때문에 claude 종료 후에도 세션이 살아있는 상태.
+      status 가 pane 자손 트리에서 claude 생존을 확인해 구분(claude_alive). 자동 복구 안 함 — 수동 restart.
+      `is_running`(tmux 세션 존재)은 여전히 true 라 up 은 "이미 실행 중"이 아니라 DEAD 안내 메시지 출력.
   - registered/running → BROKEN: status 점검에서 cwd 부재·토큰(.env) 부재 등 발견
   - * → (미등록): rm (--purge 시 상태 디렉터리도 삭제)
+  - status 정렬·표시: RUNNING → DEAD → BROKEN → stopped
 ```
 
 ### 3.4 외부 시스템 연동

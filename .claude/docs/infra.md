@@ -36,7 +36,7 @@
 
 ## 4. 모니터링·로깅
 
-- 실시간: `cctg attach`(tmux 세션), `cctg logs <name> [N]`(pane 또는 정지 시 `last-session.log` 폴백), `cctg status [--json]`(RUNNING/uptime/BROKEN + 복구 힌트).
+- 실시간: `cctg attach`(tmux 세션), `cctg logs <name> [N]`(pane 또는 정지 시 `last-session.log` 폴백), `cctg status [--json]`(RUNNING/uptime/DEAD/BROKEN + 복구 힌트; DEAD=세션 생존·claude 종료를 pane 자손 트리로 감지).
 - 스냅샷: `config <name> snapshot <초>` 활성 시 watcher 가 `last-session.log` 주기 갱신(crash/reboot 커버리지).
 - 진단: `cctg doctor` — 의존성(tmux/claude/caffeinate/jq) 존재, PATH, 레지스트리/공통설정 상태 점검.
 
