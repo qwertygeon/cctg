@@ -187,6 +187,10 @@ CLAUDE_EXTRA_ARGS=
 # 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
 # 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
 CCTG_LOG_SNAPSHOT_INTERVAL=
+
+# detached 세션 폭(칼럼). 비우면 전역 기본값(cctg common width / 기본 100)을 따른다.
+# `cctg config <name> width <칼럼|clear>` 로 설정. 최소 20.
+CCTG_SESS_WIDTH=
 ENV
     [ -n "$PMODE" ] && { set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE" || die ERR_ADD_WRITE "$SD/launch.env"; }
 
@@ -289,16 +293,22 @@ CLAUDE_EXTRA_ARGS=
 # 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
 # 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
 CCTG_LOG_SNAPSHOT_INTERVAL=
+
+# detached 세션 폭(칼럼). 비우면 전역 기본값(cctg common width / 기본 100)을 따른다.
+# `cctg config <name> width <칼럼|clear>` 로 설정. 최소 20.
+CCTG_SESS_WIDTH=
 ENV
     fi
     case "$ACTION" in
       show)
-        local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
+        local pm sv wd; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
+        wd="$(sess_width_of "$sd")"; [ -n "$wd" ] || wd="$(t FOLLOW_SHARED_PAREN)"
         t CFG_SHOW_HEADER "$NAME" "$(tilde "$LE")"
         t CFG_SHOW_CHANNEL "$cfg_channel"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
+        t CFG_SHOW_WIDTH "$wd"
         t CFG_SHOW_LAUNCHENV
         cat "$LE" ;;
       edit)
@@ -332,6 +342,18 @@ ENV
             || die ERR_BAD_SNAPSHOT "$S"
           set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL "$S"
           t CFG_SNAPSHOT_SET "$NAME" "$S"
+        fi
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      width)
+        W="${3-}"
+        [ -z "$W" ] && die ERR_CONFIG_WIDTH_USAGE "$PROG" "$NAME"
+        if [ "$W" = clear ] || [ "$W" = default ]; then
+          set_env_kv "$LE" CCTG_SESS_WIDTH ""
+          t CFG_WIDTH_CLEARED "$NAME"
+        else
+          valid_width "$W" || die ERR_BAD_WIDTH "$W"
+          set_env_kv "$LE" CCTG_SESS_WIDTH "$W"
+          t CFG_WIDTH_SET "$NAME" "$W"
         fi
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       cwd)
@@ -379,10 +401,26 @@ cmd_common() {
     ACTION="${1:-show}"
     case "$ACTION" in
       show)
+        local gw src cw; cw="$(conf_get "$CCTG_CONFIG" sess_width)"
+        if   valid_width "${CC_TG_SESS_WIDTH:-}"; then gw="$CC_TG_SESS_WIDTH"; src=env
+        elif valid_width "$cw";                    then gw="$cw";             src=config
+        else gw="$SESS_WIDTH_DEFAULT";                                        src=default; fi
         t COMMON_SHOW_HEADER "$SHARED_SETTINGS"
+        t COMMON_SHOW_WIDTH "$gw" "$src"
         cat "$SHARED_SETTINGS" ;;
       edit)
         "${EDITOR:-vi}" "$SHARED_SETTINGS" ;;
+      width)
+        W="${2-}"
+        [ -z "$W" ] && die ERR_COMMON_WIDTH_USAGE "$PROG"
+        if [ "$W" = clear ] || [ "$W" = default ]; then
+          conf_unset "$CCTG_CONFIG" sess_width
+          t COMMON_WIDTH_CLEARED
+        else
+          valid_width "$W" || die ERR_BAD_WIDTH "$W"
+          conf_set "$CCTG_CONFIG" sess_width "$W"
+          t COMMON_WIDTH_SET "$W"
+        fi ;;
       mode)
         M="${2-}"
         [ -z "$M" ] && die ERR_COMMON_MODE_USAGE "$PROG" "$VALID_MODES"

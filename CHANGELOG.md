@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Configurable detached-session width (`cctg config <name> width` / `cctg common width`)**: the column width pinned on the detached `tmux` session (`new-session -x`, which keeps `logs`/snapshot capture from being truncated at tmux's 80-col default) is now user-configurable at two layers. `cctg config <name> width <cols|clear>` sets a per-bot override in `launch.env` (`CCTG_SESS_WIDTH`); `clear`/`default` removes it so the bot follows the global default. `cctg common width <cols|clear>` sets the **global default**, stored in `~/.config/cctg/config` (`sess_width`) — not in the shared permission settings file, since width is not a permission. The effective width resolves per bot as `config width` → env `CC_TG_SESS_WIDTH` → `common width` → built-in default; each candidate must be an integer ≥ 20. `cctg config show` now reports the session width and `cctg common show` reports the global default (with its source). Shell completions (bash + zsh) and per-subcommand `--help` cover the new `width` actions. (`lib/env.sh`, `lib/util.sh`, `lib/config.sh`, `lib/session.sh`, `lib/commands.sh`, `messages/*.sh`, `completions/*`, docs)
+
+### Changed
+- **Default detached-session width is now `100` (was `200`)**: when nothing is configured (no per-bot value, no `CC_TG_SESS_WIDTH`, no global `common width`), sessions start at 100 columns instead of 200. Set a wider value per bot (`cctg config <name> width 200`) or globally (`cctg common width 200`) to restore the old width. (`lib/env.sh`)
+
 ## [0.5.1] - 2026-06-19
 
 ### Added
