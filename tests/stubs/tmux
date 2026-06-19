@@ -52,12 +52,32 @@ resolve() {
   esac
 }
 
+# Resolve a target-PANE (capture-pane / display-message). Mirrors the real tmux
+# quirk surfaced in production: the '=' exact-match prefix is only valid for a
+# target-SESSION. As a target-pane, a bare '=NAME' (no ':' window/pane part) is
+# NOT resolvable — real tmux errors "can't find pane" (capture-pane) or yields an
+# empty value (display-message). It must carry a ':' (e.g. '=NAME:') to resolve.
+# A plain (no '=') target still resolves via exact-then-prefix on the session.
+# Without this distinction the stub accepts both forms and the regression that
+# passes a bare '=NAME' to a pane command slips through the suite.
+resolve_pane() {
+  local target="$1"
+  case "$target" in
+    "="*) case "$target" in *:*) ;; *) return 1 ;; esac ;;
+  esac
+  resolve "${target%%:*}"
+}
+
 case "$cmd" in
   has-session)
     target="$(flag_val -t "$@")" || exit 1
     [ -n "$(resolve "$target")" ] && exit 0
     exit 1 ;;
   new-session)
+    # Fault injection: a non-empty FAKE_TMUX_FAIL_NEWSESSION makes new-session fail
+    # (models tmux server-unavailable / resource exhaustion) so cctg's up-failure
+    # guard can be exercised. Nothing is recorded as running.
+    [ -n "${FAKE_TMUX_FAIL_NEWSESSION:-}" ] && exit 1
     name="$(flag_val -s "$@")" || exit 0
     if [ -n "$state" ]; then
       grep -qxF "$name" "$state" 2>/dev/null || printf '%s\n' "$name" >> "$state"
@@ -70,6 +90,9 @@ case "$cmd" in
       printf '%s\n' "$@" > "$FAKE_TMUX_LASTCMD"
     fi ;;
   kill-session)
+    # Fault injection: FAKE_TMUX_FAIL_KILL makes kill-session fail (the session is
+    # left as running) so cctg's down-failure guard can be exercised.
+    [ -n "${FAKE_TMUX_FAIL_KILL:-}" ] && exit 1
     target="$(flag_val -t "$@")" || exit 0
     if [ -n "$state" ] && [ -f "$state" ]; then
       # Remove exactly the session(s) the target resolves to (faithful to tmux:
@@ -81,8 +104,24 @@ case "$cmd" in
       fi
     fi ;;
   display-message)
-    printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
+    # target-pane: a bare '=NAME' resolves to nothing -> empty value, rc 0
+    # (faithful to real tmux; this is the silent status/uptime bug's signature).
+    target="$(flag_val -t "$@")" || true
+    if [ -n "$target" ] && [ -z "$(resolve_pane "$target")" ]; then exit 0; fi
+    # Format-aware: '#{pane_pid}' (liveness check) returns FAKE_TMUX_PANE_PID so a test
+    # can point claude_alive's process walk at a tree it controls; everything else
+    # (session_created / pane_current_path) returns FAKE_TMUX_CREATED as before.
+    fmt=""; for fmt in "$@"; do :; done
+    case "$fmt" in
+      *pane_pid*) printf '%s\n' "${FAKE_TMUX_PANE_PID:-0}" ;;
+      *)          printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
+    esac ;;
   capture-pane)
+    # target-pane: a bare '=NAME' can't be resolved -> "can't find pane", rc 1.
+    target="$(flag_val -t "$@")" || { printf "no target\n" >&2; exit 1; }
+    if [ -z "$(resolve_pane "$target")" ]; then
+      printf "can't find pane: %s\n" "$target" >&2; exit 1
+    fi
     printf 'fake pane line 1\nfake pane line 2\n' ;;
   attach|send-keys)
     : ;;

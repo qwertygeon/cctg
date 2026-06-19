@@ -83,7 +83,9 @@ Running `cctg add ... --channel discord` with no token flags prompts you for up 
 
 1. **Bot token** — pasted with masked input (your keystrokes are hidden).
 2. **Your Discord user snowflake** — *optional* for Discord. Press Enter to skip it (this selects pairing mode). If you do type one, it must be digits only (`^[0-9]+$`), or `add` refuses it.
-3. **Permission mode** — press Enter to follow the shared policy, or type one of `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`.
+3. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
+
+Nothing is written to disk until all inputs validate, so a mistyped entry never leaves a half-created bot behind.
 
 Example session, skipping the ID (token masked):
 
@@ -91,7 +93,11 @@ Example session, skipping the ID (token masked):
 $ cctg add mybot ~/work/mybot --channel discord
 Bot token: ********
 Discord user snowflake:
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  1) bypassPermissions   2) acceptEdits   3) auto
+  4) default             5) dontAsk       6) plan
+  7) (follow shared)
+Number [1-7, Enter=follow shared]: 1
 Registered: mybot → cwd=/Users/you/work/mybot, state=/Users/you/.claude/channels/mybot
 ```
 
@@ -233,6 +239,10 @@ If the bot does not respond:
 - **`--group` failed?** Confirm `jq` is installed (`cctg doctor`) and that every channel and member ID is numeric. A non-numeric ID refuses the whole command and leaves the bot unregistered.
 - **Shows BROKEN in `status`?** The working directory is missing, or the `.env` token file is absent. Recreate the working directory or re-register the bot.
 - **Permission prompts or stalling?** See [permissions.md](permissions.md).
+
+## Operator responsibilities
+
+Running this bot makes you a Discord bot operator and a user of the Anthropic API. Discord's developer terms **require** every bot to publish a privacy policy (and prohibit commercializing platform "API data"); you should also disclose that the bot is an AI if others can reach it, and note that your use is subject to your own Anthropic plan terms and Usage Policy. See **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)**.
 
 ## See also
 

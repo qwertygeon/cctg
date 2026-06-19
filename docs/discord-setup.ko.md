@@ -83,7 +83,9 @@ cctg add <name> <working_dir> --channel discord
 
 1. **봇 토큰** — 가려진 입력으로 붙여넣는다(입력한 키가 화면에 보이지 않는다).
 2. **본인 Discord user snowflake** — Discord 에서는 *선택 사항*이다. Enter 로 건너뛸 수 있다(이 경우 페어링 모드가 선택된다). 입력한다면 숫자만(`^[0-9]+$`) 가능하며, 아니면 `add` 가 거부한다.
-3. **권한 모드** — Enter 를 누르면 공통 정책을 따르고, 아니면 `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan` 중 하나를 입력한다.
+3. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
+
+모든 입력이 검증되기 전에는 디스크에 아무것도 쓰지 않으므로, 잘못 입력해도 반쪽 생성된 봇이 남지 않는다.
 
 ID 를 건너뛰는 예시 세션(토큰 가려짐):
 
@@ -91,7 +93,11 @@ ID 를 건너뛰는 예시 세션(토큰 가려짐):
 $ cctg add mybot ~/work/mybot --channel discord
 Bot token: ********
 Discord user snowflake:
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  1) bypassPermissions   2) acceptEdits   3) auto
+  4) default             5) dontAsk       6) plan
+  7) (follow shared)
+Number [1-7, Enter=follow shared]: 1
 Registered: mybot → cwd=/Users/you/work/mybot, state=/Users/you/.claude/channels/mybot
 ```
 
@@ -233,6 +239,10 @@ channel=Discord (allowlist, 2 groups)
 - **`--group` 실패?** `jq` 가 설치되었는지(`cctg doctor`), 모든 채널·멤버 ID 가 숫자인지 확인한다. 숫자가 아닌 ID 는 명령 전체를 거부하고 봇을 미등록 상태로 둔다.
 - **`status` 에서 BROKEN?** 작업 디렉터리가 없거나 `.env` 토큰 파일이 없다. 작업 디렉터리를 다시 만들거나 봇을 재등록한다.
 - **권한 프롬프트나 멈춤?** [permissions.ko.md](permissions.ko.md) 참조.
+
+## 운영자 책임
+
+이 봇을 운영하면 당신은 Discord 봇 운영자이자 Anthropic API 사용자가 된다. Discord 개발자 약관은 모든 봇에 개인정보처리방침 공개를 **요구**하며 플랫폼 "API data" 의 상업화를 금지한다. 또한 다른 사람이 봇에 접근 가능하면 봇이 AI임을 고지하고, 사용은 본인 Anthropic 플랜 약관과 Usage Policy의 적용을 받음을 유의한다. **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)** 참조.
 
 ## 관련 문서
 

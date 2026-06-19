@@ -81,7 +81,9 @@ cctg add <name> <working_dir>
 
 1. **봇 토큰** — 입력이 가려진 상태로 붙여넣는다 (키 입력이 표시되지 않는다).
 2. **본인의 숫자 Telegram ID** — 숫자만 가능하며 (`^[0-9]+$`), 아니면 `add` 가 거부한다.
-3. **권한 모드** — Enter 를 누르면 공통 정책을 따르고, 아니면 `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan` 중 하나를 입력한다.
+3. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
+
+세 입력이 모두 검증되기 전에는 디스크에 아무것도 쓰지 않으므로, 잘못 입력해도 반쪽 생성된 봇이 남지 않는다.
 
 예시 세션 (토큰은 가려짐):
 
@@ -89,7 +91,11 @@ cctg add <name> <working_dir>
 $ cctg add myproject ~/work/myproject
 Bot token (issued by @BotFather, must be a NEW bot): ********
 Your Telegram numeric ID: 123456789
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  1) bypassPermissions   2) acceptEdits   3) auto
+  4) default             5) dontAsk       6) plan
+  7) (follow shared)
+Number [1-7, Enter=follow shared]: 1
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
 ```
@@ -151,6 +157,10 @@ cctg status
 - **allowlist 에 없음?** 등록한 숫자 ID 와 동일한 Telegram 계정으로 DM 을 보내고 있는지 확인한다.
 - **`status` 에서 BROKEN 표시?** 작업 디렉터리가 없거나 `.env` 토큰 파일이 없다. 작업 디렉터리를 다시 만들거나 봇을 재등록한다.
 - **권한 프롬프트나 멈춤?** [permissions.ko.md](permissions.ko.md) 를 참조한다.
+
+## 운영자 책임
+
+이 봇을 운영하면 당신은 Telegram 봇 운영자이자 Anthropic API 사용자가 된다. 상위 서비스에서 비롯되는 몇 가지 의무가 있다: 본인 외 누군가가 봇에 접근 가능하면 봇이 AI임을 고지하고, 다른 사람이 사용하면 개인정보처리방침을 공개하며, 사용은 본인 Anthropic 플랜 약관과 Usage Policy의 적용을 받음을 유의한다. **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)** 참조.
 
 ## 함께 보기
 

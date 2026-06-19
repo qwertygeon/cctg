@@ -45,6 +45,27 @@ load test_helper
   [ "$(file_mode "$CC_CHANNELS_DIR/mybot/last-session.log")" = "600" ]
 }
 
+@test "logs: streams the live pane for a running bot (capture-pane target-pane)" {
+  # Regression: cmd_logs must pass a target-PANE ('=NAME:'), not a bare '=NAME'
+  # target-session, to capture-pane — else real tmux errors "can't find pane".
+  seed_bot mybot
+  mark_running mybot
+  run cctg logs mybot
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"fake pane line 1"* ]]
+  [[ "$output" != *"can't find pane"* ]]
+}
+
+@test "logs: a running prefix-named bot reads its own pane, not its sibling's" {
+  # 'cc-tg' is a prefix of 'cc-tg-discord'; exact-match must still hold for panes.
+  seed_bot cc-tg
+  seed_bot cc-tg-discord
+  mark_running cc-tg-discord
+  run cctg logs cc-tg-discord
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"fake pane line 1"* ]]
+}
+
 @test "logs: falls back to the saved snapshot when the bot is stopped" {
   seed_bot mybot
   printf 'saved log content\n' > "$CC_CHANNELS_DIR/mybot/last-session.log"

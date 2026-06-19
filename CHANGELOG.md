@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-19
+
+### Added
+- **Health-based liveness in `cctg status` — no more false `RUNNING`**: `status` now distinguishes a truly-running bot from a **`DEAD`** one (the tmux session is still alive but the `claude` process has exited). Because the launch command ends with `exec bash`, a crashed/exited `claude` leaves a live `bash` in the pane, so the old `tmux has-session` check reported `RUNNING` for a dead bot. A new `claude_alive()` walks the pane's process descendant tree (`tmux #{pane_pid}` → `ps -ax -o pid=,ppid=,comm=`) for a `claude` process — the channel-agnostic invariant, since every channel launches `caffeinate -is claude --channels <plugin>` and the channel plugin runs as `claude`'s child. (`pane_current_command` was found unreliable — it reads `bash` even while `claude` is alive.) Both the text view (`[DEAD   ]` with a `restart` hint) and `status --json` (`state:"dead"`, `running:false`, `uptimeSeconds:null`) report it; `status` sorts `RUNNING → DEAD → BROKEN → stopped`. `up <bot>` also recognizes a DEAD session and points to `restart` (project bots keep their idempotent exit; reserved bots are refused by the sole-owner guard with the same hint) instead of a bare "already running". `is_running()` and the `up`/`down`/`restart` lifecycle behavior are unchanged — recovery is a manual `restart` (auto-restart is deferred). (`lib/session.sh`, `lib/commands.sh`, `messages/*.sh`)
+- **Documented bot-operator legal responsibilities**: a new "Your responsibilities as a bot operator" section in [SECURITY.md](SECURITY.md) surfaces obligations that come from the upstream services rather than from CCTG — your use is governed by your own Anthropic plan terms (Commercial/Consumer) and Usage Policy (CCTG only invokes the official `claude` CLI and never extracts/reuses credentials); consumer-facing bots must disclose they are AI; Discord **requires** a per-bot privacy policy and prohibits commercializing platform "API data"; Telegram expects lawful data handling. The README privacy/disclaimer callout (en/ko) gained a pointer, and the Telegram/Discord setup guides (en/ko) gained an "Operator responsibilities" note. Documentation only; not legal advice. (`SECURITY.md`, `README.md`, `README.ko.md`, `docs/telegram-setup*.md`, `docs/discord-setup*.md`)
+
+### Changed
+- **Path-heavy command output is easier to read**: paths under `$HOME` are now shown shortened to `~` across the CLI (a new display-only `tilde()` helper), and multi-value lines that used to cram several long absolute paths together are laid out as separate, label-aligned lines:
+  - `cctg status` — `cwd`/`state` split onto their own lines and aligned with `mode`/`channel` (a tidy left-aligned column).
+  - `cctg up` — the success line is now a `cwd`/`state`/`tmux` block instead of one long parenthesized line.
+  - `cctg add` success, `rm`/`rename`/`config`/`doctor` path messages, and `up` error hints all render `~`-shortened paths for consistency.
+  - These are text presentation changes only; `status --json` is unchanged. (`lib/commands.sh`, `lib/session.sh`, `lib/registry.sh`, `messages/*.sh`)
+- **`cctg status` sorts bots by state**: running bots are listed first, then BROKEN (registered but missing cwd/token), then stopped — instead of raw registry order. Within each state group the registry order is preserved (stable sort). Applies to both the project-bots and global-channel-bots sections; `status --json` keeps registry order. (`lib/commands.sh`)
+- **Interactive `cctg add` permission-mode prompt is now a numbered menu**: instead of free-typing a mode name, the interactive prompt lists the choices `1) bypassPermissions  2) acceptEdits  3) auto  4) default  5) dontAsk  6) plan  7) (follow shared)` and reads a number. An invalid entry re-prompts instead of aborting; pressing Enter or `7` follows the shared policy; typing a mode name still works. Shell tab-completion cannot reach a running `read` prompt, so a menu is the only way to make the fixed value set selectable inline. The display order is fixed with `bypassPermissions` first and `acceptEdits` second (independent of the validation set order). (`lib/commands.sh`, `messages/*.sh`, docs)
+
+### Fixed
+- **`cctg add` no longer leaves a half-created bot on bad input**: all interactive inputs (token, channel ID, group specs, permission mode) are now collected and validated *before* anything is written to disk (validate-before-write). Previously a mistyped permission mode aborted *after* `.env`/`access.json` were written but *before* registration, leaving an unregistered state directory that the foreign-statedir guard then refused to overwrite on retry (a dead-end). As a defense-in-depth net, the state directory is created inside an `EXIT` trap that removes it if the process exits before registration completes — but only when `add` created the directory itself (a pre-existing directory is never deleted, per constitution P-002). (`lib/commands.sh`)
+- **`cctg rename` rolls back a moved state directory if the registry update fails**: previously `rename` moved the directory and *then* rewrote the registry as two unguarded steps, so a registry-write failure left the directory at the new path while the registry still pointed at the old one (a broken bot). The directory move is now reverted on registry-update failure, keeping the two in sync. (`lib/commands.sh`)
+- **Atomic token `.env` writes (`cctg add` / `cctg config <name> token`)**: the bot token file is now written via a `mktemp`(0600)→`mv` helper (`write_token_env`) instead of a direct `>` redirect. A direct redirect truncates the file before writing, so an interrupted write could leave an empty or partial `.env` and break authentication; the staged-then-renamed write is atomic and never exposes a world-readable window. `cctg config <name> token` additionally gained the missing write-failure guard. (`lib/config.sh`, `lib/commands.sh`)
+- **Gateway reliability — `up`/`down` no longer report false outcomes**: `cctg up` now checks the `tmux new-session` exit code and reports a clear failure (`ERR_UP_FAILED`) instead of printing `UP` and then trying to attach a snapshot watcher to a session that never started; `cctg down` likewise checks `tmux kill-session`. `up` also refuses with a clear message when `claude` is absent from `PATH` (otherwise the session survives via `exec bash` and looks "up" while the bot is dead), and `up`/`down`/`restart`/`attach` refuse when `tmux` itself is absent. The snapshot watcher's start is now verified (`kill -0`); if it fails to launch, a warning is printed and the opt-in snapshot is simply disabled for that run rather than silently assumed on. (`lib/session.sh`, `lib/commands.sh`, `lib/util.sh`, `messages/*.sh`)
+- **`cctg logs <name> <N>` validates the line count**: a non-numeric `N` is now rejected with a clear error instead of being passed through to `tail` (cryptic tool-level error). (`lib/commands.sh`)
+
 ## [0.5.0] - 2026-06-18
 
 ### Added
@@ -103,7 +125,9 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/qwertygeon/cctg/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/qwertygeon/cctg/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/qwertygeon/cctg/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/qwertygeon/cctg/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/qwertygeon/cctg/compare/v0.1.1...v0.2.0

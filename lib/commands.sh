@@ -36,7 +36,11 @@ cmd_add() {
     if [ -d "$SD" ] && [ ! -f "$SD/launch.env" ] && { [ -f "$SD/.env" ] || [ -f "$SD/access.json" ]; }; then
       die ERR_FOREIGN_STATEDIR "$SD"
     fi
-    mkdir -p "$SD/inbox"
+    # ── 입력 수집·검증 (파일 생성 전) ──────────────────────────────────────────
+    # 모든 입력(토큰·ID·groups·권한모드)을 검증한 뒤에만 디스크에 쓴다(DEC-003). 기존 흐름은
+    # mkdir·.env·access.json 을 먼저 쓰고 권한모드를 나중에 검증해, 오입력 시 launch.env·등록이
+    # 빠진 반쪽 상태를 남겼다 — 그 반쪽 상태는 위의 foreign-statedir 가드에 걸려 같은 이름 재시도까지
+    # 막았다. 검증을 선행시켜 반쪽 상태를 원천 제거한다.
 
     # 1) 봇 토큰 — stdin/env(비대화형) 또는 가려서 입력(대화형)
     if [ "$opt_token_stdin" = 1 ]; then
@@ -65,28 +69,18 @@ cmd_add() {
     fi
     [ -n "$TGID" ] && { printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"; }
 
-    # 3) 토큰 → .env (600). 키 이름은 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN).
-    #    umask 077 서브셸로 생성 — 먼저 만들고 chmod 하면 그 사이 world-readable 창이 생긴다.
-    ( umask 077; printf '%s=%s\n' "$(channel_spec "$CH" token_key)" "$TOKEN" > "$SD/.env" )
-
-    # 4) access.json → 채널 시드 정책에 따라 생성.
-    #    dmPolicy/allowFrom 를 단일 가드로 동시 결정한다(동일 가드 중복 평가 제거):
-    #      ID 제공 → allowlist + [<id>] / 미제공 → 채널 seed_policy(예: discord=pairing) + []
+    # 3) access.json 정책 + groups JSON 사전 구성(검증만). 실제 파일 쓰기는 커밋 구간으로 미룬다.
+    #    dmPolicy/allowFrom: ID 제공 → allowlist + [<id>] / 미제공 → 채널 seed_policy(예: discord=pairing) + []
     #    TGID·group id·member id 는 모두 ^[0-9]+$ 통과분만 JSON 에 주입한다(P-003 주입 방어).
-    local sp policy af
+    local sp policy af groups_json
     sp="$(channel_spec "$CH" seed_policy)"
     if [ -n "$TGID" ]; then policy=allowlist; af='["'"$TGID"'"]'; else policy="$sp"; af='[]'; fi
-
-    if [ -z "$opt_groups" ]; then
-      # groups 미지정: heredoc 으로 작성(jq 불요 — jq 없는 환경의 일반 add 동작 보존).
-      cat > "$SD/access.json" <<JSON
-{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
-JSON
-    else
-      # groups 지정: 가변 키 JSON 객체 구성을 위해 jq 사용. 검증·jq 가드는 레지스트리 등록 전(ADR-006)
-      # 에서 수행하므로 실패 시 봇은 미등록 상태로 남는다.
+    groups_json=""
+    if [ -n "$opt_groups" ]; then
+      # groups 지정: 가변 키 JSON 객체 구성을 위해 jq 사용. need_jq·검증을 쓰기 전에 끝내
+      # 미설치/오입력 시 봇이 미등록·무흔적으로 남도록 한다(ADR-006).
       need_jq || exit 1
-      local groups_json gtok gid grest gmod rm_flag allow_csv allow_json gm first
+      local gtok gid grest gmod rm_flag allow_csv allow_json gm first saved_ifs
       groups_json='{}'
       # 토큰을 줄 단위로 변환해(구분자=탭→개행) read 로 순회 — 루프 본문에서 IFS 를 자유롭게 바꾼다.
       while IFS= read -r gtok; do
@@ -95,7 +89,7 @@ JSON
         printf '%s' "$gid" | grep -qE '^[0-9]+$' || die ERR_ADD_BAD_GROUP_ID "$gid"
         rm_flag=true; allow_csv=""
         # 수식어(`:` 구분): nomention / allow=csv
-        local saved_ifs="$IFS"; IFS=':'
+        saved_ifs="$IFS"; IFS=':'
         for gmod in $grest; do
           case "$gmod" in
             "")        : ;;
@@ -124,29 +118,63 @@ JSON
       done <<EOF
 $(printf '%s' "$opt_groups" | tr "$GROUP_SEP" '\n')
 EOF
-      jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
-        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}' > "$SD/access.json"
     fi
 
-    # 4.5) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음), 아니면 대화형
+    # 4) 권한 모드 — 플래그(검증 완료) 우선, 비대화형이면 공통 따름(프롬프트 없음),
+    #    대화형이면 번호 선택 메뉴(오타 차단 + 재입력 루프, DEC-002). 빈 입력/7 = 공통 따름.
+    #    셸 자동완성은 실행 중 read 프롬프트엔 동작하지 않으므로(셸이 아닌 cctg 가 stdin 을 읽음)
+    #    번호 메뉴로 오타를 원천 차단한다. 번호 외에 모드명 직접 입력도 수용.
     if [ -n "$opt_mode" ]; then
       PMODE="$opt_mode"
     elif [ "$noninteractive" = 1 ]; then
       PMODE=""
     else
-      t ADD_PROMPT_MODE "$VALID_MODES"
-      read -r PMODE
-      if [ -n "$PMODE" ] && ! valid_mode "$PMODE"; then
-        die ERR_BAD_MODE_ADD "$PMODE" "$VALID_MODES"
-      fi
+      local _choice
+      PMODE=""
+      # 메뉴를 매 반복 출력 — 잘못 입력해 재입력할 때도 옵션을 다시 보여준다.
+      while :; do
+        t ADD_MODE_MENU "$(t FOLLOW_SHARED)"
+        t ADD_PROMPT_MODE_PS3
+        read -r _choice || { PMODE=""; break; }
+        case "$_choice" in
+          1) PMODE=bypassPermissions; break ;;
+          2) PMODE=acceptEdits; break ;;
+          3) PMODE=auto; break ;;
+          4) PMODE=default; break ;;
+          5) PMODE=dontAsk; break ;;
+          6) PMODE=plan; break ;;
+          7|"") PMODE=""; break ;;
+          acceptEdits|auto|bypassPermissions|default|dontAsk|plan) PMODE="$_choice"; break ;;
+          *) te ERR_ADD_MODE_CHOICE ;;
+        esac
+      done
     fi
 
-    # 4.6) 공통 설정 파일 시드 (없으면)
+    # ── 커밋 구간: 모든 입력이 검증됨. 이제부터만 디스크에 쓴다. ──────────────────
+    # 등록 전 비정상 종료(쓰기 실패 등) 시 우리가 새로 만든 SD 만 정리한다(DEC-004, EXIT trap).
+    # 사전에 존재하던 디렉터리는 절대 건드리지 않는다(P-002). 등록(point of no return) 후 trap 해제.
     ensure_shared_settings
+    CCTG_ADD_CLEANUP_DIR=""
+    trap '[ -n "${CCTG_ADD_CLEANUP_DIR:-}" ] && rm -rf "$CCTG_ADD_CLEANUP_DIR"' EXIT
+    [ -e "$SD" ] || CCTG_ADD_CLEANUP_DIR="$SD"
+    mkdir -p "$SD/inbox" || die ERR_ADD_WRITE "$SD/inbox"
 
-    # 5) launch.env 템플릿 (봇 전용 옵션 — cctg config <name> 로 수정)
-    #    템플릿 주석은 봇 상태 디렉터리에 기록되는 파일 내용이라 언어 분리 대상이 아니다.
-    cat > "$SD/launch.env" <<'ENV'
+    # 토큰 → .env (600, 원자적). write_token_env: 임시파일(mktemp 0600)→mv 로 부분/빈 파일·world-readable 창 제거.
+    write_token_env "$SD/.env" "$(channel_spec "$CH" token_key)" "$TOKEN" || die ERR_ADD_WRITE "$SD/.env"
+
+    # access.json — groups 미지정은 heredoc(jq 불요 — jq 없는 환경의 일반 add 동작 보존), 지정 시 사전 구성한 groups_json 으로 jq -n.
+    if [ -z "$opt_groups" ]; then
+      cat > "$SD/access.json" <<JSON || die ERR_ADD_WRITE "$SD/access.json"
+{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
+JSON
+    else
+      jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
+        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}' > "$SD/access.json" || die ERR_ADD_WRITE "$SD/access.json"
+    fi
+
+    # launch.env 템플릿 (봇 전용 옵션 — cctg config <name> 로 수정)
+    # 템플릿 주석은 봇 상태 디렉터리에 기록되는 파일 내용이라 언어 분리 대상이 아니다.
+    cat > "$SD/launch.env" <<'ENV' || die ERR_ADD_WRITE "$SD/launch.env"
 # 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
 
 # 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
@@ -160,12 +188,14 @@ CLAUDE_EXTRA_ARGS=
 # 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
 CCTG_LOG_SNAPSHOT_INTERVAL=
 ENV
-    [ -n "$PMODE" ] && set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE"
+    [ -n "$PMODE" ] && { set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE" || die ERR_ADD_WRITE "$SD/launch.env"; }
 
-    # 6) 레지스트리 등록 (4번째 컬럼 = 채널 타입)
-    printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY"
+    # 레지스트리 등록 (4번째 컬럼 = 채널 타입) — point of no return. 이후 cleanup 해제.
+    printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY" || die ERR_ADD_WRITE "$REGISTRY"
+    CCTG_ADD_CLEANUP_DIR=""
+    trap - EXIT
 
-    t ADD_DONE "$NAME" "$CWD" "$SD"
+    t ADD_DONE "$NAME" "$(tilde "$CWD")" "$(tilde "$SD")"
     # allowlist(ID 시드) → 페어링 불필요 안내 / pairing(ID 미제공) → 페어링 절차 안내(ADR-004)
     if [ "$policy" = allowlist ]; then t ADD_DONE_ALLOWLIST "$TGID"; else t ADD_DONE_PAIRING; fi
     local pmshow="${PMODE:-$(t FOLLOW_SHARED)}"
@@ -186,14 +216,14 @@ cmd_rm() {
       case "$sd" in
         "$CHANNELS_DIR"/*)
           if is_reserved_channel_dir "$sd"; then
-            t RM_PURGE_REFUSE_GLOBAL "$sd"
+            t RM_PURGE_REFUSE_GLOBAL "$(tilde "$sd")"
           else
-            rm -rf "$sd" && t RM_PURGE_DELETED "$sd"
+            rm -rf "$sd" && t RM_PURGE_DELETED "$(tilde "$sd")"
           fi ;;
-        *) t RM_PURGE_OUTSIDE "$sd" ;;
+        *) t RM_PURGE_OUTSIDE "$(tilde "$sd")" ;;
       esac
     else
-      t RM_KEEP "$sd"
+      t RM_KEEP "$(tilde "$sd")"
     fi
 }
 
@@ -210,17 +240,20 @@ cmd_rename() {
     sd_raw="$(cut -f2 <<<"$row")"
     sd="$(expand "$sd_raw")"
     # 상태 디렉터리가 기본 경로($CHANNELS_DIR/<old>)면 함께 이동, 커스텀 경로면 유지
-    new_sd="$sd_raw"
+    new_sd="$sd_raw"; local moved=0
     if [ "$KEEPDIR" = 0 ] && [ "$sd" = "$CHANNELS_DIR/$OLD" ]; then
       target="$CHANNELS_DIR/$NEW"
-      [ -e "$target" ] && die ERR_TARGET_EXISTS "$target"
-      mv "$sd" "$target" || die ERR_MOVE_FAILED "$sd" "$target"
-      new_sd="$target"
-      t RENAME_MOVED "$sd" "$target"
-    else
-      t RENAME_KEPT "$sd"
+      [ -e "$target" ] && die ERR_TARGET_EXISTS "$(tilde "$target")"
+      mv "$sd" "$target" || die ERR_MOVE_FAILED "$(tilde "$sd")" "$(tilde "$target")"
+      new_sd="$target"; moved=1
     fi
-    rename_registry_line "$OLD" "$NEW" "$new_sd" || die ERR_REGISTRY_UPDATE
+    # 레지스트리 갱신 실패 시 이미 옮긴 디렉터리를 원위치로 롤백 — 디렉터리는 새 경로인데 레지스트리는
+    # 옛 경로를 가리키는 불일치(봇 깨짐)를 방지한다. 출력은 등록 확정 후에만 낸다.
+    if ! rename_registry_line "$OLD" "$NEW" "$new_sd"; then
+      [ "$moved" = 1 ] && mv "$target" "$sd" 2>/dev/null
+      die ERR_REGISTRY_UPDATE
+    fi
+    if [ "$moved" = 1 ]; then t RENAME_MOVED "$(tilde "$sd")" "$(tilde "$target")"; else t RENAME_KEPT "$(tilde "$sd")"; fi
     t RENAME_DONE "$OLD" "$NEW"
     t RENAME_NEXT "$PROG" "$NEW"
 }
@@ -262,7 +295,7 @@ ENV
       show)
         local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
-        t CFG_SHOW_HEADER "$NAME" "$LE"
+        t CFG_SHOW_HEADER "$NAME" "$(tilde "$LE")"
         t CFG_SHOW_CHANNEL "$cfg_channel"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
@@ -307,9 +340,9 @@ ENV
         NEWCWD="${3-}"
         [ -z "$NEWCWD" ] && die ERR_CONFIG_CWD_USAGE "$PROG" "$NAME"
         NEWCWD="$(expand "$NEWCWD")"
-        [ -d "$NEWCWD" ] || die ERR_NO_SUCH_DIR "$NEWCWD"
+        [ -d "$NEWCWD" ] || die ERR_NO_SUCH_DIR "$(tilde "$NEWCWD")"
         set_registry_cwd "$NAME" "$NEWCWD" || die ERR_REGISTRY_UPDATE "$NAME"
-        t CFG_CWD_SET "$NAME" "$NEWCWD"
+        t CFG_CWD_SET "$NAME" "$(tilde "$NEWCWD")"
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       token)
         # $3 이후를 플래그로 파싱: --token-env <VAR> | --token-stdin (argv 토큰 직접 전달 금지 — P-003)
@@ -329,8 +362,8 @@ ENV
         else t ADD_PROMPT_TOKEN; read -rs NEWTOK; echo; fi
         [ -z "$NEWTOK" ] && die ERR_EMPTY_TOKEN
         local tk; tk="$(channel_spec "$cfg_channel" token_key)"
-        # umask 077 서브셸로 생성 — chmod 후행 시의 순간 world-readable 창 제거.
-        ( umask 077; printf '%s=%s\n' "$tk" "$NEWTOK" > "$sd/.env" )
+        # 원자적 교체(임시파일→mv) + 실패 가드 — 직접 `>` 쓰기는 중단 시 기존 토큰을 빈/부분 파일로 깨뜨린다.
+        write_token_env "$sd/.env" "$tk" "$NEWTOK" || die ERR_ADD_WRITE "$sd/.env"
         t CFG_TOKEN_SET "$NAME"
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       *)
@@ -393,6 +426,7 @@ _lifecycle_apply() {
 # 처리 건수 ≥2 면 성공/실패 요약 1줄 출력. 하나라도 실패하면 비0 반환(전부 성공 0).
 _lifecycle_run() {
   local action="$1"; shift
+  need_tmux || return 1
   local ok=0 fail=0 failed="" arg n
   for arg in "$@"; do
     if [ "$arg" = all ]; then
@@ -418,6 +452,113 @@ cmd_up()      { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lif
 cmd_down()    { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run down "$@"; }
 cmd_restart() { [ $# -ge 1 ] || { te ERR_NEED_TARGET; usage >&2; exit 1; }; _lifecycle_run restart "$@"; }
 
+# status 정렬: 봇을 상태로 분류해 stdout 으로 running/broken/stopped 를 반환(정렬 키).
+# RUNNING(위) → BROKEN(주의) → stopped(아래) 순으로 렌더하기 위한 1차 분류.
+_status_class() {
+  local n="$1" row cwd sd
+  if is_running "$n"; then
+    if claude_alive "$n"; then printf 'running'; else printf 'dead'; fi
+    return
+  fi
+  row="$(lookup "$n")"
+  cwd="$(expand "$(cut -f1 <<<"$row")")"
+  sd="$(expand "$(cut -f2 <<<"$row")")"
+  if [ ! -d "$cwd" ] || [ ! -f "$sd/.env" ]; then printf 'broken'; else printf 'stopped'; fi
+}
+
+# status 정렬(예약어 전역 봇): 전역 봇은 cwd 가 없으므로 .env 유무로만 broken 판정.
+_status_class_reserved() {
+  local ch="$1" sd="$CHANNELS_DIR/$1"
+  if is_running "$ch"; then
+    if claude_alive "$ch"; then printf 'running'; else printf 'dead'; fi
+    return
+  fi
+  [ -f "$sd/.env" ] || { printf 'broken'; return; }
+  printf 'stopped'
+}
+
+# status: 프로젝트 봇 1건 렌더(RUNNING/DEAD/BROKEN/stopped + paths/mode/channel).
+# state 는 호출측(_status_class)이 이미 판정한 값을 그대로 받는다 — 여기서 재판정(claude_alive)
+# 하지 않아 봇당 ps 스캔이 1회(분류 시)로 끝난다. 버킷 순서로 정렬도 호출측이 제어.
+_status_render_project_bot() {
+  local n="$1" state="$2" row cwd sd issues created up pm ch_disp dm gc
+  row="$(lookup "$n")"
+  cwd="$(expand "$(cut -f1 <<<"$row")")"
+  sd="$(expand "$(cut -f2 <<<"$row")")"
+  case "$state" in
+    running)
+      created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
+      up=""
+      if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+        up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+      fi
+      t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")" ;;
+    dead)
+      # 세션은 살아있으나 claude 종료됨(거짓 UP). 사용자 수동 restart 유도(DEC-001).
+      t STATUS_DEAD "$n" "$(sess_of "$n")"
+      t STATUS_HINT_DEAD "$PROG" "$n" ;;
+    broken)
+      # 깨진 상태 사유(작업 디렉터리·토큰 파일 부재)별 복구 힌트.
+      issues=""
+      [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
+      [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
+      t STATUS_BROKEN "$n" "$issues"
+      [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$(tilde "$cwd")" "$PROG" "$n"
+      [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)" ;;
+    *)
+      t STATUS_STOPPED "$n" ;;
+  esac
+  pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
+  t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
+  t STATUS_MODE "$pm"
+  # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
+  ch_disp="$(channel_spec "$(channel_of "$n")" display)"
+  if command -v jq >/dev/null 2>&1 && [ -f "$sd/access.json" ]; then
+    dm="$(jq -r '.dmPolicy // "?"' "$sd/access.json" 2>/dev/null)"
+    gc="$(jq -r '(.groups // {}) | length' "$sd/access.json" 2>/dev/null)"
+    if [ -n "$dm" ] && [ -n "$gc" ]; then
+      t STATUS_CHANNEL_TOPO "$ch_disp" "$dm" "$gc"
+    else
+      t STATUS_CHANNEL "$ch_disp"
+    fi
+  else
+    t STATUS_CHANNEL "$ch_disp"
+  fi
+}
+
+# status: 예약어 전역 봇 1건 렌더.
+_status_render_reserved_bot() {
+  local ch="$1" state="$2" sd cwd issues sess created up pm
+  sd="$CHANNELS_DIR/$ch"
+  # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
+  # 그 외(DEAD/STOPPED 등)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
+  cwd="—"
+  sess="$(sess_of "$ch")"
+  case "$state" in
+    running)
+      cwd="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
+      created="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{session_created}' 2>/dev/null)"
+      up=""
+      if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
+        up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
+      fi
+      t STATUS_RUNNING "$ch" "$up" "$sess" ;;
+    dead)
+      t STATUS_DEAD "$ch" "$sess"
+      t STATUS_HINT_DEAD "$PROG" "$ch" ;;
+    broken)
+      issues="$(t ISSUE_NO_TOKEN)"
+      t STATUS_BROKEN "$ch" "$issues"
+      t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)" ;;
+    *)
+      t STATUS_STOPPED "$ch" ;;
+  esac
+  pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
+  t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
+  t STATUS_MODE "$pm"
+  t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+}
+
 cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
     if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
@@ -425,79 +566,60 @@ cmd_status() {
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
+    # 1차 분류 → running/broken/stopped 버킷(개행 구분). 버킷 안은 등록 순서 유지(안정 정렬).
+    local p_running="" p_dead="" p_broken="" p_stopped=""
     while IFS= read -r n; do
       [ -z "$n" ] && continue; found=1
-      row="$(lookup "$n")"
-      cwd="$(expand "$(cut -f1 <<<"$row")")"
-      sd="$(expand "$(cut -f2 <<<"$row")")"
-      # 깨진 상태 감지: 작업 디렉터리·토큰 파일 존재 여부
-      issues=""
-      [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
-      [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
-      if is_running "$n"; then
-        created="$(tmux display-message -p -t "$(sess_t "$n")" '#{session_created}' 2>/dev/null)"
-        up=""
-        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
-          up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
-        fi
-        t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
-      elif [ -n "$issues" ]; then
-        t STATUS_BROKEN "$n" "$issues"
-        # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
-        [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$cwd" "$PROG" "$n"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
-      else
-        t STATUS_STOPPED "$n"
-      fi
-      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
-      t STATUS_PATHS "$cwd" "$sd"
-      t STATUS_MODE "$pm"
-      # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
-      ch_disp="$(channel_spec "$(channel_of "$n")" display)"
-      if command -v jq >/dev/null 2>&1 && [ -f "$sd/access.json" ]; then
-        dm="$(jq -r '.dmPolicy // "?"' "$sd/access.json" 2>/dev/null)"
-        gc="$(jq -r '(.groups // {}) | length' "$sd/access.json" 2>/dev/null)"
-        if [ -n "$dm" ] && [ -n "$gc" ]; then
-          t STATUS_CHANNEL_TOPO "$ch_disp" "$dm" "$gc"
-        else
-          t STATUS_CHANNEL "$ch_disp"
-        fi
-      else
-        t STATUS_CHANNEL "$ch_disp"
-      fi
+      case "$(_status_class "$n")" in
+        running) p_running="${p_running}${n}"$'\n' ;;
+        dead)    p_dead="${p_dead}${n}"$'\n' ;;
+        broken)  p_broken="${p_broken}${n}"$'\n' ;;
+        *)       p_stopped="${p_stopped}${n}"$'\n' ;;
+      esac
     done < <(all_names)
+    # RUNNING(위) → DEAD(크래시) → BROKEN(설정결손) → stopped(아래) 순. 분류 시 판정한 state 를
+    # 렌더에 그대로 넘겨 재판정(ps 재스캔)을 피한다.
+    local st bucket
+    for st in running dead broken stopped; do
+      case "$st" in
+        running) bucket="$p_running" ;;
+        dead)    bucket="$p_dead" ;;
+        broken)  bucket="$p_broken" ;;
+        *)       bucket="$p_stopped" ;;
+      esac
+      while IFS= read -r n; do
+        [ -z "$n" ] && continue
+        _status_render_project_bot "$n" "$st"
+      done <<< "$bucket"
+    done
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
 
-    # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010)
-    local ch_found=0
+    # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010).
+    # 프로젝트 봇과 동일하게 running → broken → stopped 순으로 정렬한다(전역 봇은 소수).
+    local r_running="" r_dead="" r_broken="" r_stopped=""
     for ch in $RESERVED_NAMES; do
       channel_spec "$ch" plugin >/dev/null 2>&1 || continue
-      sd="$CHANNELS_DIR/$ch"; [ -d "$sd" ] || continue
-      if [ "$ch_found" = 0 ]; then t STATUS_RESERVED_HEADER; ch_found=1; fi
-      # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
-      # 그 외(STOPPED 등 세션 부재)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
-      cwd="—"
-      issues=""
-      [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
-      if is_running "$ch"; then
-        local sess; sess="$(sess_of "$ch")"
-        cwd="$(tmux display-message -p -t "=$sess" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
-        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
-        up=""
-        if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
-          up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
-        fi
-        t STATUS_RUNNING "$ch" "$up" "$sess"
-      elif [ -n "$issues" ]; then
-        t STATUS_BROKEN "$ch" "$issues"
-        [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$sd" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
-      else
-        t STATUS_STOPPED "$ch"
-      fi
-      pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
-      t STATUS_PATHS "$cwd" "$sd"
-      t STATUS_MODE "$pm"
-      t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+      [ -d "$CHANNELS_DIR/$ch" ] || continue
+      case "$(_status_class_reserved "$ch")" in
+        running) r_running="${r_running}${ch}"$'\n' ;;
+        dead)    r_dead="${r_dead}${ch}"$'\n' ;;
+        broken)  r_broken="${r_broken}${ch}"$'\n' ;;
+        *)       r_stopped="${r_stopped}${ch}"$'\n' ;;
+      esac
+    done
+    local ch_found=0 rst rbucket
+    for rst in running dead broken stopped; do
+      case "$rst" in
+        running) rbucket="$r_running" ;;
+        dead)    rbucket="$r_dead" ;;
+        broken)  rbucket="$r_broken" ;;
+        *)       rbucket="$r_stopped" ;;
+      esac
+      while IFS= read -r ch; do
+        [ -z "$ch" ] && continue
+        [ "$ch_found" = 0 ] && { t STATUS_RESERVED_HEADER; ch_found=1; }
+        _status_render_reserved_bot "$ch" "$rst"
+      done <<< "$rbucket"
     done
 }
 
@@ -517,9 +639,14 @@ status_json() {
       [ -f "$sd/.env" ] || iss+=("no-token")
       up_s=-1
       if is_running "$n"; then
-        running=true; state="running"
-        created="$(tmux display-message -p -t "=$sess" '#{session_created}' 2>/dev/null)"
-        printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
+        if claude_alive "$n"; then
+          running=true; state="running"
+          created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
+          printf '%s' "$created" | grep -qE '^[0-9]+$' && up_s=$(( now - created ))
+        else
+          # 세션 생존·claude 종료 = dead. running=false, uptime 은 봇 기준 무의미 → null(up_s=-1 유지).
+          running=false; state="dead"
+        fi
       elif [ "${#iss[@]}" -gt 0 ]; then
         running=false; state="broken"
       else
@@ -539,12 +666,13 @@ status_json() {
 
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
+    printf '%s' "$N" | grep -qE '^[0-9]+$' || die ERR_BAD_LOG_N "$N"
     # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
     if is_reserved_name "$NAME"; then
       # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
       channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
       if is_running "$NAME"; then
-        tmux capture-pane -p -S -2000 -t "$(sess_t "$NAME")" | tail -n "$N"
+        tmux capture-pane -p -S -2000 -t "$(sess_pt "$NAME")" | tail -n "$N"
         return
       fi
       local snap="$CHANNELS_DIR/$NAME/last-session.log"
@@ -556,7 +684,7 @@ cmd_logs() {
       die LOGS_STOPPED "$NAME" "$PROG" "$NAME"
     fi
     if is_running "$NAME"; then
-      tmux capture-pane -p -S -2000 -t "$(sess_t "$NAME")" | tail -n "$N"
+      tmux capture-pane -p -S -2000 -t "$(sess_pt "$NAME")" | tail -n "$N"
       return
     fi
     # 정지 상태: down 시 저장한 마지막 세션 스냅샷이 있으면 보여준다.
@@ -574,6 +702,7 @@ cmd_logs() {
 
 cmd_attach() {
     NAME="${1:?name 필요}"
+    need_tmux || exit 1
     is_running "$NAME" || die ERR_NOT_RUNNING "$NAME" "$PROG" "$NAME"
     t ATTACH_DETACH_HINT
     tmux attach -t "$(sess_t "$NAME")"
@@ -670,12 +799,12 @@ cmd_doctor() {
       *) t DOCTOR_PATH_WARN ;;
     esac
     t DOCTOR_REGISTRY
-    t DOCTOR_FILE "$REGISTRY"
+    t DOCTOR_FILE "$(tilde "$REGISTRY")"
     cnt=0
     while IFS= read -r n; do [ -n "$n" ] && cnt=$((cnt+1)); done < <(all_names)
     t DOCTOR_REGISTRY_COUNT "$cnt"
     t DOCTOR_SHARED
-    t DOCTOR_FILE "$SHARED_SETTINGS"
+    t DOCTOR_FILE "$(tilde "$SHARED_SETTINGS")"
     if [ -f "$SHARED_SETTINGS" ]; then
       if command -v jq >/dev/null 2>&1; then
         t DOCTOR_DEFAULTMODE "$(jq -r '.permissions.defaultMode // "default"' "$SHARED_SETTINGS" 2>/dev/null)"

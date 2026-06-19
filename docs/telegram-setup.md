@@ -81,7 +81,9 @@ Running `cctg add` with no token flags prompts you for three things, in order:
 
 1. **Bot token** — pasted with masked input (your keystrokes are hidden).
 2. **Your Telegram numeric ID** — must be digits only (`^[0-9]+$`), or `add` refuses it.
-3. **Permission mode** — press Enter to follow the shared policy, or type one of `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`.
+3. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
+
+Nothing is written to disk until all three inputs validate, so a mistyped entry never leaves a half-created bot behind.
 
 Example session (token masked):
 
@@ -89,7 +91,11 @@ Example session (token masked):
 $ cctg add myproject ~/work/myproject
 Bot token (issued by @BotFather, must be a NEW bot): ********
 Your Telegram numeric ID: 123456789
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  1) bypassPermissions   2) acceptEdits   3) auto
+  4) default             5) dontAsk       6) plan
+  7) (follow shared)
+Number [1-7, Enter=follow shared]: 1
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
 ```
@@ -151,6 +157,10 @@ If the bot does not respond:
 - **Not in the allowlist?** Make sure you are DMing from the same Telegram account whose numeric ID you registered.
 - **Shows BROKEN in `status`?** The working directory is missing, or the `.env` token file is absent. Recreate the working directory or re-register the bot.
 - **Permission prompts or stalling?** See [permissions.md](permissions.md).
+
+## Operator responsibilities
+
+Running this bot makes you a Telegram bot operator and a user of the Anthropic API. A few obligations come from those services: disclose that the bot is an AI if anyone but you can reach it, publish a privacy policy if others use it, and note that your use is subject to your own Anthropic plan terms and Usage Policy. See **[SECURITY.md → Your responsibilities as a bot operator](../SECURITY.md#your-responsibilities-as-a-bot-operator)**.
 
 ## See also
 
