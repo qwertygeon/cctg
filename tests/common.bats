@@ -65,3 +65,56 @@ load test_helper
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown common action"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# global default session width (v0.6.0/001-session-width-config)
+# ---------------------------------------------------------------------------
+
+@test "common width: sets the global default in the config file" {
+  run cctg common width 150
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Default session width: 150"* ]]
+  grep -q '^sess_width=150$' "$XDG_CONFIG_HOME/cctg/config"
+}
+
+@test "common width clear: resets to the built-in default" {
+  cctg common width 150 >/dev/null
+  run cctg common width clear
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"(built-in default)"* ]]
+  ! grep -q '^sess_width=' "$XDG_CONFIG_HOME/cctg/config"
+}
+
+@test "common width: refuses a below-minimum value" {
+  run cctg common width 5
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"width must be an integer"* ]]
+}
+
+@test "common show: reports the global default width and source" {
+  run cctg common show
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Default session width: 100 (default)"* ]]
+  cctg common width 150 >/dev/null
+  run cctg common show
+  [[ "$output" == *"Default session width: 150 (config)"* ]]
+}
+
+@test "up: applies the global default width when no per-bot value" {
+  cctg common width 150 >/dev/null
+  seed_bot mybot
+  export FAKE_TMUX_LASTCMD="$BATS_TEST_TMPDIR/tmux-lastcmd"
+  run cctg up mybot
+  [ "$status" -eq 0 ]
+  grep -qxF -- '150' "$FAKE_TMUX_LASTCMD"   # global default applied
+}
+
+@test "up: env CC_TG_SESS_WIDTH overrides the config-file global default" {
+  cctg common width 150 >/dev/null
+  seed_bot mybot
+  export FAKE_TMUX_LASTCMD="$BATS_TEST_TMPDIR/tmux-lastcmd"
+  CC_TG_SESS_WIDTH=180 run cctg up mybot
+  [ "$status" -eq 0 ]
+  grep -qxF -- '180' "$FAKE_TMUX_LASTCMD"   # env wins over config
+  ! grep -qxF -- '150' "$FAKE_TMUX_LASTCMD"
+}

@@ -251,20 +251,22 @@ $ cctg attach proj
 ### `config`
 
 ```
-cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|off> | cwd <경로> | token [--token-env <VAR>|--token-stdin]]
+cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|off> | width <칼럼|clear> | cwd <경로> | token [--token-env <VAR>|--token-stdin]]
 ```
 
 `<state>/launch.env` 에 저장되는 봇별 옵션을 보거나 수정한다. 변경은 다음 [`up`](#up) / [`restart`](#restart) 시 적용되며, 봇이 실행 중이면 `cctg` 가 재기동을 안내한다.
 
 | 동작 | 의미 |
 |---|---|
-| `show`(기본) | 채널, 권한 모드, 스냅샷 주기, `launch.env` 내용을 출력한다. |
+| `show`(기본) | 채널, 권한 모드, 스냅샷 주기, 세션 폭, `launch.env` 내용을 출력한다. |
 | `edit` | `$EDITOR`(기본 `vi`) 로 `launch.env` 를 연다. |
 | `mode <m>` | `CCTG_PERMISSION_MODE` 를 설정한다(`acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan` 중 하나). |
 | `mode clear` | 모드를 비워 봇이 공통 `defaultMode` 를 따르게 한다. |
 | `args <str>` | `CLAUDE_EXTRA_ARGS` 를 설정한다. 예: `"--model opus"`. |
 | `snapshot <초>` | `<초>` 초마다 주기 로그 스냅샷을 켠다(최소 `5`). |
 | `snapshot off` | 주기 스냅샷을 끈다(`0` 도 허용, off 가 기본). |
+| `width <칼럼>` | 이 봇의 detached 세션 폭(`CCTG_SESS_WIDTH`, 최소 `20`)을 설정한다. |
+| `width clear` | 봇별 폭을 비워 전역 기본값을 따르게 한다(`default` 도 허용). |
 | `cwd <경로>` | <a name="config-cwd"></a>레지스트리의 봇 작업 디렉터리를 변경한다. 경로가 실제로 존재해야 한다. 봇이 실행 중이면 재기동 안내가 출력된다. |
 | `token` | <a name="config-token"></a>`<state>/.env` 의 토큰을 교체한다(권한 `600`). `--token-env <VAR>`, `--token-stdin`, 또는 대화형 가림 입력을 받는다. 토큰 키(`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`)는 봇의 채널로 결정된다. 봇이 실행 중이면 재기동 안내가 출력된다. |
 
@@ -276,6 +278,8 @@ $ cctg config proj mode bypassPermissions
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
+$ cctg config proj width 200
+$ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
@@ -284,24 +288,28 @@ $ cctg config proj token --token-env NEW_BOT_TOKEN
 ### `common`
 
 ```
-cctg common [show | edit | mode <m> | deny add|rm <rule> | allow add|rm <rule>]
+cctg common [show | edit | mode <m> | width <칼럼|clear> | deny add|rm <rule> | allow add|rm <rule>]
 ```
 
-`--settings` 로 모든 봇에 주입되는 공통 권한 정책을 보거나 수정한다. 파일은 첫 `add`/`up` 시 자동 생성된다. `mode`·`deny`·`allow` 동작은 `jq` 가 필요하다.
+`--settings` 로 모든 봇에 주입되는 공통 권한 정책과 전역 기본 세션 폭을 보거나 수정한다. 설정 파일은 첫 `add`/`up` 시 자동 생성된다. `mode`·`deny`·`allow` 동작은 `jq` 가 필요하다.
 
 | 동작 | 의미 |
 |---|---|
-| `show`(기본) | 공통 설정 파일을 출력한다. |
+| `show`(기본) | 전역 기본 세션 폭(출처 포함)과 공통 설정 파일을 출력한다. |
 | `edit` | `$EDITOR` 로 파일을 연다. |
 | `mode <m>` | `permissions.defaultMode` 를 설정한다. |
+| `width <칼럼>` | 전역 기본 detached 세션 폭(최소 `20`)을 설정한다. 권한 설정 파일이 아니라 `~/.config/cctg/config`(`sess_width`)에 저장된다. |
+| `width clear` | 전역 기본값을 제거해 내장 기본값(`100`)으로 되돌린다(`default` 도 허용). |
 | `deny add <rule>` / `deny rm <rule>` | deny 규칙을 추가/제거한다. 예: `Bash(sudo *)`. |
 | `allow add <rule>` / `allow rm <rule>` | allow 규칙을 추가/제거한다. |
 
-전체 권한 모델은 [permissions.md](permissions.md) 를 참조한다.
+봇의 유효 폭 해석 순서: 봇별 `width` → env `CC_TG_SESS_WIDTH` → 전역 `common width` → 내장 기본값(`100`). 전체 권한 모델은 [permissions.md](permissions.md) 를 참조한다.
 
 ```console
 $ cctg common
 $ cctg common mode default
+$ cctg common width 160
+$ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
 ```
