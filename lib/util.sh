@@ -38,6 +38,9 @@ JSON
 }
 # 모드 유효성 검사
 valid_mode() { case " $VALID_MODES " in *" $1 "*) return 0;; *) return 1;; esac; }
+# detached 세션 폭 유효성 검사: 양의 정수이고 하한(20) 이상.
+# 하한 20 은 tmux 가 거부할 비정상값·오타를 set/해석 시점에 차단한다.
+valid_width() { printf '%s' "${1:-}" | grep -qE '^[0-9]+$' && [ "${1:-0}" -ge 20 ]; }
 # jq 필요 동작 가드
 need_jq() {
   command -v jq >/dev/null 2>&1 && return 0

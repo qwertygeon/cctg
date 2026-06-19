@@ -41,6 +41,67 @@ load test_helper
   [[ "$output" == *"CCTG_PERMISSION_MODE"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# session width (v0.6.0/001-session-width-config)
+# ---------------------------------------------------------------------------
+
+@test "config width: sets CCTG_SESS_WIDTH" {
+  seed_bot mybot
+  run cctg config mybot width 160
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"session width: 160"* ]]
+  grep -q 'CCTG_SESS_WIDTH="160"' "$CC_CHANNELS_DIR/mybot/launch.env"
+}
+
+@test "config width clear: empties CCTG_SESS_WIDTH (follow global)" {
+  seed_bot mybot
+  cctg config mybot width 160 >/dev/null
+  run cctg config mybot width clear
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"(follow global)"* ]]
+  grep -q 'CCTG_SESS_WIDTH=""' "$CC_CHANNELS_DIR/mybot/launch.env"
+}
+
+@test "config width: refuses a non-numeric value" {
+  seed_bot mybot
+  run cctg config mybot width wide
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"width must be an integer"* ]]
+}
+
+@test "config width: refuses a below-minimum value" {
+  seed_bot mybot
+  run cctg config mybot width 10
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"width must be an integer"* ]]
+}
+
+@test "config show: reports the session width" {
+  seed_bot mybot
+  cctg config mybot width 144 >/dev/null
+  run cctg config mybot show
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"session width: 144"* ]]
+}
+
+@test "config width: hints to restart when the bot is running" {
+  seed_bot mybot
+  mark_running mybot
+  run cctg config mybot width 160
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"to apply"* ]]
+}
+
+@test "up: a per-bot CCTG_SESS_WIDTH overrides the default" {
+  seed_bot mybot
+  cctg config mybot width 160 >/dev/null
+  export FAKE_TMUX_LASTCMD="$BATS_TEST_TMPDIR/tmux-lastcmd"
+  run cctg up mybot
+  [ "$status" -eq 0 ]
+  grep -qxF -- '160' "$FAKE_TMUX_LASTCMD"   # per-bot width wins
+  ! grep -qxF -- '100' "$FAKE_TMUX_LASTCMD"  # default not used
+}
+
 @test "config: fails for an unregistered bot" {
   run cctg config ghost show
   [ "$status" -ne 0 ]

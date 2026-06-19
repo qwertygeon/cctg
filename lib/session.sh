@@ -45,10 +45,11 @@ claude_alive() {
 # 본 함수로 위임한다 — 채널 종류가 늘어도 기동 형식/폭을 한 곳에서 관리한다.
 #   - 명령 전달은 다중 인자 직접형(bash -lc "$launch")으로 통일한다: 단일 인자형은 tmux 가
 #     sh -c 로 한 겹 더 감싸 불필요한 셸 계층·이식성 부담을 만든다.
-#   - -x "$SESS_WIDTH": detached 기본 80 폭으로 캡처가 잘리지 않도록 폭을 고정한다.
-# $1=세션명(sess_of 결과), $2=launch 문자열. 반환코드는 tmux new-session 그대로 전파.
+#   - -x "$width": detached 기본 80 폭으로 캡처가 잘리지 않도록 폭을 고정한다.
+# $1=세션명(sess_of 결과), $2=launch 문자열, $3=폭(effective_sess_width 결과; 생략 시 기본값).
+# 반환코드는 tmux new-session 그대로 전파.
 start_session() {
-  tmux new-session -d -x "$SESS_WIDTH" -s "$1" bash -lc "$2"
+  tmux new-session -d -x "${3:-$SESS_WIDTH_DEFAULT}" -s "$1" bash -lc "$2"
 }
 
 # 초 → 사람이 읽는 기간 (예: 2d3h / 4h5m / 7m)
@@ -167,7 +168,7 @@ up_one() {
 && caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   # new-session 실패(서버 기동 불가·리소스 부족·직전 race 등)를 확인 — 미확인 시 거짓 UP 보고.
-  if ! start_session "$(sess_of "$name")" "$launch"; then
+  if ! start_session "$(sess_of "$name")" "$launch" "$(effective_sess_width "$sd")"; then
     te ERR_UP_FAILED "$name"; return 1
   fi
   t UP_OK "$name" "$(tilde "$cwd")" "$(tilde "$sd")" "$(sess_of "$name")"
@@ -252,7 +253,7 @@ up_reserved() {
 && { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
 && caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
-  if ! start_session "$(sess_of "$ch")" "$launch"; then
+  if ! start_session "$(sess_of "$ch")" "$launch" "$(effective_sess_width "$sd")"; then
     te ERR_UP_FAILED "$ch"; return 1
   fi
   t RESERVED_UP "$ch" "$(sess_of "$ch")"

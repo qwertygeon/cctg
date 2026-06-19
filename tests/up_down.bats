@@ -22,7 +22,7 @@ load test_helper
   run cctg up mybot
   [ "$status" -eq 0 ]
   grep -qxF -- '-x'   "$FAKE_TMUX_LASTCMD"   # width flag present
-  grep -qxF -- '200'  "$FAKE_TMUX_LASTCMD"   # default SESS_WIDTH
+  grep -qxF -- '100'  "$FAKE_TMUX_LASTCMD"   # default SESS_WIDTH_DEFAULT
   grep -qxF -- 'bash' "$FAKE_TMUX_LASTCMD"   # direct form: bash is its own token
   grep -qxF -- '-lc'  "$FAKE_TMUX_LASTCMD"
 }
