@@ -61,3 +61,23 @@ snapshot_interval_of() {
   conf_get "$1/launch.env" CCTG_LOG_SNAPSHOT_INTERVAL \
     | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
 }
+
+# launch.env 의 CCTG_SESS_WIDTH(칼럼) 추출(따옴표 제거). 없으면 빈 문자열.
+sess_width_of() {
+  conf_get "$1/launch.env" CCTG_SESS_WIDTH \
+    | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//'
+}
+
+# 봇의 유효 detached 폭 해석. $1=상태 디렉터리.
+# 우선순위: 봇별(launch.env CCTG_SESS_WIDTH) > env(CC_TG_SESS_WIDTH)
+#           > 전역(CCTG_CONFIG sess_width = `cctg common width`) > SESS_WIDTH_DEFAULT(100).
+# 각 후보는 valid_width(양의 정수 ∧ >=20)를 통과해야 채택, 아니면 다음 후보로 폴백한다.
+# (env>config 우선순위는 lang 해석 CCTG_LANG>config 와 동형. valid_width 는 util.sh,
+#  호출 시점엔 모든 모듈이 source 돼 있다.)
+effective_sess_width() {
+  local sd="$1" w
+  w="$(sess_width_of "$sd")";              valid_width "$w" && { printf '%s' "$w"; return; }
+  w="${CC_TG_SESS_WIDTH:-}";               valid_width "$w" && { printf '%s' "$w"; return; }
+  w="$(conf_get "$CCTG_CONFIG" sess_width)"; valid_width "$w" && { printf '%s' "$w"; return; }
+  printf '%s' "$SESS_WIDTH_DEFAULT"
+}

@@ -62,6 +62,7 @@ Some text remains language-neutral regardless of the resolved language: the gene
 | `CC_CHANNELS_DIR` | `~/.claude/channels` | Channel state root |
 | `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | Registry file |
 | `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | Shared permission policy file |
+| `CC_TG_SESS_WIDTH` | (unset) | Detached session width override (columns); beats the `cctg common width` global default |
 | `CCTG_LANG` | (unset) | One-off CLI language override (`en`/`ko`) |
 | `BINDIR` | `~/.local/bin` | Install location (`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | Copy-install package dir (`install.sh`) |
@@ -77,7 +78,7 @@ Per install:
 - launcher `~/.local/bin/cctg`
 - copy-install package `~/.local/libexec/cctg/`
 - manifest `~/.config/cctg/install.conf`
-- language config `~/.config/cctg/config`
+- user config `~/.config/cctg/config` (holds `lang` and the global default `sess_width`)
 
 Per-bot state dir `~/.claude/channels/<name>/` contains:
 
@@ -111,7 +112,7 @@ The shared permission policy (`cctg-shared.settings.json`) is injected into ever
 
 ### tmux sessions
 
-tmux session names follow the `cctg-<name>` convention.
+tmux session names follow the `cctg-<name>` convention. Sessions are detached, so tmux would otherwise cap the width at 80 columns and truncate `logs`/snapshot capture. CCTG pins the width with `new-session -x`. The effective width resolves in this order (first valid wins): the bot's `CCTG_SESS_WIDTH` (`cctg config <name> width`) → env `CC_TG_SESS_WIDTH` → the global default `sess_width` (`cctg common width`, in `~/.config/cctg/config`) → the built-in default `100`. Each candidate must be an integer ≥ 20.
 
 ### The `up` launch line
 

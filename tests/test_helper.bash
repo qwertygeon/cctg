@@ -13,6 +13,8 @@ setup() {
   export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
   export CC_CHANNELS_DIR="$BATS_TEST_TMPDIR/channels"
   export CCTG_LANG=en            # stable English output for assertions
+  # A developer-exported width override would skew width-resolution assertions.
+  unset CC_TG_SESS_WIDTH
   mkdir -p "$HOME" "$XDG_CONFIG_HOME"
 
   # Default working dir for bots that need an existing cwd.

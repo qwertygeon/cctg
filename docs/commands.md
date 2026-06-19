@@ -251,20 +251,22 @@ $ cctg attach proj
 ### `config`
 
 ```
-cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <secs|off> | cwd <path> | token [--token-env <VAR>|--token-stdin]]
+cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <secs|off> | width <cols|clear> | cwd <path> | token [--token-env <VAR>|--token-stdin]]
 ```
 
 Views or edits a bot's per-bot options, stored in `<state>/launch.env`. Changes take effect on the next [`up`](#up) / [`restart`](#restart); when the bot is running, `cctg` reminds you to restart.
 
 | Action | Meaning |
 |---|---|
-| `show` (default) | Prints the channel, permission mode, snapshot interval, and the `launch.env` contents. |
+| `show` (default) | Prints the channel, permission mode, snapshot interval, session width, and the `launch.env` contents. |
 | `edit` | Opens `launch.env` in `$EDITOR` (default `vi`). |
 | `mode <m>` | Sets `CCTG_PERMISSION_MODE` (one of `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`). |
 | `mode clear` | Empties the mode so the bot follows the shared `defaultMode`. |
 | `args <str>` | Sets `CLAUDE_EXTRA_ARGS`, e.g. `"--model opus"`. |
 | `snapshot <secs>` | Enables a periodic log snapshot every `<secs>` seconds (minimum `5`). |
 | `snapshot off` | Disables periodic snapshots (also accepts `0`; off is the default). |
+| `width <cols>` | Sets this bot's detached session width (`CCTG_SESS_WIDTH`, minimum `20`). |
+| `width clear` | Empties the per-bot width so the bot follows the global default (also accepts `default`). |
 | `cwd <path>` | <a name="config-cwd"></a>Changes the bot's working directory in the registry. The path must already exist. If the bot is running, a restart reminder is shown. |
 | `token` | <a name="config-token"></a>Replaces the bot's token in `<state>/.env` (mode `600`). Accepts `--token-env <VAR>`, `--token-stdin`, or an interactive masked prompt. The token key (`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`) is determined by the bot's channel. If the bot is running, a restart reminder is shown. |
 
@@ -276,6 +278,8 @@ $ cctg config proj mode bypassPermissions
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
+$ cctg config proj width 200
+$ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
@@ -284,24 +288,28 @@ $ cctg config proj token --token-env NEW_BOT_TOKEN
 ### `common`
 
 ```
-cctg common [show | edit | mode <m> | deny add|rm <rule> | allow add|rm <rule>]
+cctg common [show | edit | mode <m> | width <cols|clear> | deny add|rm <rule> | allow add|rm <rule>]
 ```
 
-Views or edits the shared permission policy that is injected into every bot via `--settings`. The file is auto-created on the first `add`/`up`. The `mode`, `deny`, and `allow` actions require `jq`.
+Views or edits the shared permission policy that is injected into every bot via `--settings`, plus the global default session width. The settings file is auto-created on the first `add`/`up`. The `mode`, `deny`, and `allow` actions require `jq`.
 
 | Action | Meaning |
 |---|---|
-| `show` (default) | Prints the shared settings file. |
+| `show` (default) | Prints the global default session width (with its source) and the shared settings file. |
 | `edit` | Opens the file in `$EDITOR`. |
 | `mode <m>` | Sets `permissions.defaultMode`. |
+| `width <cols>` | Sets the global default detached session width (minimum `20`), stored in `~/.config/cctg/config` (`sess_width`) — not in the permission settings file. |
+| `width clear` | Removes the global default so it falls back to the built-in default (`100`; also accepts `default`). |
 | `deny add <rule>` / `deny rm <rule>` | Adds/removes a deny rule, e.g. `Bash(sudo *)`. |
 | `allow add <rule>` / `allow rm <rule>` | Adds/removes an allow rule. |
 
-For the full permission model, see [permissions.md](permissions.md).
+The effective width for a bot resolves as: per-bot `width` → env `CC_TG_SESS_WIDTH` → global `common width` → built-in default (`100`). For the full permission model, see [permissions.md](permissions.md).
 
 ```console
 $ cctg common
 $ cctg common mode default
+$ cctg common width 160
+$ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
 ```
