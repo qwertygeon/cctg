@@ -477,37 +477,37 @@ _status_class_reserved() {
   printf 'stopped'
 }
 
-# status: 프로젝트 봇 1건 렌더(RUNNING/BROKEN/stopped + paths/mode/channel). 정렬은 호출측이 버킷 순서로 제어.
+# status: 프로젝트 봇 1건 렌더(RUNNING/DEAD/BROKEN/stopped + paths/mode/channel).
+# state 는 호출측(_status_class)이 이미 판정한 값을 그대로 받는다 — 여기서 재판정(claude_alive)
+# 하지 않아 봇당 ps 스캔이 1회(분류 시)로 끝난다. 버킷 순서로 정렬도 호출측이 제어.
 _status_render_project_bot() {
-  local n="$1" row cwd sd issues created up pm ch_disp dm gc
+  local n="$1" state="$2" row cwd sd issues created up pm ch_disp dm gc
   row="$(lookup "$n")"
   cwd="$(expand "$(cut -f1 <<<"$row")")"
   sd="$(expand "$(cut -f2 <<<"$row")")"
-  # 깨진 상태 감지: 작업 디렉터리·토큰 파일 존재 여부
-  issues=""
-  [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
-  [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
-  if is_running "$n"; then
-    if claude_alive "$n"; then
+  case "$state" in
+    running)
       created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
       up=""
       if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
         up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
       fi
-      t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")"
-    else
+      t STATUS_RUNNING "$n" "$up" "$(sess_of "$n")" ;;
+    dead)
       # 세션은 살아있으나 claude 종료됨(거짓 UP). 사용자 수동 restart 유도(DEC-001).
       t STATUS_DEAD "$n" "$(sess_of "$n")"
-      t STATUS_HINT_DEAD "$PROG" "$n"
-    fi
-  elif [ -n "$issues" ]; then
-    t STATUS_BROKEN "$n" "$issues"
-    # BROKEN 사유별 복구 힌트. 토큰 키는 채널 descriptor 에서(telegram=TELEGRAM_BOT_TOKEN 등).
-    [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$(tilde "$cwd")" "$PROG" "$n"
-    [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)"
-  else
-    t STATUS_STOPPED "$n"
-  fi
+      t STATUS_HINT_DEAD "$PROG" "$n" ;;
+    broken)
+      # 깨진 상태 사유(작업 디렉터리·토큰 파일 부재)별 복구 힌트.
+      issues=""
+      [ -d "$cwd" ]      || issues="$(t ISSUE_NO_CWD)"
+      [ -f "$sd/.env" ]  || issues="${issues:+$issues, }$(t ISSUE_NO_TOKEN)"
+      t STATUS_BROKEN "$n" "$issues"
+      [ -d "$cwd" ]     || t STATUS_HINT_NO_CWD "$(tilde "$cwd")" "$PROG" "$n"
+      [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$n" "$(channel_spec "$(channel_of "$n")" token_key)" ;;
+    *)
+      t STATUS_STOPPED "$n" ;;
+  esac
   pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
   t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
   t STATUS_MODE "$pm"
@@ -528,33 +528,31 @@ _status_render_project_bot() {
 
 # status: 예약어 전역 봇 1건 렌더.
 _status_render_reserved_bot() {
-  local ch="$1" sd cwd issues sess created up pm
+  local ch="$1" state="$2" sd cwd issues sess created up pm
   sd="$CHANNELS_DIR/$ch"
   # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
-  # 그 외(STOPPED 등 세션 부재)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
+  # 그 외(DEAD/STOPPED 등)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
   cwd="—"
-  issues=""
-  [ -f "$sd/.env" ] || issues="$(t ISSUE_NO_TOKEN)"
-  if is_running "$ch"; then
-    sess="$(sess_of "$ch")"
-    if claude_alive "$ch"; then
+  sess="$(sess_of "$ch")"
+  case "$state" in
+    running)
       cwd="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{pane_current_path}' 2>/dev/null)"; [ -n "$cwd" ] || cwd="—"
       created="$(tmux display-message -p -t "$(sess_pt "$ch")" '#{session_created}' 2>/dev/null)"
       up=""
       if printf '%s' "$created" | grep -qE '^[0-9]+$'; then
         up="$(t STATUS_UPTIME "$(fmt_dur $(( $(date +%s) - created )))")"
       fi
-      t STATUS_RUNNING "$ch" "$up" "$sess"
-    else
+      t STATUS_RUNNING "$ch" "$up" "$sess" ;;
+    dead)
       t STATUS_DEAD "$ch" "$sess"
-      t STATUS_HINT_DEAD "$PROG" "$ch"
-    fi
-  elif [ -n "$issues" ]; then
-    t STATUS_BROKEN "$ch" "$issues"
-    [ -f "$sd/.env" ] || t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)"
-  else
-    t STATUS_STOPPED "$ch"
-  fi
+      t STATUS_HINT_DEAD "$PROG" "$ch" ;;
+    broken)
+      issues="$(t ISSUE_NO_TOKEN)"
+      t STATUS_BROKEN "$ch" "$issues"
+      t STATUS_HINT_NO_TOKEN "$(tilde "$sd")" "$PROG" "$ch" "$(channel_spec "$ch" token_key)" ;;
+    *)
+      t STATUS_STOPPED "$ch" ;;
+  esac
   pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
   t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
   t STATUS_MODE "$pm"
@@ -579,11 +577,21 @@ cmd_status() {
         *)       p_stopped="${p_stopped}${n}"$'\n' ;;
       esac
     done < <(all_names)
-    # RUNNING(위) → DEAD(크래시) → BROKEN(설정결손) → stopped(아래) 순. here-string 이라 현재 셸에서 실행.
-    while IFS= read -r n; do
-      [ -z "$n" ] && continue
-      _status_render_project_bot "$n"
-    done <<< "$p_running$p_dead$p_broken$p_stopped"
+    # RUNNING(위) → DEAD(크래시) → BROKEN(설정결손) → stopped(아래) 순. 분류 시 판정한 state 를
+    # 렌더에 그대로 넘겨 재판정(ps 재스캔)을 피한다.
+    local st bucket
+    for st in running dead broken stopped; do
+      case "$st" in
+        running) bucket="$p_running" ;;
+        dead)    bucket="$p_dead" ;;
+        broken)  bucket="$p_broken" ;;
+        *)       bucket="$p_stopped" ;;
+      esac
+      while IFS= read -r n; do
+        [ -z "$n" ] && continue
+        _status_render_project_bot "$n" "$st"
+      done <<< "$bucket"
+    done
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
 
     # 예약어 전역 봇 섹션: channel_spec 정의 + $CHANNELS_DIR/<ch> 존재 항목만 표시(ADR-010).
@@ -599,12 +607,20 @@ cmd_status() {
         *)       r_stopped="${r_stopped}${ch}"$'\n' ;;
       esac
     done
-    local ch_found=0
-    while IFS= read -r ch; do
-      [ -z "$ch" ] && continue
-      [ "$ch_found" = 0 ] && { t STATUS_RESERVED_HEADER; ch_found=1; }
-      _status_render_reserved_bot "$ch"
-    done <<< "$r_running$r_dead$r_broken$r_stopped"
+    local ch_found=0 rst rbucket
+    for rst in running dead broken stopped; do
+      case "$rst" in
+        running) rbucket="$r_running" ;;
+        dead)    rbucket="$r_dead" ;;
+        broken)  rbucket="$r_broken" ;;
+        *)       rbucket="$r_stopped" ;;
+      esac
+      while IFS= read -r ch; do
+        [ -z "$ch" ] && continue
+        [ "$ch_found" = 0 ] && { t STATUS_RESERVED_HEADER; ch_found=1; }
+        _status_render_reserved_bot "$ch" "$rst"
+      done <<< "$rbucket"
+    done
 }
 
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.

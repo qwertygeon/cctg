@@ -31,7 +31,7 @@
 | 메시지 카탈로그 | `messages/en.sh`, `messages/ko.sh` | i18n 출력 문자열(`CCTG_MSG_*` 스칼라). `t()`/`te()`/`die()` 가 키로 조회 | en=베이스, 선택언어 overlay |
 | 자동완성 | `completions/cctg.bash`, `completions/_cctg` | bash/zsh 명령·플래그·봇이름 완성 | zsh 는 `#compdef` |
 | 검증 스크립트 | `scripts/check-i18n-keys.sh` | en/ko 키 패리티 + 참조 키 검증 | CI lint |
-| 테스트 | `tests/*.bats`, `tests/test_helper.bash`, `tests/stubs/tmux` | 격리 상태 트리 + stateful fake tmux 로 명령·lifecycle 검증(119) | 실제 봇/tmux 무접촉 |
+| 테스트 | `tests/*.bats`, `tests/test_helper.bash`, `tests/stubs/{tmux,ps,claude}` | 격리 상태 트리 + stateful fake tmux(+조건부 ps stub: liveness 트리) 로 명령·lifecycle 검증(201) | 실제 봇/tmux 무접촉 |
 | 설치/제거 | `install.sh`, `uninstall.sh` | copy(libexec) / `--dev`(symlink) 설치, 매니페스트·완성·셸rc 관리, 대칭 제거 | |
 | 문서 | `docs/` (RELEASING·TODO·i18n·packaging), `README(.ko).md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` | 사용자·기여자 문서 | |
 | CI/릴리스 | `.github/workflows/ci.yml`, `release.yml` | lint+test(main) / VERSION 변경→태그·Release 자동 발행 | |

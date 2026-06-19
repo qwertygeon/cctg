@@ -23,6 +23,9 @@ is_running() { tmux has-session -t "$(sess_t "$1")" 2>/dev/null; }
 # 모든 채널이 동일 launch(caffeinate -is claude --channels …)로 떠 채널 플러그인이 claude 의
 # 자식으로 동작하므로, claude 가 채널 불문 단일 불변 신호다.
 # BSD ps / Bash 3.2 호환: 맵·BFS 는 awk 가 수행(bash 연관배열 미사용). comm 만 보므로 토큰 비노출.
+# 가정: claude 의 프로세스명(comm)이 'claude' 다(풀패스 호출 '/…/claude' 도 정규식이 처리).
+#   claude CLI 가 향후 프로세스명을 바꾸면(node/래퍼 등) false DEAD 가능 — 그때는 launch 래퍼
+#   'caffeinate'(이름 안정) 를 보조 신호로 병행하도록 정규식을 확장한다.
 claude_alive() {
   local pp
   pp="$(tmux display-message -p -t "$(sess_pt "$1")" '#{pane_pid}' 2>/dev/null)"
@@ -129,7 +132,13 @@ up_one() {
   sd="$(expand "$(cut -f2 <<<"$row")")"
   [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }
   [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }
-  if is_running "$name"; then t ALREADY_RUNNING "$name"; return 0; fi
+  if is_running "$name"; then
+    # 세션은 있으나 claude 가 죽은 DEAD 면 복구 경로(restart)를 안내한다. 자동 재기동은
+    # 하지 않는다(DEC-001/A=2) — is_running 기반 idempotent 동작 유지 위해 return 0.
+    if claude_alive "$name"; then t ALREADY_RUNNING "$name"
+    else t ALREADY_RUNNING_DEAD "$name" "$PROG" "$name"; fi
+    return 0
+  fi
   # claude 부재 시 세션은 exec bash 로 살아남아 거짓 UP 이 되므로 기동 전에 거부.
   need_claude || return 1
 
@@ -217,7 +226,12 @@ up_reserved() {
   [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }                 # up_one 과 동형 가드
   [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }       # SC-017
   # 단독소유자 가드: cctg-<ch> tmux 세션 OR bot.pid 생존 (ADR-007)
-  if is_running "$ch"; then te ERR_RESERVED_UP_OCCUPIED "$ch"; return 1; fi
+  # DEAD(세션 생존·claude 종료)면 점유 거부 메시지 대신 restart 복구 경로를 안내한다.
+  if is_running "$ch"; then
+    if claude_alive "$ch"; then te ERR_RESERVED_UP_OCCUPIED "$ch"
+    else te ERR_RESERVED_UP_DEAD "$ch" "$PROG" "$ch"; fi
+    return 1
+  fi
   if reserved_runner_alive "$sd"; then te ERR_RESERVED_UP_RUNNER "$ch"; return 1; fi
   need_claude || return 1
 
