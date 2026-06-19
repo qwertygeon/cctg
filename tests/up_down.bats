@@ -200,8 +200,17 @@ load test_helper
 
 @test "up: refuses when tmux is absent (need_tmux, R2)" {
   seed_bot mybot
-  local nodir="$BATS_TEST_TMPDIR/notmux"; mkdir -p "$nodir"
-  run env PATH="$nodir:/usr/bin:/bin" bash "$CCTG" up mybot
+  # A controlled bin with the tools cctg needs but deliberately WITHOUT tmux, used as
+  # the sole PATH — so tmux is absent regardless of OS. (A bare /usr/bin:/bin PATH is
+  # not enough: ubuntu ships tmux in /usr/bin, so need_tmux would still find it; macOS
+  # keeps tmux in homebrew so it happened to be absent there.)
+  local bin="$BATS_TEST_TMPDIR/notmux-bin"; mkdir -p "$bin"
+  local t src
+  for t in bash sh env basename dirname readlink awk sed grep cut tr cat head tail mkdir chmod rm ln date stat; do
+    src="$(command -v "$t" 2>/dev/null)" || continue
+    ln -sf "$src" "$bin/$t"
+  done
+  run env PATH="$bin" bash "$CCTG" up mybot
   [ "$status" -ne 0 ]
   [[ "$output" == *"tmux not found"* ]]
 }
