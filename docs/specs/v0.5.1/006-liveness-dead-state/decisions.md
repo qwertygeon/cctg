@@ -22,4 +22,4 @@
 - **제약 준수**: BSD `ps -ax -o pid=,ppid=,comm=` + awk(BFS·맵)로 Bash 3.2 호환(P-001). comm 만 매칭하여 토큰(argv 의 `--settings` 등) 비노출(P-003).
 - **엣지**: claude 기동 직후/종료 직전 짧은 전이 구간은 스냅샷 시점 판정이라 transient `dead` 가능(허용 — status 는 순간 조회). 향후 P2 에서 grace 적용 검토.
 - **awk 이식성(검증 공백)**: `claude_alive` 의 awk 는 호스트 awk 로 실행된다. 로컬 검증은 macOS awk(BWK)에서만 이뤄졌고, CI(ubuntu, mawk/gawk) 경로는 →develop PR 에 CI 트리거가 없어 미실행이다. 사용한 구문(연관배열 맵, `for(k in a)`, `~` 정규식, `exit cond?0:1` 삼항)은 POSIX awk 표준이라 mawk/gawk 에서도 동작할 것으로 보지만, **develop→main PR 에서 ubuntu CI 가 처음 검증**한다(현재까지 미검증인 점을 명시 — no-silent-caps).
-- **comm 공백 경로 엣지**: claude 실행 경로에 공백이 있으면 `ps -o comm=` 출력의 3번째 필드 분해가 깨질 수 있다(현실적으로 claude 경로엔 공백 없음 — 미처리 수용).
+- **comm 공백 경로 엣지**: claude 실행 경로에 공백이 있으면 `ps -o comm=` 출력의 3번째 필드 분해가 깨질 수 있다(현실적으로 claude 경로엔 공백 없음). 본 차수 미처리 — `docs/TODO.md` "방어 코드/견고성" P3 로 추적.
