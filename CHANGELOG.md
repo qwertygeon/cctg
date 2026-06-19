@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-19
+
 ### Added
 - **Health-based liveness in `cctg status` — no more false `RUNNING`**: `status` now distinguishes a truly-running bot from a **`DEAD`** one (the tmux session is still alive but the `claude` process has exited). Because the launch command ends with `exec bash`, a crashed/exited `claude` leaves a live `bash` in the pane, so the old `tmux has-session` check reported `RUNNING` for a dead bot. A new `claude_alive()` walks the pane's process descendant tree (`tmux #{pane_pid}` → `ps -ax -o pid=,ppid=,comm=`) for a `claude` process — the channel-agnostic invariant, since every channel launches `caffeinate -is claude --channels <plugin>` and the channel plugin runs as `claude`'s child. (`pane_current_command` was found unreliable — it reads `bash` even while `claude` is alive.) Both the text view (`[DEAD   ]` with a `restart` hint) and `status --json` (`state:"dead"`, `running:false`, `uptimeSeconds:null`) report it; `status` sorts `RUNNING → DEAD → BROKEN → stopped`. `up <bot>` also recognizes a DEAD session and points to `restart` (project bots keep their idempotent exit; reserved bots are refused by the sole-owner guard with the same hint) instead of a bare "already running". `is_running()` and the `up`/`down`/`restart` lifecycle behavior are unchanged — recovery is a manual `restart` (auto-restart is deferred). (`lib/session.sh`, `lib/commands.sh`, `messages/*.sh`)
 - **Documented bot-operator legal responsibilities**: a new "Your responsibilities as a bot operator" section in [SECURITY.md](SECURITY.md) surfaces obligations that come from the upstream services rather than from CCTG — your use is governed by your own Anthropic plan terms (Commercial/Consumer) and Usage Policy (CCTG only invokes the official `claude` CLI and never extracts/reuses credentials); consumer-facing bots must disclose they are AI; Discord **requires** a per-bot privacy policy and prohibits commercializing platform "API data"; Telegram expects lawful data handling. The README privacy/disclaimer callout (en/ko) gained a pointer, and the Telegram/Discord setup guides (en/ko) gained an "Operator responsibilities" note. Documentation only; not legal advice. (`SECURITY.md`, `README.md`, `README.ko.md`, `docs/telegram-setup*.md`, `docs/discord-setup*.md`)
@@ -123,7 +125,9 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/qwertygeon/cctg/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/qwertygeon/cctg/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/qwertygeon/cctg/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/qwertygeon/cctg/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/qwertygeon/cctg/compare/v0.1.1...v0.2.0
