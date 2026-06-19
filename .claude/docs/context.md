@@ -54,12 +54,17 @@
 
 ```
 봇: (미등록) → registered → running → stopped
+                              ↘ DEAD   (tmux 세션 생존 · claude 종료)
                               ↘ BROKEN (cwd 없음 / 토큰 없음 등 issue)
   - 미등록 → registered: add
   - registered → running: up (tmux 세션 생성)
   - running → stopped: down (스냅샷 + 세션 kill)
+  - running → DEAD: 세션 launch 의 `exec bash` 꼬리 때문에 claude 종료 후에도 세션이 살아있는 상태.
+      status 가 pane 자손 트리에서 claude 생존을 확인해 구분(claude_alive). 자동 복구 안 함 — 수동 restart.
+      `is_running`(tmux 세션 존재)은 여전히 true 라 up 은 "이미 실행 중"이 아니라 DEAD 안내 메시지 출력.
   - registered/running → BROKEN: status 점검에서 cwd 부재·토큰(.env) 부재 등 발견
   - * → (미등록): rm (--purge 시 상태 디렉터리도 삭제)
+  - status 정렬·표시: RUNNING → DEAD → BROKEN → stopped
 ```
 
 ### 3.4 외부 시스템 연동
