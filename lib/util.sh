@@ -64,6 +64,11 @@ need_claude() {
   return 1
 }
 
+# 읽기 경로(status/logs)용 tmux 부재 경고 — 없으면 is_running/capture-pane 이 조용히 실패해
+# 실행/라이브 상태가 미상인데도 모두 "stopped/broken" 으로 오인될 수 있다. need_tmux 처럼 거부하지는
+# 않는다(정지 봇 스냅샷 조회·레지스트리 표시는 tmux 없이도 유효) — 침묵 대신 stderr 경고만 1회 낸다.
+warn_no_tmux_readonly() { command -v tmux >/dev/null 2>&1 || te WARN_NO_TMUX; }
+
 # jq in-place 편집
 jq_inplace() {
   local f="$1"; shift; local tmp
@@ -98,3 +103,9 @@ sub_usage() {
 
 # 봇 이름 검증 — tmux 세션명·레지스트리(|) 충돌 방지를 위해 영숫자/_/- 만 허용
 valid_name() { printf '%s' "$1" | grep -qE '^[A-Za-z0-9_-]+$'; }
+
+# 파일의 8진 권한 비트(예: 600) — GNU(stat -c) 우선, BSD/macOS(stat -f) 폴백. 실패 시 빈 문자열.
+file_perm() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
+
+# 파일 수정시각(epoch 초) — GNU(stat -c %Y) 우선, BSD/macOS(stat -f %m) 폴백. 실패 시 빈 문자열.
+file_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null; }

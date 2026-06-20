@@ -118,6 +118,8 @@ case "$cmd" in
     fmt=""; for fmt in "$@"; do :; done
     case "$fmt" in
       *pane_pid*) printf '%s\n' "${FAKE_TMUX_PANE_PID:-0}" ;;
+      # last-activity (status #{window_activity}); tests can pin FAKE_TMUX_ACTIVITY.
+      *window_activity*) printf '%s\n' "${FAKE_TMUX_ACTIVITY:-${FAKE_TMUX_CREATED:-1700000000}}" ;;
       *session_created*)
         created=""
         if [ -n "${FAKE_TMUX_CREATED_FILE:-}" ] && [ -f "${FAKE_TMUX_CREATED_FILE}" ] && [ -n "$resolved" ]; then
