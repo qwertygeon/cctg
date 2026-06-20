@@ -81,3 +81,15 @@ load test_helper
   [ "$status" -ne 0 ]
   [[ "$output" == *"no logs"* ]]
 }
+
+@test "status: warns when tmux is absent instead of silently showing all stopped (defensive)" {
+  # Without tmux, is_running() silently fails and every bot reads as stopped/broken.
+  # The read path must surface a warning rather than mislead. Run with a PATH that
+  # has no tmux (skip if this host happens to ship one under /usr/bin:/bin).
+  if PATH="/usr/bin:/bin" command -v tmux >/dev/null 2>&1; then
+    skip "tmux present in /usr/bin:/bin on this host"
+  fi
+  seed_bot mybot
+  run env PATH="/usr/bin:/bin" bash "$CCTG" status
+  [[ "$output" == *"tmux not found"* ]]
+}

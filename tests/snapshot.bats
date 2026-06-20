@@ -8,7 +8,7 @@ load test_helper
   run cctg config mybot snapshot 30
   [ "$status" -eq 0 ]
   [[ "$output" == *"log snapshot: every 30s"* ]]
-  grep -q 'CCTG_LOG_SNAPSHOT_INTERVAL="30"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_LOG_SNAPSHOT_INTERVAL='30'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config snapshot off: clears the interval" {
@@ -17,7 +17,7 @@ load test_helper
   run cctg config mybot snapshot off
   [ "$status" -eq 0 ]
   [[ "$output" == *"log snapshot: off"* ]]
-  grep -q 'CCTG_LOG_SNAPSHOT_INTERVAL=""' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_LOG_SNAPSHOT_INTERVAL=''" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config snapshot: rejects a value below the minimum" {

@@ -202,14 +202,14 @@ seed_global() {
   run bash -c "printf 'SECRET\n' | bash '$CCTG' config telegram token --token-stdin"
   [ "$status" -eq 0 ]
   local env="$CC_CHANNELS_DIR/telegram/.env"
-  [ "$(cat "$env")" = "TELEGRAM_BOT_TOKEN=SECRET" ]
+  [ "$(cat "$env")" = "TELEGRAM_BOT_TOKEN='SECRET'" ]
   [ "$(file_mode "$env")" = "600" ]
 }
 
 @test "config discord token: uses DISCORD_BOT_TOKEN (channel == bot name)" {
   run bash -c "printf 'DTOK\n' | bash '$CCTG' config discord token --token-stdin"
   [ "$status" -eq 0 ]
-  [ "$(cat "$CC_CHANNELS_DIR/discord/.env")" = "DISCORD_BOT_TOKEN=DTOK" ]
+  [ "$(cat "$CC_CHANNELS_DIR/discord/.env")" = "DISCORD_BOT_TOKEN='DTOK'" ]
 }
 
 @test "config telegram cwd: rejected — global bot has no stored cwd" {

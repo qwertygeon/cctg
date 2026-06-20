@@ -95,6 +95,9 @@ cmd_add() {
             "")        : ;;
             nomention) rm_flag=false ;;
             allow=*)   allow_csv="${gmod#allow=}" ;;
+            # 미지 수식어는 조용히 무시하지 않는다 — 오타(`nomeniton` 등)가 접근정책을 의도와
+            # 다르게 시드하는 silent-failure 를 막는다. 검증 단계라 파일 쓰기 전 안전하게 중단.
+            *)         IFS="$saved_ifs"; die ERR_ADD_BAD_GROUP_MOD "$gmod" "$gid" ;;
           esac
         done
         IFS="$saved_ifs"
@@ -270,7 +273,7 @@ cmd_config() {
       # 예약어 전역 봇: 레지스트리 없이 고정 좌표 사용(ADR-006/010). channel_spec 정의 채널만 지원.
       # up/down/logs/status 와 동일하게 config(token·mode·args·snapshot) 도 전역 봇을 다룬다.
       channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
-      sd="$CHANNELS_DIR/$NAME"; mkdir -p "$sd"
+      sd="$CHANNELS_DIR/$NAME"; mkdir -p "$sd" || die ERR_ADD_WRITE "$sd"
       cfg_channel="$NAME"                          # 예약어는 채널명 == 봇명
     else
       row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
@@ -280,7 +283,7 @@ cmd_config() {
     LE="$sd/launch.env"
     # 이 기능 도입 전 등록된 봇엔 키가 없을 수 있으므로 템플릿 보강
     if [ ! -f "$LE" ]; then
-      cat > "$LE" <<'ENV'
+      cat > "$LE" <<'ENV' || die ERR_ADD_WRITE "$LE"
 # 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
 
 # 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
@@ -616,6 +619,7 @@ cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
     if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
 
+    warn_no_tmux_readonly   # tmux 없으면 모든 봇이 stopped/broken 으로 보이는 오인 방지(경고만)
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
@@ -727,6 +731,7 @@ status_json() {
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
     printf '%s' "$N" | grep -qE '^[0-9]+$' || die ERR_BAD_LOG_N "$N"
+    warn_no_tmux_readonly   # tmux 없으면 실행 중 봇도 라이브 캡처 대신 스냅샷/정지로 보임(경고만)
     # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
     if is_reserved_name "$NAME"; then
       # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)

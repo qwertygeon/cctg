@@ -64,6 +64,11 @@ need_claude() {
   return 1
 }
 
+# 읽기 경로(status/logs)용 tmux 부재 경고 — 없으면 is_running/capture-pane 이 조용히 실패해
+# 실행/라이브 상태가 미상인데도 모두 "stopped/broken" 으로 오인될 수 있다. need_tmux 처럼 거부하지는
+# 않는다(정지 봇 스냅샷 조회·레지스트리 표시는 tmux 없이도 유효) — 침묵 대신 stderr 경고만 1회 낸다.
+warn_no_tmux_readonly() { command -v tmux >/dev/null 2>&1 || te WARN_NO_TMUX; }
+
 # jq in-place 편집
 jq_inplace() {
   local f="$1"; shift; local tmp
