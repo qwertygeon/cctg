@@ -101,3 +101,66 @@ make_jqless_path() {
   p2=$(grep -n '\[RUNNING\] two' <<<"$output" | head -1 | cut -d: -f1)
   [ "$p1" -lt "$p2" ]   # one registered before two → stays first
 }
+
+# --- v0.6.0/002: within-bucket recency sort (RUNNING·DEAD by session_created desc) ---
+
+# Map a bot's session to a session_created epoch for the fake tmux, so the
+# recency sort sees distinct per-session start times (real tmux returns each
+# session's own #{session_created}).
+set_created() {
+  export FAKE_TMUX_CREATED_FILE="$BATS_TEST_TMPDIR/.tmux-created"
+  printf 'cctg-%s\t%s\n' "$1" "$2" >> "$FAKE_TMUX_CREATED_FILE"
+}
+
+@test "status: RUNNING bucket lists most-recently-started bot first (SC-001)" {
+  seed_bot older       # registered first
+  seed_bot newer       # registered second, but started later
+  mark_running older
+  mark_running newer
+  set_created older 1700000000
+  set_created newer 1700009999
+  run cctg status
+  [ "$status" -eq 0 ]
+  local pn po
+  pn=$(grep -n '\[RUNNING\] newer' <<<"$output" | head -1 | cut -d: -f1)
+  po=$(grep -n '\[RUNNING\] older' <<<"$output" | head -1 | cut -d: -f1)
+  [ -n "$pn" ] && [ -n "$po" ]
+  [ "$pn" -lt "$po" ]   # newer session_created sorts above older despite registry order
+}
+
+@test "status: DEAD bucket lists most-recently-started bot first (SC-002)" {
+  seed_bot d_old
+  seed_bot d_new
+  mark_running d_old
+  mark_running d_new
+  # claude-less process tree → both sessions classify as DEAD, not RUNNING.
+  export FAKE_PS_TREE="$FAKE_TMUX_PANE_PID 1 bash"
+  set_created d_old 1700000000
+  set_created d_new 1700009999
+  run cctg status
+  [ "$status" -eq 0 ]
+  local pn po
+  pn=$(grep -n 'd_new' <<<"$output" | grep DEAD | head -1 | cut -d: -f1)
+  po=$(grep -n 'd_old' <<<"$output" | grep DEAD | head -1 | cut -d: -f1)
+  [ -n "$pn" ] && [ -n "$po" ]
+  [ "$pn" -lt "$po" ]   # newer dead session sorts above older dead session
+}
+
+@test "status: reserved global bots also sort RUNNING by recency (SC-005)" {
+  # telegram precedes discord in RESERVED_NAMES iteration order; make discord the
+  # more-recently-started one so recency sort floats it above telegram.
+  mkdir -p "$CC_CHANNELS_DIR/telegram" "$CC_CHANNELS_DIR/discord"
+  printf 'TELEGRAM_BOT_TOKEN=x\n' > "$CC_CHANNELS_DIR/telegram/.env"
+  printf 'DISCORD_BOT_TOKEN=x\n'  > "$CC_CHANNELS_DIR/discord/.env"
+  mark_running telegram
+  mark_running discord
+  set_created telegram 1700000000
+  set_created discord  1700009999
+  run cctg status
+  [ "$status" -eq 0 ]
+  local pd pt
+  pd=$(grep -n '\[RUNNING\] discord'  <<<"$output" | head -1 | cut -d: -f1)
+  pt=$(grep -n '\[RUNNING\] telegram' <<<"$output" | head -1 | cut -d: -f1)
+  [ -n "$pd" ] && [ -n "$pt" ]
+  [ "$pd" -lt "$pt" ]   # discord (later session_created) sorts above telegram
+}
