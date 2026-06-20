@@ -22,7 +22,7 @@ load test_helper
   run cctg up mybot
   [ "$status" -eq 0 ]
   grep -qxF -- '-x'   "$FAKE_TMUX_LASTCMD"   # width flag present
-  grep -qxF -- '200'  "$FAKE_TMUX_LASTCMD"   # default SESS_WIDTH
+  grep -qxF -- '100'  "$FAKE_TMUX_LASTCMD"   # default SESS_WIDTH_DEFAULT
   grep -qxF -- 'bash' "$FAKE_TMUX_LASTCMD"   # direct form: bash is its own token
   grep -qxF -- '-lc'  "$FAKE_TMUX_LASTCMD"
 }
@@ -40,6 +40,8 @@ load test_helper
   run cctg up mybot
   [ "$status" -ne 0 ]
   [[ "$output" == *"working directory not found"* ]]
+  # recovery hint aligned with status BROKEN hint (item: action-error hints)
+  [[ "$output" == *"config mybot cwd"* ]]
 }
 
 @test "up: fails when the token file is missing" {
@@ -54,6 +56,8 @@ load test_helper
   run cctg up ghost
   [ "$status" -ne 0 ]
   [[ "$output" == *"not a registered project: ghost"* ]]
+  # recovery hint points to registration
+  [[ "$output" == *"add <name> <dir>"* ]]
 }
 
 @test "down: stops a running session, snapshots, and clears the session" {

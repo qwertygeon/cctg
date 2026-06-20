@@ -38,6 +38,9 @@ JSON
 }
 # 모드 유효성 검사
 valid_mode() { case " $VALID_MODES " in *" $1 "*) return 0;; *) return 1;; esac; }
+# detached 세션 폭 유효성 검사: 양의 정수이고 하한(20) 이상.
+# 하한 20 은 tmux 가 거부할 비정상값·오타를 set/해석 시점에 차단한다.
+valid_width() { printf '%s' "${1:-}" | grep -qE '^[0-9]+$' && [ "${1:-0}" -ge 20 ]; }
 # jq 필요 동작 가드
 need_jq() {
   command -v jq >/dev/null 2>&1 && return 0
@@ -60,6 +63,11 @@ need_claude() {
   te ERR_NO_CLAUDE
   return 1
 }
+
+# 읽기 경로(status/logs)용 tmux 부재 경고 — 없으면 is_running/capture-pane 이 조용히 실패해
+# 실행/라이브 상태가 미상인데도 모두 "stopped/broken" 으로 오인될 수 있다. need_tmux 처럼 거부하지는
+# 않는다(정지 봇 스냅샷 조회·레지스트리 표시는 tmux 없이도 유효) — 침묵 대신 stderr 경고만 1회 낸다.
+warn_no_tmux_readonly() { command -v tmux >/dev/null 2>&1 || te WARN_NO_TMUX; }
 
 # jq in-place 편집
 jq_inplace() {
@@ -95,3 +103,9 @@ sub_usage() {
 
 # 봇 이름 검증 — tmux 세션명·레지스트리(|) 충돌 방지를 위해 영숫자/_/- 만 허용
 valid_name() { printf '%s' "$1" | grep -qE '^[A-Za-z0-9_-]+$'; }
+
+# 파일의 8진 권한 비트(예: 600) — GNU(stat -c) 우선, BSD/macOS(stat -f) 폴백. 실패 시 빈 문자열.
+file_perm() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
+
+# 파일 수정시각(epoch 초) — GNU(stat -c %Y) 우선, BSD/macOS(stat -f %m) 폴백. 실패 시 빈 문자열.
+file_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null; }

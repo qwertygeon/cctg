@@ -45,10 +45,26 @@ claude_alive() {
 # 본 함수로 위임한다 — 채널 종류가 늘어도 기동 형식/폭을 한 곳에서 관리한다.
 #   - 명령 전달은 다중 인자 직접형(bash -lc "$launch")으로 통일한다: 단일 인자형은 tmux 가
 #     sh -c 로 한 겹 더 감싸 불필요한 셸 계층·이식성 부담을 만든다.
-#   - -x "$SESS_WIDTH": detached 기본 80 폭으로 캡처가 잘리지 않도록 폭을 고정한다.
-# $1=세션명(sess_of 결과), $2=launch 문자열. 반환코드는 tmux new-session 그대로 전파.
+#   - -x "$width": detached 기본 80 폭으로 캡처가 잘리지 않도록 폭을 고정한다.
+# $1=세션명(sess_of 결과), $2=launch 문자열, $3=폭(effective_sess_width 결과; 생략 시 기본값).
+# 반환코드는 tmux new-session 그대로 전파.
 start_session() {
-  tmux new-session -d -x "$SESS_WIDTH" -s "$1" bash -lc "$2"
+  tmux new-session -d -x "${3:-$SESS_WIDTH_DEFAULT}" -s "$1" bash -lc "$2"
+}
+
+# 봇의 마지막 활동 시각(epoch) 을 stdout 으로. 세션 생존($3=1)이면 tmux #{window_activity}(라이브
+# 출력 활동 시각), 비실행이면 last-session.log mtime(마지막 down 스냅샷) 으로 폴백한다.
+# 알 수 없으면(미실행·미스냅샷·비숫자) 비-0 반환. $1=봇/채널명 $2=상태디렉터리 $3=세션생존(1/0).
+# 주의: window_activity 는 출력 활동 기준이라 '살아있지만 멈춘' 봇 식별의 보조 지표다(완전 신뢰 X).
+last_activity_epoch() {
+  local name="$1" sd="$2" live="$3" e=""
+  if [ "$live" = 1 ]; then
+    e="$(tmux display-message -p -t "$(sess_pt "$name")" '#{window_activity}' 2>/dev/null)"
+  elif [ -f "$sd/last-session.log" ]; then
+    e="$(file_mtime "$sd/last-session.log")"
+  fi
+  case "$e" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s' "$e"
 }
 
 # 초 → 사람이 읽는 기간 (예: 2d3h / 4h5m / 7m)
@@ -127,10 +143,10 @@ stop_snapshotter() {
 
 up_one() {
   local name="$1" cwd sd row
-  row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name"; return 1; }
+  row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name" "$PROG"; return 1; }
   cwd="$(expand "$(cut -f1 <<<"$row")")"
   sd="$(expand "$(cut -f2 <<<"$row")")"
-  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; te ERR_NO_CWD_HINT "$PROG" "$name"; return 1; }
   [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }
   if is_running "$name"; then
     # 세션은 있으나 claude 가 죽은 DEAD 면 복구 경로(restart)를 안내한다. 자동 재기동은
@@ -167,7 +183,7 @@ up_one() {
 && caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   # new-session 실패(서버 기동 불가·리소스 부족·직전 race 등)를 확인 — 미확인 시 거짓 UP 보고.
-  if ! start_session "$(sess_of "$name")" "$launch"; then
+  if ! start_session "$(sess_of "$name")" "$launch" "$(effective_sess_width "$sd")"; then
     te ERR_UP_FAILED "$name"; return 1
   fi
   t UP_OK "$name" "$(tilde "$cwd")" "$(tilde "$sd")" "$(sess_of "$name")"
@@ -223,7 +239,7 @@ up_reserved() {
   channel_spec "$ch" plugin >/dev/null 2>&1 || { te ERR_RESERVED_UNSUPPORTED "$ch"; return 1; }
   sd="$CHANNELS_DIR/$ch"
   cwd="$PWD"                                                            # DEC-001: cctg 호출 시점 현재 작업 디렉터리
-  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }                 # up_one 과 동형 가드
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; te ERR_NO_CWD_HINT_RESERVED; return 1; }   # up_one 과 동형 가드(전역 봇은 복구 경로가 다름)
   [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }       # SC-017
   # 단독소유자 가드: cctg-<ch> tmux 세션 OR bot.pid 생존 (ADR-007)
   # DEAD(세션 생존·claude 종료)면 점유 거부 메시지 대신 restart 복구 경로를 안내한다.
@@ -252,7 +268,7 @@ up_reserved() {
 && { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
 && caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
-  if ! start_session "$(sess_of "$ch")" "$launch"; then
+  if ! start_session "$(sess_of "$ch")" "$launch" "$(effective_sess_width "$sd")"; then
     te ERR_UP_FAILED "$ch"; return 1
   fi
   t RESERVED_UP "$ch" "$(sess_of "$ch")"

@@ -62,6 +62,7 @@ cctg lang clear      # 선호 설정을 제거한다 (자동 감지로 복귀)
 | `CC_CHANNELS_DIR` | `~/.claude/channels` | 채널 상태 루트 |
 | `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | 레지스트리 파일 |
 | `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | 공통 권한 정책 파일 |
+| `CC_TG_SESS_WIDTH` | (미설정) | detached 세션 폭(칼럼) 오버라이드. `cctg common width` 전역 기본값보다 우선 |
 | `CCTG_LANG` | (미설정) | 일회성 CLI 언어 오버라이드(`en`/`ko`) |
 | `BINDIR` | `~/.local/bin` | 설치 위치(`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | 복사 설치 패키지 디렉터리(`install.sh`) |
@@ -77,7 +78,7 @@ cctg lang clear      # 선호 설정을 제거한다 (자동 감지로 복귀)
 - 런처 `~/.local/bin/cctg`
 - 복사 설치 패키지 `~/.local/libexec/cctg/`
 - 매니페스트 `~/.config/cctg/install.conf`
-- 언어 설정 `~/.config/cctg/config`
+- 사용자 설정 `~/.config/cctg/config` (`lang` 과 전역 기본 `sess_width` 보관)
 
 봇별 상태 디렉터리 `~/.claude/channels/<name>/` 의 구성:
 
@@ -111,7 +112,7 @@ name | working_dir | state_dir | channel
 
 ### tmux 세션
 
-tmux 세션 이름은 `cctg-<name>` 규약을 따른다.
+tmux 세션 이름은 `cctg-<name>` 규약을 따른다. 세션은 detached 라 tmux 가 폭을 80 칼럼으로 제한해 `logs`/snapshot 캡처가 잘릴 수 있어, CCTG 는 `new-session -x` 로 폭을 고정한다. 유효 폭은 다음 순서로 해석한다(첫 유효값 채택): 봇별 `CCTG_SESS_WIDTH`(`cctg config <name> width`) → env `CC_TG_SESS_WIDTH` → 전역 기본 `sess_width`(`cctg common width`, `~/.config/cctg/config`) → 내장 기본값 `100`. 각 후보는 20 이상의 정수여야 한다.
 
 ### `up` 기동 라인
 

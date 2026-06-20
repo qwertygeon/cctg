@@ -186,7 +186,9 @@ $ cctg restart telegram
 cctg status [--json]
 ```
 
-Prints per-bot status. For each bot it shows the state — `RUNNING` (with uptime) / `DEAD` / `BROKEN` / `stopped` — plus the working and state directory paths, the permission mode (or `shared`), and the channel. When `jq` is present and `access.json` exists, the channel line also shows the DM policy and the number of group entries (topology). Bots are listed `RUNNING → DEAD → BROKEN → stopped`.
+Prints per-bot status. For each bot it shows the state — `RUNNING` (with uptime) / `DEAD` / `BROKEN` / `stopped` — plus the working and state directory paths, the permission mode (or `shared`), a **last-activity** line, and the channel. When `jq` is present and `access.json` exists, the channel line also shows the DM policy and the number of group entries (topology). Bots are listed `RUNNING → DEAD → BROKEN → stopped`.
+
+The **last-activity** line (`last  <dur> ago`) shows how long ago the bot last produced output. For a live session it comes from the tmux `#{window_activity}` time; for a stopped bot it falls back to the `last-session.log` snapshot mtime; when no signal exists the line is omitted. It is an auxiliary indicator for spotting a bot that is up but idle/stalled — distinct from the `DEAD` health check.
 
 A bot is `DEAD` when its `tmux` session is still alive but the `claude` process inside it has exited (a crash/exit leaves a bare `bash` in the pane via the launch's `exec bash` tail, which would otherwise look "running"). The state is detected by walking the session pane's process descendant tree for a `claude` process. A `restart` hint is printed; `up` does not auto-restart it.
 
@@ -194,7 +196,7 @@ A bot is `BROKEN` when it is registered but its working directory is missing or 
 
 A `--- global channel bots ---` section is appended for each reserved channel whose state directory (`~/.claude/channels/<channel>/`) exists. The displayed `cwd` for global bots is the directory from which `cctg status` was invoked (because global bots have no registered working directory).
 
-`--json` emits a machine-readable array of objects with locale-independent tokens (requires `jq`). Each object has `name`, `state` (`running`/`dead`/`broken`/`stopped`), `running` (bool — `false` for `dead`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds` (or `null`; `null` for `dead`), and `issues` (e.g. `no-cwd`, `no-token`).
+`--json` emits a machine-readable array of objects with locale-independent tokens (requires `jq`). Each object has `name`, `state` (`running`/`dead`/`broken`/`stopped`), `running` (bool — `false` for `dead`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds` (or `null`; `null` for `dead`), `lastActivitySeconds` (seconds since last activity, or `null` when unknown), and `issues` (e.g. `no-cwd`, `no-token`).
 
 ```console
 $ cctg status
@@ -213,6 +215,7 @@ $ cctg status --json
     "channel": "telegram",
     "session": "cctg-proj",
     "uptimeSeconds": 3600,
+    "lastActivitySeconds": 42,
     "issues": []
   }
 ]
@@ -251,20 +254,22 @@ $ cctg attach proj
 ### `config`
 
 ```
-cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <secs|off> | cwd <path> | token [--token-env <VAR>|--token-stdin]]
+cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <secs|off> | width <cols|clear> | cwd <path> | token [--token-env <VAR>|--token-stdin]]
 ```
 
 Views or edits a bot's per-bot options, stored in `<state>/launch.env`. Changes take effect on the next [`up`](#up) / [`restart`](#restart); when the bot is running, `cctg` reminds you to restart.
 
 | Action | Meaning |
 |---|---|
-| `show` (default) | Prints the channel, permission mode, snapshot interval, and the `launch.env` contents. |
+| `show` (default) | Prints the channel, permission mode, snapshot interval, session width, and the `launch.env` contents. |
 | `edit` | Opens `launch.env` in `$EDITOR` (default `vi`). |
 | `mode <m>` | Sets `CCTG_PERMISSION_MODE` (one of `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`). |
 | `mode clear` | Empties the mode so the bot follows the shared `defaultMode`. |
-| `args <str>` | Sets `CLAUDE_EXTRA_ARGS`, e.g. `"--model opus"`. |
+| `args <str>` | Sets `CLAUDE_EXTRA_ARGS`, e.g. `"--model opus"`. Must be a single line — a value containing a newline is rejected (use `config <name> edit` for multi-line edits). |
 | `snapshot <secs>` | Enables a periodic log snapshot every `<secs>` seconds (minimum `5`). |
 | `snapshot off` | Disables periodic snapshots (also accepts `0`; off is the default). |
+| `width <cols>` | Sets this bot's detached session width (`CCTG_SESS_WIDTH`, minimum `20`). |
+| `width clear` | Empties the per-bot width so the bot follows the global default (also accepts `default`). |
 | `cwd <path>` | <a name="config-cwd"></a>Changes the bot's working directory in the registry. The path must already exist. If the bot is running, a restart reminder is shown. |
 | `token` | <a name="config-token"></a>Replaces the bot's token in `<state>/.env` (mode `600`). Accepts `--token-env <VAR>`, `--token-stdin`, or an interactive masked prompt. The token key (`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`) is determined by the bot's channel. If the bot is running, a restart reminder is shown. |
 
@@ -276,6 +281,8 @@ $ cctg config proj mode bypassPermissions
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
+$ cctg config proj width 200
+$ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
@@ -284,24 +291,28 @@ $ cctg config proj token --token-env NEW_BOT_TOKEN
 ### `common`
 
 ```
-cctg common [show | edit | mode <m> | deny add|rm <rule> | allow add|rm <rule>]
+cctg common [show | edit | mode <m> | width <cols|clear> | deny add|rm <rule> | allow add|rm <rule>]
 ```
 
-Views or edits the shared permission policy that is injected into every bot via `--settings`. The file is auto-created on the first `add`/`up`. The `mode`, `deny`, and `allow` actions require `jq`.
+Views or edits the shared permission policy that is injected into every bot via `--settings`, plus the global default session width. The settings file is auto-created on the first `add`/`up`. The `mode`, `deny`, and `allow` actions require `jq`.
 
 | Action | Meaning |
 |---|---|
-| `show` (default) | Prints the shared settings file. |
+| `show` (default) | Prints the global default session width (with its source) and the shared settings file. |
 | `edit` | Opens the file in `$EDITOR`. |
 | `mode <m>` | Sets `permissions.defaultMode`. |
+| `width <cols>` | Sets the global default detached session width (minimum `20`), stored in `~/.config/cctg/config` (`sess_width`) — not in the permission settings file. |
+| `width clear` | Removes the global default so it falls back to the built-in default (`100`; also accepts `default`). |
 | `deny add <rule>` / `deny rm <rule>` | Adds/removes a deny rule, e.g. `Bash(sudo *)`. |
 | `allow add <rule>` / `allow rm <rule>` | Adds/removes an allow rule. |
 
-For the full permission model, see [permissions.md](permissions.md).
+The effective width for a bot resolves as: per-bot `width` → env `CC_TG_SESS_WIDTH` → global `common width` → built-in default (`100`). For the full permission model, see [permissions.md](permissions.md).
 
 ```console
 $ cctg common
 $ cctg common mode default
+$ cctg common width 160
+$ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
 ```
@@ -328,7 +339,7 @@ $ cctg lang clear
 cctg doctor
 ```
 
-Diagnoses the environment: checks the dependencies (`tmux`, `claude`, `caffeinate`, `jq`), whether `~/.local/bin` is on `PATH`, the registry file and bot count, and the shared permission policy (`defaultMode`, deny/allow counts). It also reminds you to install the channel plugins globally.
+Diagnoses the environment: checks the dependencies (`tmux`, `claude`, `caffeinate`, `jq`), whether `~/.local/bin` is on `PATH`, the registry file and bot count, and the shared permission policy (`defaultMode`, deny/allow counts). It also reminds you to install the channel plugins globally. Finally it runs an **install integrity** pass: each registered bot's token `.env` must be `600`, the install manifest (`~/.config/cctg/install.conf`) paths are validated (repo/libexec exist), and the install `bindir` is checked for writability (so `update`/`uninstall` desync surfaces early). Channel-plugin presence and minimum tool versions are not asserted (no stable detection / non-arbitrary baseline).
 
 ```console
 $ cctg doctor

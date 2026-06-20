@@ -75,8 +75,9 @@ find_companion() {
 
 # ── 초기화 ───────────────────────────────────────────────────────────────────
 _load_messages
-mkdir -p "$CHANNELS_DIR"
-[ -f "$REGISTRY" ] || printf '# name | working_dir | state_dir\n' > "$REGISTRY"
+# 상태 루트·레지스트리 초기화 실패(권한·디스크)를 침묵하지 않는다 — 이후 모든 명령이 cryptic 하게 깨진다.
+mkdir -p "$CHANNELS_DIR" || die ERR_ADD_WRITE "$CHANNELS_DIR"
+[ -f "$REGISTRY" ] || printf '# name | working_dir | state_dir\n' > "$REGISTRY" || die ERR_ADD_WRITE "$REGISTRY"
 
 CMD="${1:-}"
 shift || true

@@ -107,13 +107,26 @@ case "$cmd" in
     # target-pane: a bare '=NAME' resolves to nothing -> empty value, rc 0
     # (faithful to real tmux; this is the silent status/uptime bug's signature).
     target="$(flag_val -t "$@")" || true
-    if [ -n "$target" ] && [ -z "$(resolve_pane "$target")" ]; then exit 0; fi
+    resolved="$(resolve_pane "$target")"
+    if [ -n "$target" ] && [ -z "$resolved" ]; then exit 0; fi
     # Format-aware: '#{pane_pid}' (liveness check) returns FAKE_TMUX_PANE_PID so a test
-    # can point claude_alive's process walk at a tree it controls; everything else
-    # (session_created / pane_current_path) returns FAKE_TMUX_CREATED as before.
+    # can point claude_alive's process walk at a tree it controls. '#{session_created}'
+    # is per-session when FAKE_TMUX_CREATED_FILE (lines "<session>\t<epoch>") maps the
+    # resolved session — mirroring real tmux returning each session's own creation time,
+    # so the status recency-sort can be exercised. Everything else (and any unmapped
+    # session, e.g. pane_current_path) falls back to FAKE_TMUX_CREATED as before.
     fmt=""; for fmt in "$@"; do :; done
     case "$fmt" in
       *pane_pid*) printf '%s\n' "${FAKE_TMUX_PANE_PID:-0}" ;;
+      # last-activity (status #{window_activity}); tests can pin FAKE_TMUX_ACTIVITY.
+      *window_activity*) printf '%s\n' "${FAKE_TMUX_ACTIVITY:-${FAKE_TMUX_CREATED:-1700000000}}" ;;
+      *session_created*)
+        created=""
+        if [ -n "${FAKE_TMUX_CREATED_FILE:-}" ] && [ -f "${FAKE_TMUX_CREATED_FILE}" ] && [ -n "$resolved" ]; then
+          created="$(awk -F'\t' -v s="$resolved" '$1==s{print $2; exit}' "$FAKE_TMUX_CREATED_FILE")"
+        fi
+        [ -n "$created" ] || created="${FAKE_TMUX_CREATED:-1700000000}"
+        printf '%s\n' "$created" ;;
       *)          printf '%s\n' "${FAKE_TMUX_CREATED:-1700000000}" ;;
     esac ;;
   capture-pane)

@@ -31,10 +31,11 @@ _cctg() {
         names=$(awk -F'|' '/^[[:space:]]*#/{next}/^[[:space:]]*$/{next}{gsub(/^[ \t]+|[ \t]+$/,"",$1);print $1}' "$reg" 2>/dev/null)
         COMPREPLY=( $(compgen -W "$names" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 3 ]; then
-        COMPREPLY=( $(compgen -W "show edit mode args snapshot cwd token --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show edit mode args snapshot width cwd token --help" -- "$cur") )
       elif [ "$cmd" = config ] && [ "$COMP_CWORD" -eq 4 ]; then
         case "${COMP_WORDS[3]}" in
           mode)  COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan clear" -- "$cur") ) ;;
+          width) COMPREPLY=( $(compgen -W "clear default" -- "$cur") ) ;;
           cwd)   COMPREPLY=( $(compgen -d -- "$cur") ) ;;
           token) COMPREPLY=( $(compgen -W "--token-env --token-stdin --help" -- "$cur") ) ;;
         esac
@@ -49,11 +50,12 @@ _cctg() {
     common)
       # common <action> [...]
       if [ "$COMP_CWORD" -eq 2 ]; then
-        COMPREPLY=( $(compgen -W "show edit mode deny allow --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "show edit mode width deny allow --help" -- "$cur") )
       elif [ "$COMP_CWORD" -eq 3 ]; then
         case "${COMP_WORDS[2]}" in
           deny|allow) COMPREPLY=( $(compgen -W "add rm" -- "$cur") ) ;;
           mode) COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") ) ;;
+          width) COMPREPLY=( $(compgen -W "clear default" -- "$cur") ) ;;
         esac
       fi
       ;;

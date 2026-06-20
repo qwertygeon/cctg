@@ -186,7 +186,9 @@ $ cctg restart telegram
 cctg status [--json]
 ```
 
-봇별 상태를 출력한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `DEAD` / `BROKEN` / `stopped` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다. 정렬 순서는 `RUNNING → DEAD → BROKEN → stopped`.
+봇별 상태를 출력한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `DEAD` / `BROKEN` / `stopped` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), **최근활동** 라인, 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다. 정렬 순서는 `RUNNING → DEAD → BROKEN → stopped`.
+
+**최근활동** 라인(`최근활동  <기간> 전`)은 봇이 마지막으로 출력을 낸 시점을 보여준다. 실행 중 세션은 tmux `#{window_activity}` 시각에서, 정지된 봇은 `last-session.log` 스냅샷 mtime 으로 폴백하며, 신호가 없으면 라인을 생략한다. '살아있지만 멈춘' 봇 식별용 보조 지표이며 `DEAD` 헬스 판정과는 별개다.
 
 봇의 `tmux` 세션은 살아있으나 내부 `claude` 프로세스가 종료되면 `DEAD` 다(크래시·종료 시 launch 의 `exec bash` 꼬리 때문에 pane 에 bash 만 남아 "실행 중"처럼 보이던 거짓 UP). 세션 pane 의 프로세스 자손 트리에서 `claude` 존재 여부로 감지하며, `restart` 복구 힌트를 출력한다(`up` 은 자동 재기동하지 않음).
 
@@ -194,7 +196,7 @@ cctg status [--json]
 
 상태 디렉터리(`~/.claude/channels/<channel>/`)가 존재하는 예약 채널에 대해서는 `--- 전역 채널 봇 ---` 섹션이 이어서 출력된다. 전역 봇의 `cwd` 는 `cctg status` 를 실행한 시점의 현재 디렉터리다(전역 봇은 레지스트리에 작업 디렉터리가 없으므로).
 
-`--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`dead`/`broken`/`stopped`), `running`(불리언 — `dead` 면 `false`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`; `dead` 면 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
+`--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`dead`/`broken`/`stopped`), `running`(불리언 — `dead` 면 `false`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`; `dead` 면 `null`), `lastActivitySeconds`(마지막 활동 이후 경과 초, 미상이면 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
 
 ```console
 $ cctg status
@@ -213,6 +215,7 @@ $ cctg status --json
     "channel": "telegram",
     "session": "cctg-proj",
     "uptimeSeconds": 3600,
+    "lastActivitySeconds": 42,
     "issues": []
   }
 ]
@@ -251,20 +254,22 @@ $ cctg attach proj
 ### `config`
 
 ```
-cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|off> | cwd <경로> | token [--token-env <VAR>|--token-stdin]]
+cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|off> | width <칼럼|clear> | cwd <경로> | token [--token-env <VAR>|--token-stdin]]
 ```
 
 `<state>/launch.env` 에 저장되는 봇별 옵션을 보거나 수정한다. 변경은 다음 [`up`](#up) / [`restart`](#restart) 시 적용되며, 봇이 실행 중이면 `cctg` 가 재기동을 안내한다.
 
 | 동작 | 의미 |
 |---|---|
-| `show`(기본) | 채널, 권한 모드, 스냅샷 주기, `launch.env` 내용을 출력한다. |
+| `show`(기본) | 채널, 권한 모드, 스냅샷 주기, 세션 폭, `launch.env` 내용을 출력한다. |
 | `edit` | `$EDITOR`(기본 `vi`) 로 `launch.env` 를 연다. |
 | `mode <m>` | `CCTG_PERMISSION_MODE` 를 설정한다(`acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan` 중 하나). |
 | `mode clear` | 모드를 비워 봇이 공통 `defaultMode` 를 따르게 한다. |
-| `args <str>` | `CLAUDE_EXTRA_ARGS` 를 설정한다. 예: `"--model opus"`. |
+| `args <str>` | `CLAUDE_EXTRA_ARGS` 를 설정한다. 예: `"--model opus"`. 한 줄이어야 하며 개행이 든 값은 거부된다(여러 줄은 `config <name> edit` 로 편집). |
 | `snapshot <초>` | `<초>` 초마다 주기 로그 스냅샷을 켠다(최소 `5`). |
 | `snapshot off` | 주기 스냅샷을 끈다(`0` 도 허용, off 가 기본). |
+| `width <칼럼>` | 이 봇의 detached 세션 폭(`CCTG_SESS_WIDTH`, 최소 `20`)을 설정한다. |
+| `width clear` | 봇별 폭을 비워 전역 기본값을 따르게 한다(`default` 도 허용). |
 | `cwd <경로>` | <a name="config-cwd"></a>레지스트리의 봇 작업 디렉터리를 변경한다. 경로가 실제로 존재해야 한다. 봇이 실행 중이면 재기동 안내가 출력된다. |
 | `token` | <a name="config-token"></a>`<state>/.env` 의 토큰을 교체한다(권한 `600`). `--token-env <VAR>`, `--token-stdin`, 또는 대화형 가림 입력을 받는다. 토큰 키(`TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN`)는 봇의 채널로 결정된다. 봇이 실행 중이면 재기동 안내가 출력된다. |
 
@@ -276,6 +281,8 @@ $ cctg config proj mode bypassPermissions
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
+$ cctg config proj width 200
+$ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
@@ -284,24 +291,28 @@ $ cctg config proj token --token-env NEW_BOT_TOKEN
 ### `common`
 
 ```
-cctg common [show | edit | mode <m> | deny add|rm <rule> | allow add|rm <rule>]
+cctg common [show | edit | mode <m> | width <칼럼|clear> | deny add|rm <rule> | allow add|rm <rule>]
 ```
 
-`--settings` 로 모든 봇에 주입되는 공통 권한 정책을 보거나 수정한다. 파일은 첫 `add`/`up` 시 자동 생성된다. `mode`·`deny`·`allow` 동작은 `jq` 가 필요하다.
+`--settings` 로 모든 봇에 주입되는 공통 권한 정책과 전역 기본 세션 폭을 보거나 수정한다. 설정 파일은 첫 `add`/`up` 시 자동 생성된다. `mode`·`deny`·`allow` 동작은 `jq` 가 필요하다.
 
 | 동작 | 의미 |
 |---|---|
-| `show`(기본) | 공통 설정 파일을 출력한다. |
+| `show`(기본) | 전역 기본 세션 폭(출처 포함)과 공통 설정 파일을 출력한다. |
 | `edit` | `$EDITOR` 로 파일을 연다. |
 | `mode <m>` | `permissions.defaultMode` 를 설정한다. |
+| `width <칼럼>` | 전역 기본 detached 세션 폭(최소 `20`)을 설정한다. 권한 설정 파일이 아니라 `~/.config/cctg/config`(`sess_width`)에 저장된다. |
+| `width clear` | 전역 기본값을 제거해 내장 기본값(`100`)으로 되돌린다(`default` 도 허용). |
 | `deny add <rule>` / `deny rm <rule>` | deny 규칙을 추가/제거한다. 예: `Bash(sudo *)`. |
 | `allow add <rule>` / `allow rm <rule>` | allow 규칙을 추가/제거한다. |
 
-전체 권한 모델은 [permissions.md](permissions.md) 를 참조한다.
+봇의 유효 폭 해석 순서: 봇별 `width` → env `CC_TG_SESS_WIDTH` → 전역 `common width` → 내장 기본값(`100`). 전체 권한 모델은 [permissions.md](permissions.md) 를 참조한다.
 
 ```console
 $ cctg common
 $ cctg common mode default
+$ cctg common width 160
+$ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
 ```
@@ -328,7 +339,7 @@ $ cctg lang clear
 cctg doctor
 ```
 
-환경을 진단한다. 의존성(`tmux`, `claude`, `caffeinate`, `jq`), `~/.local/bin` 의 `PATH` 등재 여부, 레지스트리 파일과 봇 개수, 공통 권한 정책(`defaultMode`, deny/allow 개수) 을 확인한다. 또한 채널 플러그인을 전역으로 설치하라고 안내한다.
+환경을 진단한다. 의존성(`tmux`, `claude`, `caffeinate`, `jq`), `~/.local/bin` 의 `PATH` 등재 여부, 레지스트리 파일과 봇 개수, 공통 권한 정책(`defaultMode`, deny/allow 개수) 을 확인한다. 또한 채널 플러그인을 전역으로 설치하라고 안내한다. 마지막으로 **install integrity** 점검을 수행한다: 등록된 각 봇의 토큰 `.env` 는 `600` 이어야 하고, 설치 매니페스트(`~/.config/cctg/install.conf`) 경로 유효성(repo/libexec 존재)과 설치 `bindir` 쓰기 권한을 확인한다(`update`/`uninstall` desync 조기 발견). 채널 플러그인 설치 여부·도구 최소 버전은 강제하지 않는다(안정적 탐지/비자명 기준선 부재).
 
 ```console
 $ cctg doctor

@@ -95,6 +95,9 @@ cmd_add() {
             "")        : ;;
             nomention) rm_flag=false ;;
             allow=*)   allow_csv="${gmod#allow=}" ;;
+            # 미지 수식어는 조용히 무시하지 않는다 — 오타(`nomeniton` 등)가 접근정책을 의도와
+            # 다르게 시드하는 silent-failure 를 막는다. 검증 단계라 파일 쓰기 전 안전하게 중단.
+            *)         IFS="$saved_ifs"; die ERR_ADD_BAD_GROUP_MOD "$gmod" "$gid" ;;
           esac
         done
         IFS="$saved_ifs"
@@ -163,18 +166,21 @@ EOF
     write_token_env "$SD/.env" "$(channel_spec "$CH" token_key)" "$TOKEN" || die ERR_ADD_WRITE "$SD/.env"
 
     # access.json — groups 미지정은 heredoc(jq 불요 — jq 없는 환경의 일반 add 동작 보존), 지정 시 사전 구성한 groups_json 으로 jq -n.
+    # 최초 작성도 write_atomic(tmp→mv)으로 통일 — 중단 시 부분 파일을 남기지 않는다.
     if [ -z "$opt_groups" ]; then
-      cat > "$SD/access.json" <<JSON || die ERR_ADD_WRITE "$SD/access.json"
+      write_atomic "$SD/access.json" <<JSON || die ERR_ADD_WRITE "$SD/access.json"
 { "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
 JSON
     else
-      jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
-        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}' > "$SD/access.json" || die ERR_ADD_WRITE "$SD/access.json"
+      local _aj
+      _aj="$(jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
+        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}')" || die ERR_ADD_WRITE "$SD/access.json"
+      printf '%s\n' "$_aj" | write_atomic "$SD/access.json" || die ERR_ADD_WRITE "$SD/access.json"
     fi
 
     # launch.env 템플릿 (봇 전용 옵션 — cctg config <name> 로 수정)
     # 템플릿 주석은 봇 상태 디렉터리에 기록되는 파일 내용이라 언어 분리 대상이 아니다.
-    cat > "$SD/launch.env" <<'ENV' || die ERR_ADD_WRITE "$SD/launch.env"
+    write_atomic "$SD/launch.env" <<'ENV' || die ERR_ADD_WRITE "$SD/launch.env"
 # 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
 
 # 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
@@ -187,11 +193,17 @@ CLAUDE_EXTRA_ARGS=
 # 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
 # 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
 CCTG_LOG_SNAPSHOT_INTERVAL=
+
+# detached 세션 폭(칼럼). 비우면 전역 기본값(cctg common width / 기본 100)을 따른다.
+# `cctg config <name> width <칼럼|clear>` 로 설정. 최소 20.
+CCTG_SESS_WIDTH=
 ENV
     [ -n "$PMODE" ] && { set_env_kv "$SD/launch.env" CCTG_PERMISSION_MODE "$PMODE" || die ERR_ADD_WRITE "$SD/launch.env"; }
 
     # 레지스트리 등록 (4번째 컬럼 = 채널 타입) — point of no return. 이후 cleanup 해제.
-    printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH" >> "$REGISTRY" || die ERR_ADD_WRITE "$REGISTRY"
+    # append 도 copy→write_atomic(tmp→mv)으로 통일 — 중단·경합 시 부분/경합 쓰기를 막는다.
+    { [ -f "$REGISTRY" ] && cat "$REGISTRY"; printf '%s | %s | %s | %s\n' "$NAME" "$CWD" "$SD" "$CH"; } \
+      | write_atomic "$REGISTRY" || die ERR_ADD_WRITE "$REGISTRY"
     CCTG_ADD_CLEANUP_DIR=""
     trap - EXIT
 
@@ -206,7 +218,7 @@ ENV
 cmd_rm() {
     NAME="${1:?name 필요}"
     PURGE=0; [ "${2:-}" = "--purge" ] && PURGE=1
-    row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
+    row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME" "$PROG"
     sd="$(expand "$(cut -f2 <<<"$row")")"
     if is_running "$NAME"; then die ERR_RUNNING_DOWN_FIRST "$PROG" "$NAME"; fi
     remove_registry_line "$NAME" || die ERR_REGISTRY_UPDATE
@@ -233,7 +245,7 @@ cmd_rename() {
     valid_name "$NEW" || die ERR_BADNAME "$NEW"
     is_reserved_name "$NEW" && die ERR_RESERVED "$NEW" "$RESERVED_NAMES"
     [ "$OLD" = "$NEW" ] && die ERR_SAME_NAME "$OLD"
-    row="$(lookup "$OLD")" || die ERR_NOT_REGISTERED "$OLD"
+    row="$(lookup "$OLD")" || die ERR_NOT_REGISTERED "$OLD" "$PROG"
     if lookup "$NEW" >/dev/null 2>&1; then die ERR_ALREADY_REGISTERED "$NEW"; fi
     # 세션명이 이름 기반이므로 실행 중에는 거부 (down 후 재시도)
     if is_running "$OLD"; then die ERR_RUNNING_DOWN_FIRST "$PROG" "$OLD"; fi
@@ -266,17 +278,17 @@ cmd_config() {
       # 예약어 전역 봇: 레지스트리 없이 고정 좌표 사용(ADR-006/010). channel_spec 정의 채널만 지원.
       # up/down/logs/status 와 동일하게 config(token·mode·args·snapshot) 도 전역 봇을 다룬다.
       channel_spec "$NAME" plugin >/dev/null 2>&1 || die ERR_RESERVED_UNSUPPORTED "$NAME"
-      sd="$CHANNELS_DIR/$NAME"; mkdir -p "$sd"
+      sd="$CHANNELS_DIR/$NAME"; mkdir -p "$sd" || die ERR_ADD_WRITE "$sd"
       cfg_channel="$NAME"                          # 예약어는 채널명 == 봇명
     else
-      row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME"
+      row="$(lookup "$NAME")" || die ERR_NOT_REGISTERED "$NAME" "$PROG"
       sd="$(expand "$(cut -f2 <<<"$row")")"
       cfg_channel="$(channel_of "$NAME")"
     fi
     LE="$sd/launch.env"
     # 이 기능 도입 전 등록된 봇엔 키가 없을 수 있으므로 템플릿 보강
     if [ ! -f "$LE" ]; then
-      cat > "$LE" <<'ENV'
+      write_atomic "$LE" <<'ENV' || die ERR_ADD_WRITE "$LE"
 # 이 봇 전용 설정. `cctg config <name> ...` 로 수정하거나 직접 편집한다.
 
 # 권한 모드: acceptEdits | auto | bypassPermissions | default | dontAsk | plan
@@ -289,16 +301,22 @@ CLAUDE_EXTRA_ARGS=
 # 비상시(크래시·재부팅) 로그 보존: 실행 중 N초마다 tmux 화면을 last-session.log 로 스냅샷.
 # 비우면 OFF(기본). `cctg config <name> snapshot <초|off>` 로 설정. 권장 30~120.
 CCTG_LOG_SNAPSHOT_INTERVAL=
+
+# detached 세션 폭(칼럼). 비우면 전역 기본값(cctg common width / 기본 100)을 따른다.
+# `cctg config <name> width <칼럼|clear>` 로 설정. 최소 20.
+CCTG_SESS_WIDTH=
 ENV
     fi
     case "$ACTION" in
       show)
-        local pm sv; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
+        local pm sv wd; pm="$(mode_of "$sd")"; [ -n "$pm" ] || pm="$(t FOLLOW_SHARED_PAREN)"
         sv="$(snapshot_interval_of "$sd")"; if [ -n "$sv" ]; then sv="${sv}s"; else sv="off"; fi
+        wd="$(sess_width_of "$sd")"; [ -n "$wd" ] || wd="$(t FOLLOW_SHARED_PAREN)"
         t CFG_SHOW_HEADER "$NAME" "$(tilde "$LE")"
         t CFG_SHOW_CHANNEL "$cfg_channel"
         t CFG_SHOW_MODE "$pm"
         t CFG_SHOW_SNAPSHOT "$sv"
+        t CFG_SHOW_WIDTH "$wd"
         t CFG_SHOW_LAUNCHENV
         cat "$LE" ;;
       edit)
@@ -317,6 +335,9 @@ ENV
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       args)
         ARGS="${3-}"
+        # launch.env 는 줄 단위 KEY=value 이고 set_env_kv 치환은 첫 줄만 매칭하므로, 개행이 든 값은
+        # 재설정 시 옛 값의 연속 줄을 고아로 남겨 source 를 깬다(DEC-001). 입력 시점에 거부한다.
+        case "$ARGS" in *$'\n'*) die ERR_CONFIG_ARGS_NEWLINE "$PROG" "$NAME" ;; esac
         set_env_kv "$LE" CLAUDE_EXTRA_ARGS "$ARGS"
         local argshow="${ARGS:-$(t EMPTY_PAREN)}"
         t CFG_ARGS_SET "$NAME" "$argshow"
@@ -332,6 +353,18 @@ ENV
             || die ERR_BAD_SNAPSHOT "$S"
           set_env_kv "$LE" CCTG_LOG_SNAPSHOT_INTERVAL "$S"
           t CFG_SNAPSHOT_SET "$NAME" "$S"
+        fi
+        if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
+      width)
+        W="${3-}"
+        [ -z "$W" ] && die ERR_CONFIG_WIDTH_USAGE "$PROG" "$NAME"
+        if [ "$W" = clear ] || [ "$W" = default ]; then
+          set_env_kv "$LE" CCTG_SESS_WIDTH ""
+          t CFG_WIDTH_CLEARED "$NAME"
+        else
+          valid_width "$W" || die ERR_BAD_WIDTH "$W"
+          set_env_kv "$LE" CCTG_SESS_WIDTH "$W"
+          t CFG_WIDTH_SET "$NAME" "$W"
         fi
         if is_running "$NAME"; then t APPLY_RESTART "$PROG" "$NAME"; fi ;;
       cwd)
@@ -379,10 +412,26 @@ cmd_common() {
     ACTION="${1:-show}"
     case "$ACTION" in
       show)
+        local gw src cw; cw="$(conf_get "$CCTG_CONFIG" sess_width)"
+        if   valid_width "${CC_TG_SESS_WIDTH:-}"; then gw="$CC_TG_SESS_WIDTH"; src=env
+        elif valid_width "$cw";                    then gw="$cw";             src=config
+        else gw="$SESS_WIDTH_DEFAULT";                                        src=default; fi
         t COMMON_SHOW_HEADER "$SHARED_SETTINGS"
+        t COMMON_SHOW_WIDTH "$gw" "$src"
         cat "$SHARED_SETTINGS" ;;
       edit)
         "${EDITOR:-vi}" "$SHARED_SETTINGS" ;;
+      width)
+        W="${2-}"
+        [ -z "$W" ] && die ERR_COMMON_WIDTH_USAGE "$PROG"
+        if [ "$W" = clear ] || [ "$W" = default ]; then
+          conf_unset "$CCTG_CONFIG" sess_width
+          t COMMON_WIDTH_CLEARED
+        else
+          valid_width "$W" || die ERR_BAD_WIDTH "$W"
+          conf_set "$CCTG_CONFIG" sess_width "$W"
+          t COMMON_WIDTH_SET "$W"
+        fi ;;
       mode)
         M="${2-}"
         [ -z "$M" ] && die ERR_COMMON_MODE_USAGE "$PROG" "$VALID_MODES"
@@ -511,6 +560,13 @@ _status_render_project_bot() {
   pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
   t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
   t STATUS_MODE "$pm"
+  # last-activity(보조 지표): RUNNING/DEAD 는 tmux window_activity, stopped 는 마지막 스냅샷 mtime. broken 은 생략.
+  local _live=0 _act _d
+  case "$state" in running|dead) _live=1 ;; esac
+  if [ "$state" != broken ] && _act="$(last_activity_epoch "$n" "$sd" "$_live")"; then
+    _d=$(( $(date +%s) - _act )); [ "$_d" -lt 0 ] && _d=0   # 클록 스큐로 음수면 0 으로 클램프
+    t STATUS_LAST_ACTIVITY "$(fmt_dur "$_d")"
+  fi
   # 채널 표시명. jq 있고 access.json 있으면 dmPolicy·groups 수 토폴로지까지(없으면 표시명만 — NFR-005).
   ch_disp="$(channel_spec "$(channel_of "$n")" display)"
   if command -v jq >/dev/null 2>&1 && [ -f "$sd/access.json" ]; then
@@ -556,13 +612,36 @@ _status_render_reserved_bot() {
   pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
   t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
   t STATUS_MODE "$pm"
+  # last-activity(보조 지표) — 프로젝트 봇과 동일 규칙.
+  local _live=0 _act _d
+  case "$state" in running|dead) _live=1 ;; esac
+  if [ "$state" != broken ] && _act="$(last_activity_epoch "$ch" "$sd" "$_live")"; then
+    _d=$(( $(date +%s) - _act )); [ "$_d" -lt 0 ] && _d=0   # 클록 스큐로 음수면 0 으로 클램프
+    t STATUS_LAST_ACTIVITY "$(fmt_dur "$_d")"
+  fi
   t STATUS_CHANNEL "$(channel_spec "$ch" display)"
+}
+
+# status 정렬: running/dead 버킷(개행 구분 봇 이름)을 세션 생성시각(session_created) 내림차순으로
+# 재정렬한다 — 최근 실행한 봇이 위로. 동률·미상(tmux 조회 실패·비숫자)은 입력(등록) 순서를 유지
+# (안정 정렬 -s), 미상(created=0)은 버킷 최하위로. sess_pt 가 프로젝트/예약어 봇 공용이라 두 섹션이
+# 같은 헬퍼를 쓴다. broken/stopped 는 세션이 없어 created 가 없으므로 호출하지 않는다.
+_sort_bucket_by_created() {
+  local bucket="$1" n created tab
+  tab="$(printf '\t')"
+  while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
+    case "$created" in ''|*[!0-9]*) created=0 ;; esac
+    printf '%s%s%s\n' "$created" "$tab" "$n"
+  done <<< "$bucket" | sort -t"$tab" -k1,1nr -s | cut -f2-
 }
 
 cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
     if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
 
+    warn_no_tmux_readonly   # tmux 없으면 모든 봇이 stopped/broken 으로 보이는 오인 방지(경고만)
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
@@ -577,6 +656,10 @@ cmd_status() {
         *)       p_stopped="${p_stopped}${n}"$'\n' ;;
       esac
     done < <(all_names)
+    # RUNNING·DEAD 버킷 내부는 세션 생성시각 내림차순(최근 실행이 위)으로 재정렬. broken/stopped 는
+    # 등록 순서 유지(세션 없음 → created 부재).
+    p_running="$(_sort_bucket_by_created "$p_running")"
+    p_dead="$(_sort_bucket_by_created "$p_dead")"
     # RUNNING(위) → DEAD(크래시) → BROKEN(설정결손) → stopped(아래) 순. 분류 시 판정한 state 를
     # 렌더에 그대로 넘겨 재판정(ps 재스캔)을 피한다.
     local st bucket
@@ -607,6 +690,9 @@ cmd_status() {
         *)       r_stopped="${r_stopped}${ch}"$'\n' ;;
       esac
     done
+    # 전역 봇 RUNNING·DEAD 버킷도 동일하게 최근 실행순 정렬.
+    r_running="$(_sort_bucket_by_created "$r_running")"
+    r_dead="$(_sort_bucket_by_created "$r_dead")"
     local ch_found=0 rst rbucket
     for rst in running dead broken stopped; do
       case "$rst" in
@@ -626,7 +712,7 @@ cmd_status() {
 # status --json: 기계 판독용 봇 상태 배열. 출력은 순수 JSON(사람용 헤더 없음)이며 로케일 무관 토큰 사용.
 status_json() {
     need_jq || exit 1
-    local objs=() n row cwd sd sess created up_s pm running state iss issues_json now ch
+    local objs=() n row cwd sd sess created up_s pm running state iss issues_json now ch la_s la_e
     now="$(date +%s)"
     while IFS= read -r n; do
       [ -z "$n" ] && continue
@@ -652,14 +738,20 @@ status_json() {
       else
         running=false; state="stopped"
       fi
+      # last-activity(초): running/dead 는 tmux window_activity, stopped 는 마지막 스냅샷 mtime, broken 은 null.
+      la_s=-1
+      case "$state" in
+        running|dead) la_e="$(last_activity_epoch "$n" "$sd" 1)" && la_s=$(( now - la_e )) ;;
+        stopped)      la_e="$(last_activity_epoch "$n" "$sd" 0)" && la_s=$(( now - la_e )) ;;
+      esac
       pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="shared"
       ch="$(channel_of "$n")"
       if [ "${#iss[@]}" -gt 0 ]; then issues_json="$(printf '%s\n' "${iss[@]}" | jq -R . | jq -s .)"; else issues_json="[]"; fi
       objs+=("$(jq -nc \
         --arg name "$n" --arg state "$state" --argjson running "$running" \
         --arg cwd "$cwd" --arg stateDir "$sd" --arg mode "$pm" --arg session "$sess" --arg channel "$ch" \
-        --argjson uptimeSeconds "$up_s" --argjson issues "$issues_json" \
-        '{name:$name,state:$state,running:$running,cwd:$cwd,stateDir:$stateDir,mode:$mode,channel:$channel,session:$session,uptimeSeconds:(if $uptimeSeconds<0 then null else $uptimeSeconds end),issues:$issues}')")
+        --argjson uptimeSeconds "$up_s" --argjson lastActivitySeconds "$la_s" --argjson issues "$issues_json" \
+        '{name:$name,state:$state,running:$running,cwd:$cwd,stateDir:$stateDir,mode:$mode,channel:$channel,session:$session,uptimeSeconds:(if $uptimeSeconds<0 then null else $uptimeSeconds end),lastActivitySeconds:(if $lastActivitySeconds<0 then null else $lastActivitySeconds end),issues:$issues}')")
     done < <(all_names)
     if [ "${#objs[@]}" -gt 0 ]; then printf '%s\n' "${objs[@]}" | jq -s .; else printf '[]\n'; fi
 }
@@ -667,6 +759,7 @@ status_json() {
 cmd_logs() {
     NAME="${1:?name 필요}"; N="${2:-50}"
     printf '%s' "$N" | grep -qE '^[0-9]+$' || die ERR_BAD_LOG_N "$N"
+    warn_no_tmux_readonly   # tmux 없으면 실행 중 봇도 라이브 캡처 대신 스냅샷/정지로 보임(경고만)
     # 예약어: 전역 봇 디렉터리에서 조회 (레지스트리 lookup 불필요)
     if is_reserved_name "$NAME"; then
       # channel_spec 미정의 예약어(imessage/fakechat)는 미지원으로 안내 (up_reserved 와 동형, ADR-010)
@@ -816,6 +909,41 @@ cmd_doctor() {
       t DOCTOR_SHARED_NONE
     fi
     t DOCTOR_PLUGIN_HINT "$IMPLEMENTED_CHANNELS"
+
+    # --- install integrity (흔한 운영 실패 사전 진단) ---
+    # 채널 플러그인 설치 여부·claude/tmux 최소 버전은 안정적 탐지/비자명 기준선이 없어 제외하고
+    # (위 PLUGIN_HINT 로 안내 갈음), 신뢰성 있는 항목만 점검한다.
+    t DOCTOR_INTEGRITY
+    # (1) 등록봇 토큰 .env 권한(600) — 시크릿 노출 조기 감지
+    local _envtot=0 _envbad=0 _bn _esd _ef _eperm
+    while IFS= read -r _bn; do
+      [ -n "$_bn" ] || continue
+      _esd="$(expand "$(cut -f2 <<<"$(lookup "$_bn")")")"
+      _ef="$_esd/.env"
+      [ -f "$_ef" ] || continue
+      _envtot=$((_envtot+1))
+      _eperm="$(file_perm "$_ef")"
+      # 빈 perm(루프 중 파일 소멸 등 일시적 stat 실패)은 'bad 600' 이 아니라 '미상'으로 흘려보낸다.
+      if [ -n "$_eperm" ] && [ "$_eperm" != 600 ]; then _envbad=$((_envbad+1)); t DOCTOR_ENV_PERM_WARN "$_bn" "$_eperm"; fi
+    done < <(all_names)
+    [ "$_envbad" = 0 ] && [ "$_envtot" -gt 0 ] && t DOCTOR_ENV_PERM_OK "$_envtot"
+    # (2) 설치 매니페스트 경로 유효성 + BINDIR 쓰기 권한 — update/uninstall desync 조기 감지
+    local _mf _mmode _mrepo _mbin _mlib
+    _mf="${XDG_CONFIG_HOME:-$HOME/.config}/cctg/install.conf"
+    if [ ! -f "$_mf" ]; then
+      t DOCTOR_MANIFEST_NONE "$(tilde "$_mf")"
+    else
+      _mmode="$(conf_get "$_mf" mode)"
+      _mrepo="$(conf_get "$_mf" repo)"
+      _mbin="$(conf_get "$_mf" bindir)"
+      _mlib="$(conf_get "$_mf" libexecdir)"
+      t DOCTOR_MANIFEST_OK "$(tilde "$_mf")" "${_mmode:-?}"
+      [ -n "$_mrepo" ] && [ ! -d "$_mrepo" ] && t DOCTOR_MANIFEST_BADPATH repo "$(tilde "$_mrepo")"
+      [ -n "$_mlib" ]  && [ ! -d "$_mlib" ]  && t DOCTOR_MANIFEST_BADPATH libexecdir "$(tilde "$_mlib")"
+      if [ -n "$_mbin" ]; then
+        if [ -w "$_mbin" ]; then t DOCTOR_BINDIR_OK "$(tilde "$_mbin")"; else t DOCTOR_BINDIR_WARN "$(tilde "$_mbin")"; fi
+      fi
+    fi
 }
 
 cmd_version() {
