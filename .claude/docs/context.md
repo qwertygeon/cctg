@@ -64,7 +64,9 @@
       `is_running`(tmux 세션 존재)은 여전히 true 라 up 은 "이미 실행 중"이 아니라 DEAD 안내 메시지 출력.
   - registered/running → BROKEN: status 점검에서 cwd 부재·토큰(.env) 부재 등 발견
   - * → (미등록): rm (--purge 시 상태 디렉터리도 삭제)
-  - status 정렬·표시: RUNNING → DEAD → BROKEN → stopped
+  - status 정렬·표시: 버킷 간 RUNNING → DEAD → BROKEN → stopped. RUNNING·DEAD 버킷 내부는
+      session_created 내림차순(최근 실행이 위, `_sort_bucket_by_created`); 동률·미상은 등록순
+      (안정정렬)·미상 최하위. broken/stopped·status --json 은 등록순 유지.
 ```
 
 ### 3.4 외부 시스템 연동
