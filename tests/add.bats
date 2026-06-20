@@ -271,6 +271,18 @@ load test_helper
   [ -z "$output" ]
 }
 
+@test "add: write_atomic leaves no .tmp residue and preserves prior registry lines" {
+  seed_bot first
+  BOT_TOKEN=x run cctg add second "$WORK" --token-env BOT_TOKEN --id 1
+  [ "$status" -eq 0 ]
+  # no .tmp.* staging residue in the channels dir or any state dir (access.json/launch.env/registry)
+  run bash -c 'ls "$CC_CHANNELS_DIR"/.tmp.* "$CC_CHANNELS_DIR"/*/.tmp.* 2>/dev/null'
+  [ -z "$output" ]
+  # the registry append preserved the prior line and added the new one
+  grep -qE '^first \| '  "$REGISTRY"
+  grep -qE '^second \| ' "$REGISTRY"
+}
+
 @test "add: a failed attempt leaves no foreign-statedir dead-end — retry succeeds (DEC-004)" {
   # First attempt dies on a bad id (after token), creating no state dir.
   run bash -c "printf 'tok\nabc\n' | bash '$CCTG' add mybot '$WORK'"

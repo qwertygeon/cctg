@@ -103,3 +103,9 @@ sub_usage() {
 
 # 봇 이름 검증 — tmux 세션명·레지스트리(|) 충돌 방지를 위해 영숫자/_/- 만 허용
 valid_name() { printf '%s' "$1" | grep -qE '^[A-Za-z0-9_-]+$'; }
+
+# 파일의 8진 권한 비트(예: 600) — GNU(stat -c) 우선, BSD/macOS(stat -f) 폴백. 실패 시 빈 문자열.
+file_perm() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
+
+# 파일 수정시각(epoch 초) — GNU(stat -c %Y) 우선, BSD/macOS(stat -f %m) 폴백. 실패 시 빈 문자열.
+file_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null; }

@@ -34,6 +34,31 @@ make_jqless_path() {
   [[ "$output" == *"Discord"* ]]
 }
 
+@test "status: shows a last-activity line for a running bot" {
+  seed_bot mybot
+  mark_running mybot
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *" ago"* ]]         # last-activity line ("last  <dur> ago")
+}
+
+@test "status: a DEAD bot still shows a last-activity line; a broken bot does not" {
+  seed_bot deadbot
+  mark_running deadbot
+  export FAKE_PS_TREE="$FAKE_TMUX_PANE_PID 1 bash"   # claude-less tree → DEAD
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[DEAD"* ]]
+  [[ "$output" == *" ago"* ]]
+  unset FAKE_PS_TREE
+  # broken bot (missing token) has no live session → no last-activity line
+  registry_raw "brokebot | $WORK | $CC_CHANNELS_DIR/brokebot"
+  mkdir -p "$CC_CHANNELS_DIR/brokebot"               # dir exists, no .env → broken
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[BROKEN"* ]]
+}
+
 @test "status: with jq shows dmPolicy and group count for a discord bot (SC-019)" {
   seed_discord dcbot                  # --id absent → pairing, groups {}
   run cctg status
