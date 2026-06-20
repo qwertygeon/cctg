@@ -104,10 +104,10 @@ liveness/복구/재부팅 이벤트가 능동 통지되지 않는다(직접 `sta
 
 ### P2 — doctor 점검 심화
 
-> install-integrity 1차 점검(.env 600·매니페스트 경로 유효성·bindir 쓰기 권한)은 반영됨(`CHANGELOG.md`). 아래는 보류된 하위 점검.
+> install-integrity 1차 점검(.env 600·매니페스트 경로 유효성·bindir 쓰기 권한)은 반영됨(`CHANGELOG.md`). 아래는 보류된 하위 점검 (플러그인 탐지·최소버전은 **의도적 보류** — `v0.6.0/003` scope.md **CUT-001**).
 
-- **채널 플러그인 설치 여부**(`telegram`/`discord`): 안정적 탐지 수단(공식 CLI 질의)이 없어 보류 — 현재 `DOCTOR_PLUGIN_HINT` 안내로 갈음.
-- **`claude`/`tmux` 최소 버전**: 비자명한 기준선(어느 버전부터?)이 필요해 보류 — 강제 대신 버전 *표시*만 추후 검토.
+- **채널 플러그인 설치 여부**(`telegram`/`discord`)*(CUT-001)*: 안정적 탐지 수단(공식 CLI 질의)이 없어 보류 — 현재 `DOCTOR_PLUGIN_HINT` 안내로 갈음.
+- **`claude`/`tmux` 최소 버전***(CUT-001)*: 비자명한 기준선(어느 버전부터?)이 필요해 보류 — 강제 대신 버전 *표시*만 추후 검토.
 - **libexec/share 쓰기 권한 확대**: 현재 `bindir` 만 점검. libexec/share 까지 확대 가능.
 - **규모**: 저.
 
