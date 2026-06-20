@@ -1,6 +1,29 @@
 # lib/config.sh — key=value·launch.env 헬퍼
 # cc-tg.sh 가 런타임 source 하는 모듈(정의·전역설정 전용). 직접 실행하지 않는다.
 
+# 값을 작은따옴표로 감싸 셸-안전하게 만든다. .env·launch.env 는 봇 기동 시 `source` 되므로
+# 따옴표·공백·`;`·`$()`·백틱 등이 든 값을 무방비로 쓰면 source 시점에 파싱이 깨지거나
+# 명령이 실행될 수 있다(예: 토큰 오타·`config args '--p "x"'` 의 따옴표). 내부의 ' 는
+# '\'' 로 치환하는 셸 표준 단일따옴표 이스케이프를 적용해, 어떤 값이든 리터럴로 source 되게 한다.
+# (할당을 큰따옴표로 감싸지 않아야 ${//} 치환의 백슬래시가 이스케이프로 처리됨 — bash 3.2 호환.)
+shq() {
+  local q
+  q=${1//\'/\'\\\'\'}
+  printf "'%s'" "$q"
+}
+
+# stdin 을 파일에 원자적으로 쓴다(같은 디렉터리 mktemp→mv). 중단·경합 시 대상 파일은 부분 상태로
+# 남지 않는다(`cat >`/heredoc 직접 쓰기는 truncate 후 중단 시 부분 파일을 남긴다). mktemp 기본 0600.
+# 성공 0 / 실패 비0(호출측 die 처리).
+write_atomic() {
+  local file="$1" tmp dir
+  # 같은 디렉터리에 tmp 생성(원자 mv 보장). 슬래시 없는 경로(bare 파일명)면 dir 이 파일명으로 붕괴하므로 '.' 로.
+  dir="${file%/*}"; [ "$dir" = "$file" ] && dir="."
+  tmp="$(mktemp "$dir/.tmp.XXXXXX")" || return 1
+  cat > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+}
+
 # key=value 설정 파일에서 키 값을 읽는다(마지막 매치, '=' 뒤 전체). 없거나 빈 값이면 빈 문자열.
 conf_get() {
   local file="$1" key="$2"
@@ -32,21 +55,27 @@ conf_unset() {
 # 부분/빈 파일이 남지 않게 한다(`>` 직접 쓰기는 truncate 후 중단 시 토큰이 깨진다). mktemp 가 0600 으로
 # 생성하므로 world-readable 창이 없다. 성공 0 / 실패 비0(호출측이 die 처리). [P-003 / TODO 비원자적 쓰기]
 write_token_env() {
-  local file="$1" key="$2" val="$3" tmp
-  tmp="$(mktemp "${file%/*}/.env.XXXXXX")" || return 1
-  printf '%s=%s\n' "$key" "$val" > "$tmp" || { rm -f "$tmp"; return 1; }
+  local file="$1" key="$2" val="$3" tmp dir
+  dir="${file%/*}"; [ "$dir" = "$file" ] && dir="."
+  tmp="$(mktemp "$dir/.env.XXXXXX")" || return 1
+  # 값은 shq 로 작은따옴표 이스케이프 — .env 가 source 될 때 토큰의 특수문자가 명령으로 해석되지 않게.
+  printf '%s=%s\n' "$key" "$(shq "$val")" > "$tmp" || { rm -f "$tmp"; return 1; }
   mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
 }
 
-# launch.env 에 KEY="value" upsert (있으면 치환, 없으면 추가). 값은 그대로 기록(셸 치환 주의는 호출측 책임).
+# launch.env 에 KEY='value' upsert (있으면 제자리 치환, 없으면 추가). 값은 shq 로 작은따옴표
+# 이스케이프해 기록 — launch.env 는 봇 기동 시 source 되므로 따옴표·`$`·백틱이 든 값(예:
+# `config args '--append-system-prompt "x"'`)이 파싱 깨짐·명령 실행을 일으키지 않게 한다.
+# 치환 값은 awk -v 가 아니라 ENVIRON 으로 넘긴다(awk -v 는 백슬래시를 C 이스케이프로 해석해 깨짐).
 set_env_kv() {
-  local file="$1" key="$2" val="$3" tmp
+  local file="$1" key="$2" val="$3" tmp q
+  q="$(shq "$val")"
   [ -f "$file" ] || : > "$file"
   tmp="$(mktemp)" || return 1
   if grep -qE "^${key}=" "$file" 2>/dev/null; then
-    awk -v k="$key" -v v="$val" '$0 ~ "^"k"=" { print k"=\""v"\""; next } { print }' "$file" > "$tmp" && mv "$tmp" "$file"
+    q="$q" awk -v k="$key" '$0 ~ "^"k"=" { print k"=" ENVIRON["q"]; next } { print }' "$file" > "$tmp" && mv "$tmp" "$file"
   else
-    cp "$file" "$tmp" && printf '%s="%s"\n' "$key" "$val" >> "$tmp" && mv "$tmp" "$file"
+    cp "$file" "$tmp" && printf '%s=%s\n' "$key" "$q" >> "$tmp" && mv "$tmp" "$file"
   fi
 }
 

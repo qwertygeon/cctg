@@ -8,7 +8,7 @@ load test_helper
   run cctg config mybot mode acceptEdits
   [ "$status" -eq 0 ]
   [[ "$output" == *"permission mode: acceptEdits"* ]]
-  grep -q 'CCTG_PERMISSION_MODE="acceptEdits"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config mode clear: empties CCTG_PERMISSION_MODE" {
@@ -16,7 +16,7 @@ load test_helper
   run cctg config mybot mode clear
   [ "$status" -eq 0 ]
   [[ "$output" == *"(follow shared)"* ]]
-  grep -q 'CCTG_PERMISSION_MODE=""' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE=''" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config mode: refuses an invalid mode" {
@@ -30,7 +30,7 @@ load test_helper
   seed_bot mybot
   run cctg config mybot args "--model opus"
   [ "$status" -eq 0 ]
-  grep -q 'CLAUDE_EXTRA_ARGS="--model opus"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CLAUDE_EXTRA_ARGS='--model opus'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config show: prints the header and launch.env body" {
@@ -50,7 +50,7 @@ load test_helper
   run cctg config mybot width 160
   [ "$status" -eq 0 ]
   [[ "$output" == *"session width: 160"* ]]
-  grep -q 'CCTG_SESS_WIDTH="160"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_SESS_WIDTH='160'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config width clear: empties CCTG_SESS_WIDTH (follow global)" {
@@ -59,7 +59,7 @@ load test_helper
   run cctg config mybot width clear
   [ "$status" -eq 0 ]
   [[ "$output" == *"(follow global)"* ]]
-  grep -q 'CCTG_SESS_WIDTH=""' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_SESS_WIDTH=''" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "config width: refuses a non-numeric value" {
@@ -166,7 +166,7 @@ load test_helper
   printf 'newtok' > "$tmpf"
   run cctg config mybot token --token-stdin < "$tmpf"
   [ "$status" -eq 0 ]
-  grep -q 'TELEGRAM_BOT_TOKEN=newtok' "$sd/.env"
+  grep -q "TELEGRAM_BOT_TOKEN='newtok'" "$sd/.env"
   [ "$(file_mode "$sd/.env")" = "600" ]
 }
 
@@ -194,6 +194,69 @@ load test_helper
   printf 'newtok' > "$tmpf"
   run cctg config dbot token --token-stdin < "$tmpf"
   [ "$status" -eq 0 ]
-  grep -q 'DISCORD_BOT_TOKEN=newtok' "$sd/.env"
+  grep -q "DISCORD_BOT_TOKEN='newtok'" "$sd/.env"
   [ "$(file_mode "$sd/.env")" = "600" ]
+}
+
+# ---------------------------------------------------------------------------
+# .env / launch.env are `source`d at bot launch — values must be shell-safe so a
+# token/arg with metacharacters can neither break parsing nor execute commands.
+# ---------------------------------------------------------------------------
+
+@test "config args: metacharacters are stored single-quoted; sourcing does not inject" {
+  seed_bot mybot
+  local le="$CC_CHANNELS_DIR/mybot/launch.env"
+  local canary="$BATS_TEST_TMPDIR/pwned-args"
+  run cctg config mybot args "; touch $canary #"
+  [ "$status" -eq 0 ]
+  # Sourcing launch.env (as the launcher does) must NOT run the injected command…
+  ( set -a; . "$le" )
+  [ ! -e "$canary" ]
+  # …and the value must round-trip literally.
+  ( set -a; . "$le"; [ "$CLAUDE_EXTRA_ARGS" = "; touch $canary #" ] )
+}
+
+@test "config args: a value with embedded quotes round-trips and does not break source" {
+  seed_bot mybot
+  local le="$CC_CHANNELS_DIR/mybot/launch.env"
+  run cctg config mybot args '--append-system-prompt "be brief"'
+  [ "$status" -eq 0 ]
+  ( set -a; . "$le"; [ "$CLAUDE_EXTRA_ARGS" = '--append-system-prompt "be brief"' ] )
+}
+
+@test "config token: metacharacters in token are stored safely; sourcing does not inject" {
+  seed_bot mybot
+  local env="$CC_CHANNELS_DIR/mybot/.env"
+  local canary="$BATS_TEST_TMPDIR/pwned-tok"
+  printf '%s\n' "; touch $canary #" > "$BATS_TEST_TMPDIR/badtok"
+  run cctg config mybot token --token-stdin < "$BATS_TEST_TMPDIR/badtok"
+  [ "$status" -eq 0 ]
+  ( set -a; . "$env" )
+  [ ! -e "$canary" ]
+  ( set -a; . "$env"; [ "$TELEGRAM_BOT_TOKEN" = "; touch $canary #" ] )
+}
+
+@test "config args: rejects a value containing a newline (DEC-001)" {
+  seed_bot mybot
+  run cctg config mybot args "$(printf 'a\nb')"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"single line"* ]]
+}
+
+@test "config args: a value with a literal single quote round-trips (shq escape branch)" {
+  seed_bot mybot
+  local le="$CC_CHANNELS_DIR/mybot/launch.env"
+  run cctg config mybot args "--p 'x'"
+  [ "$status" -eq 0 ]
+  grep -Fq -- "'\''" "$le"                       # the '\'' escape sequence on disk
+  ( set -a; . "$le"; [ "$CLAUDE_EXTRA_ARGS" = "--p 'x'" ] )
+}
+
+@test "config args: re-setting a quote-containing value round-trips (set_env_kv replace branch)" {
+  seed_bot mybot
+  local le="$CC_CHANNELS_DIR/mybot/launch.env"
+  cctg config mybot args "--first" >/dev/null
+  run cctg config mybot args "--p 'y' --q"
+  [ "$status" -eq 0 ]
+  ( set -a; . "$le"; [ "$CLAUDE_EXTRA_ARGS" = "--p 'y' --q" ] )
 }
