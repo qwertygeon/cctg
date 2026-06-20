@@ -597,6 +597,21 @@ _status_render_reserved_bot() {
   t STATUS_CHANNEL "$(channel_spec "$ch" display)"
 }
 
+# status 정렬: running/dead 버킷(개행 구분 봇 이름)을 세션 생성시각(session_created) 내림차순으로
+# 재정렬한다 — 최근 실행한 봇이 위로. 동률·미상(tmux 조회 실패·비숫자)은 입력(등록) 순서를 유지
+# (안정 정렬 -s), 미상(created=0)은 버킷 최하위로. sess_pt 가 프로젝트/예약어 봇 공용이라 두 섹션이
+# 같은 헬퍼를 쓴다. broken/stopped 는 세션이 없어 created 가 없으므로 호출하지 않는다.
+_sort_bucket_by_created() {
+  local bucket="$1" n created tab
+  tab="$(printf '\t')"
+  while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    created="$(tmux display-message -p -t "$(sess_pt "$n")" '#{session_created}' 2>/dev/null)"
+    case "$created" in ''|*[!0-9]*) created=0 ;; esac
+    printf '%s%s%s\n' "$created" "$tab" "$n"
+  done <<< "$bucket" | sort -t"$tab" -k1,1nr -s | cut -f2-
+}
+
 cmd_status() {
     [ "${1:-}" = "--json" ] && { status_json; return; }
     if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
@@ -615,6 +630,10 @@ cmd_status() {
         *)       p_stopped="${p_stopped}${n}"$'\n' ;;
       esac
     done < <(all_names)
+    # RUNNING·DEAD 버킷 내부는 세션 생성시각 내림차순(최근 실행이 위)으로 재정렬. broken/stopped 는
+    # 등록 순서 유지(세션 없음 → created 부재).
+    p_running="$(_sort_bucket_by_created "$p_running")"
+    p_dead="$(_sort_bucket_by_created "$p_dead")"
     # RUNNING(위) → DEAD(크래시) → BROKEN(설정결손) → stopped(아래) 순. 분류 시 판정한 state 를
     # 렌더에 그대로 넘겨 재판정(ps 재스캔)을 피한다.
     local st bucket
@@ -645,6 +664,9 @@ cmd_status() {
         *)       r_stopped="${r_stopped}${ch}"$'\n' ;;
       esac
     done
+    # 전역 봇 RUNNING·DEAD 버킷도 동일하게 최근 실행순 정렬.
+    r_running="$(_sort_bucket_by_created "$r_running")"
+    r_dead="$(_sort_bucket_by_created "$r_dead")"
     local ch_found=0 rst rbucket
     for rst in running dead broken stopped; do
       case "$rst" in
