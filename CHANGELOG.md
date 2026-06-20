@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-20
+
 ### Added
 - **`cctg status` shows a last-activity indicator**: each running bot now reports `last  <dur> ago` (text view) and `lastActivitySeconds` (`status --json`), derived from the tmux session's `#{window_activity}` (last output time); stopped bots fall back to the `last-session.log` mtime, and bots with no signal report `—`/`null`. Helps spot a bot that is alive but idle/stalled. Display-only; no new command to learn. (`lib/session.sh`, `lib/commands.sh`, `messages/*.sh`, `tests/stubs/tmux`)
 - **`cctg doctor` install-integrity checks**: doctor gained an `install integrity` section that flags registered bots whose token `.env` is not `600`, reports install-manifest (`install.conf`) presence/path validity (repo + libexec paths exist) and whether the install `bindir` is writable (so `update`/`uninstall` desync surfaces early). Channel-plugin presence and minimum tool versions are intentionally not asserted (no stable detection / no non-arbitrary baseline). (`lib/util.sh`, `lib/commands.sh`, `messages/*.sh`)
