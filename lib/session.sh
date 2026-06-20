@@ -52,6 +52,21 @@ start_session() {
   tmux new-session -d -x "${3:-$SESS_WIDTH_DEFAULT}" -s "$1" bash -lc "$2"
 }
 
+# 봇의 마지막 활동 시각(epoch) 을 stdout 으로. 세션 생존($3=1)이면 tmux #{window_activity}(라이브
+# 출력 활동 시각), 비실행이면 last-session.log mtime(마지막 down 스냅샷) 으로 폴백한다.
+# 알 수 없으면(미실행·미스냅샷·비숫자) 비-0 반환. $1=봇/채널명 $2=상태디렉터리 $3=세션생존(1/0).
+# 주의: window_activity 는 출력 활동 기준이라 '살아있지만 멈춘' 봇 식별의 보조 지표다(완전 신뢰 X).
+last_activity_epoch() {
+  local name="$1" sd="$2" live="$3" e=""
+  if [ "$live" = 1 ]; then
+    e="$(tmux display-message -p -t "$(sess_pt "$name")" '#{window_activity}' 2>/dev/null)"
+  elif [ -f "$sd/last-session.log" ]; then
+    e="$(file_mtime "$sd/last-session.log")"
+  fi
+  case "$e" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s' "$e"
+}
+
 # 초 → 사람이 읽는 기간 (예: 2d3h / 4h5m / 7m)
 fmt_dur() {
   local s="$1" d h m
@@ -128,10 +143,10 @@ stop_snapshotter() {
 
 up_one() {
   local name="$1" cwd sd row
-  row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name"; return 1; }
+  row="$(lookup "$name")" || { te ERR_NOT_REGISTERED "$name" "$PROG"; return 1; }
   cwd="$(expand "$(cut -f1 <<<"$row")")"
   sd="$(expand "$(cut -f2 <<<"$row")")"
-  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; te ERR_NO_CWD_HINT "$PROG" "$name"; return 1; }
   [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }
   if is_running "$name"; then
     # 세션은 있으나 claude 가 죽은 DEAD 면 복구 경로(restart)를 안내한다. 자동 재기동은
@@ -224,7 +239,7 @@ up_reserved() {
   channel_spec "$ch" plugin >/dev/null 2>&1 || { te ERR_RESERVED_UNSUPPORTED "$ch"; return 1; }
   sd="$CHANNELS_DIR/$ch"
   cwd="$PWD"                                                            # DEC-001: cctg 호출 시점 현재 작업 디렉터리
-  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; return 1; }                 # up_one 과 동형 가드
+  [ -d "$cwd" ] || { te ERR_NO_CWD "$(tilde "$cwd")"; te ERR_NO_CWD_HINT_RESERVED; return 1; }   # up_one 과 동형 가드(전역 봇은 복구 경로가 다름)
   [ -f "$sd/.env" ] || { te ERR_NO_TOKEN "$(tilde "$sd/.env")"; return 1; }       # SC-017
   # 단독소유자 가드: cctg-<ch> tmux 세션 OR bot.pid 생존 (ADR-007)
   # DEAD(세션 생존·claude 종료)면 점유 거부 메시지 대신 restart 복구 경로를 안내한다.

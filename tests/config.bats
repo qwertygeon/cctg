@@ -235,3 +235,28 @@ load test_helper
   [ ! -e "$canary" ]
   ( set -a; . "$env"; [ "$TELEGRAM_BOT_TOKEN" = "; touch $canary #" ] )
 }
+
+@test "config args: rejects a value containing a newline (DEC-001)" {
+  seed_bot mybot
+  run cctg config mybot args "$(printf 'a\nb')"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"single line"* ]]
+}
+
+@test "config args: a value with a literal single quote round-trips (shq escape branch)" {
+  seed_bot mybot
+  local le="$CC_CHANNELS_DIR/mybot/launch.env"
+  run cctg config mybot args "--p 'x'"
+  [ "$status" -eq 0 ]
+  grep -Fq -- "'\''" "$le"                       # the '\'' escape sequence on disk
+  ( set -a; . "$le"; [ "$CLAUDE_EXTRA_ARGS" = "--p 'x'" ] )
+}
+
+@test "config args: re-setting a quote-containing value round-trips (set_env_kv replace branch)" {
+  seed_bot mybot
+  local le="$CC_CHANNELS_DIR/mybot/launch.env"
+  cctg config mybot args "--first" >/dev/null
+  run cctg config mybot args "--p 'y' --q"
+  [ "$status" -eq 0 ]
+  ( set -a; . "$le"; [ "$CLAUDE_EXTRA_ARGS" = "--p 'y' --q" ] )
+}

@@ -25,6 +25,18 @@ seed_global() {
 }
 
 # ---------------------------------------------------------------------------
+# last-activity (v0.6.0/003): reserved global bots have a dedicated render branch
+# ---------------------------------------------------------------------------
+
+@test "status: a running reserved global bot shows a last-activity line" {
+  seed_global telegram
+  mark_running telegram                 # cctg-telegram session running; default ps tree → claude alive
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *" ago"* ]]
+}
+
+# ---------------------------------------------------------------------------
 # SC-014: up telegram starts cctg-telegram session
 # ---------------------------------------------------------------------------
 

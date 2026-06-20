@@ -12,6 +12,18 @@ shq() {
   printf "'%s'" "$q"
 }
 
+# stdin 을 파일에 원자적으로 쓴다(같은 디렉터리 mktemp→mv). 중단·경합 시 대상 파일은 부분 상태로
+# 남지 않는다(`cat >`/heredoc 직접 쓰기는 truncate 후 중단 시 부분 파일을 남긴다). mktemp 기본 0600.
+# 성공 0 / 실패 비0(호출측 die 처리).
+write_atomic() {
+  local file="$1" tmp dir
+  # 같은 디렉터리에 tmp 생성(원자 mv 보장). 슬래시 없는 경로(bare 파일명)면 dir 이 파일명으로 붕괴하므로 '.' 로.
+  dir="${file%/*}"; [ "$dir" = "$file" ] && dir="."
+  tmp="$(mktemp "$dir/.tmp.XXXXXX")" || return 1
+  cat > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+}
+
 # key=value 설정 파일에서 키 값을 읽는다(마지막 매치, '=' 뒤 전체). 없거나 빈 값이면 빈 문자열.
 conf_get() {
   local file="$1" key="$2"
@@ -43,8 +55,9 @@ conf_unset() {
 # 부분/빈 파일이 남지 않게 한다(`>` 직접 쓰기는 truncate 후 중단 시 토큰이 깨진다). mktemp 가 0600 으로
 # 생성하므로 world-readable 창이 없다. 성공 0 / 실패 비0(호출측이 die 처리). [P-003 / TODO 비원자적 쓰기]
 write_token_env() {
-  local file="$1" key="$2" val="$3" tmp
-  tmp="$(mktemp "${file%/*}/.env.XXXXXX")" || return 1
+  local file="$1" key="$2" val="$3" tmp dir
+  dir="${file%/*}"; [ "$dir" = "$file" ] && dir="."
+  tmp="$(mktemp "$dir/.env.XXXXXX")" || return 1
   # 값은 shq 로 작은따옴표 이스케이프 — .env 가 source 될 때 토큰의 특수문자가 명령으로 해석되지 않게.
   printf '%s=%s\n' "$key" "$(shq "$val")" > "$tmp" || { rm -f "$tmp"; return 1; }
   mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
