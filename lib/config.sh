@@ -1,6 +1,17 @@
 # lib/config.sh — key=value·launch.env 헬퍼
 # cc-tg.sh 가 런타임 source 하는 모듈(정의·전역설정 전용). 직접 실행하지 않는다.
 
+# 값을 작은따옴표로 감싸 셸-안전하게 만든다. .env·launch.env 는 봇 기동 시 `source` 되므로
+# 따옴표·공백·`;`·`$()`·백틱 등이 든 값을 무방비로 쓰면 source 시점에 파싱이 깨지거나
+# 명령이 실행될 수 있다(예: 토큰 오타·`config args '--p "x"'` 의 따옴표). 내부의 ' 는
+# '\'' 로 치환하는 셸 표준 단일따옴표 이스케이프를 적용해, 어떤 값이든 리터럴로 source 되게 한다.
+# (할당을 큰따옴표로 감싸지 않아야 ${//} 치환의 백슬래시가 이스케이프로 처리됨 — bash 3.2 호환.)
+shq() {
+  local q
+  q=${1//\'/\'\\\'\'}
+  printf "'%s'" "$q"
+}
+
 # key=value 설정 파일에서 키 값을 읽는다(마지막 매치, '=' 뒤 전체). 없거나 빈 값이면 빈 문자열.
 conf_get() {
   local file="$1" key="$2"
@@ -34,19 +45,24 @@ conf_unset() {
 write_token_env() {
   local file="$1" key="$2" val="$3" tmp
   tmp="$(mktemp "${file%/*}/.env.XXXXXX")" || return 1
-  printf '%s=%s\n' "$key" "$val" > "$tmp" || { rm -f "$tmp"; return 1; }
+  # 값은 shq 로 작은따옴표 이스케이프 — .env 가 source 될 때 토큰의 특수문자가 명령으로 해석되지 않게.
+  printf '%s=%s\n' "$key" "$(shq "$val")" > "$tmp" || { rm -f "$tmp"; return 1; }
   mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
 }
 
-# launch.env 에 KEY="value" upsert (있으면 치환, 없으면 추가). 값은 그대로 기록(셸 치환 주의는 호출측 책임).
+# launch.env 에 KEY='value' upsert (있으면 제자리 치환, 없으면 추가). 값은 shq 로 작은따옴표
+# 이스케이프해 기록 — launch.env 는 봇 기동 시 source 되므로 따옴표·`$`·백틱이 든 값(예:
+# `config args '--append-system-prompt "x"'`)이 파싱 깨짐·명령 실행을 일으키지 않게 한다.
+# 치환 값은 awk -v 가 아니라 ENVIRON 으로 넘긴다(awk -v 는 백슬래시를 C 이스케이프로 해석해 깨짐).
 set_env_kv() {
-  local file="$1" key="$2" val="$3" tmp
+  local file="$1" key="$2" val="$3" tmp q
+  q="$(shq "$val")"
   [ -f "$file" ] || : > "$file"
   tmp="$(mktemp)" || return 1
   if grep -qE "^${key}=" "$file" 2>/dev/null; then
-    awk -v k="$key" -v v="$val" '$0 ~ "^"k"=" { print k"=\""v"\""; next } { print }' "$file" > "$tmp" && mv "$tmp" "$file"
+    q="$q" awk -v k="$key" '$0 ~ "^"k"=" { print k"=" ENVIRON["q"]; next } { print }' "$file" > "$tmp" && mv "$tmp" "$file"
   else
-    cp "$file" "$tmp" && printf '%s="%s"\n' "$key" "$val" >> "$tmp" && mv "$tmp" "$file"
+    cp "$file" "$tmp" && printf '%s=%s\n' "$key" "$q" >> "$tmp" && mv "$tmp" "$file"
   fi
 }
 

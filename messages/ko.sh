@@ -12,6 +12,7 @@ CCTG_MSG_ERR_UP_FAILED="ERROR: '%s' 의 tmux 세션 기동 실패 (tmux new-sess
 CCTG_MSG_ERR_DOWN_FAILED="ERROR: '%s' 의 tmux 세션 정지 실패 (tmux kill-session 오류)\n"
 CCTG_MSG_ERR_BAD_LOG_N="ERROR: 줄 수는 숫자여야 합니다: '%s'\n"
 CCTG_MSG_WARN_SNAPSHOT_FAILED="warning: '%s' 의 스냅샷 watcher 가 기동되지 않았습니다 (이번 실행은 스냅샷 비활성)\n"
+CCTG_MSG_WARN_NO_TMUX="warning: PATH 에서 tmux 를 찾지 못했습니다 — 실행/라이브 상태를 알 수 없습니다 (봇이 stopped/broken 으로 보일 수 있음)\n"
 
 CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n                         프로젝트 봇 등록 (플래그 사용 시 비대화형, telegram 은 --id 필수)\n                         --channel telegram|discord; --group 은 discord 서버채널 시드(반복 가능)\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>]\n                         봇별 옵션(권한 모드·추가 인자·로그 스냅샷) 보기·수정\n  common [show|edit|mode <m>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status [--json]        등록/실행 상태 (--json: 기계 판독용)\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
 
@@ -62,6 +63,7 @@ CCTG_MSG_ERR_ADD_BAD_ENVNAME="ERROR: '%s' 은(는) 유효한 환경변수 이름
 CCTG_MSG_ERR_ADD_NEED_ID="ERROR: 비대화형 add(--token-env/--token-stdin)에는 --id <num> 가 필수입니다\n"
 CCTG_MSG_ERR_ADD_BAD_GROUP_ID="ERROR: --group 채널 id 는 숫자여야 합니다: '%s'\n"
 CCTG_MSG_ERR_ADD_BAD_GROUP_MEMBER="ERROR: --group allow 멤버는 숫자여야 합니다: '%s'\n"
+CCTG_MSG_ERR_ADD_BAD_GROUP_MOD="ERROR: 알 수 없는 --group 수식어 '%s' (채널 %s) — 가능: nomention, allow=<ids>\n"
 CCTG_MSG_ERR_CHANNEL_UNSUPPORTED="ERROR: 채널 '%s' 은(는) 아직 지원하지 않습니다 (구현됨: %s)\n"
 CCTG_MSG_ADD_DONE="등록 완료: %s → cwd=%s, state=%s\n"
 CCTG_MSG_ADD_DONE_ALLOWLIST="  allowlist에 %s 시드함 (페어링 불필요)\n"

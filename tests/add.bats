@@ -14,7 +14,7 @@ load test_helper
   [ -f "$sd/.env" ]
   [ -f "$sd/access.json" ]
   [ -f "$sd/launch.env" ]
-  grep -q 'TELEGRAM_BOT_TOKEN=abc123' "$sd/.env"
+  grep -q "TELEGRAM_BOT_TOKEN='abc123'" "$sd/.env"
 }
 
 @test "add: .env is created with 600 permissions" {
@@ -32,7 +32,7 @@ load test_helper
 
 @test "add: --mode writes CCTG_PERMISSION_MODE into launch.env" {
   seed_bot mybot "$WORK" --mode acceptEdits
-  grep -q 'CCTG_PERMISSION_MODE="acceptEdits"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: rejects an invalid name and registers nothing" {
@@ -142,7 +142,7 @@ load test_helper
 
 @test "add: discord writes DISCORD_BOT_TOKEN into .env (SC-022)" {
   printf 'dc-secret-token\n' | cctg add mybot "$WORK" --channel discord --token-stdin >/dev/null
-  grep -q '^DISCORD_BOT_TOKEN=dc-secret-token$' "$CC_CHANNELS_DIR/mybot/.env"
+  grep -q "^DISCORD_BOT_TOKEN='dc-secret-token'\$" "$CC_CHANNELS_DIR/mybot/.env"
 }
 
 @test "add: --group <id> once seeds that key (SC-025)" {
@@ -195,6 +195,16 @@ load test_helper
   ! { [ -f "$REGISTRY" ] && grep -qE "^mybot \|" "$REGISTRY"; }
 }
 
+@test "add: unknown --group modifier errors, registers nothing (defensive)" {
+  # A typo'd modifier (e.g. 'nomeniton') must not be silently dropped — that would
+  # seed an access policy different from the user's intent. It must fail loudly.
+  BOT_TOKEN="tok" run cctg add mybot "$WORK" --channel discord --token-env BOT_TOKEN \
+    --group 846209781206941736:nomeniton
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown --group modifier"* ]]
+  ! { [ -f "$REGISTRY" ] && grep -qE "^mybot \|" "$REGISTRY"; }
+}
+
 # ---------------------------------------------------------------------------
 # v0.5.1/001-add-flow-hardening: interactive permission-mode menu (DEC-002),
 # validate-before-write (DEC-003), and pre-registration cleanup (DEC-004).
@@ -204,12 +214,12 @@ load test_helper
 
 @test "add: interactive mode menu choice 1 selects bypassPermissions (DEC-002 order)" {
   printf 'tok\n555\n1\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
-  grep -q 'CCTG_PERMISSION_MODE="bypassPermissions"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE='bypassPermissions'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu choice 2 selects acceptEdits (DEC-002 order)" {
   printf 'tok\n555\n2\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
-  grep -q 'CCTG_PERMISSION_MODE="acceptEdits"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu Enter follows shared (no per-bot mode)" {
@@ -225,13 +235,13 @@ load test_helper
 
 @test "add: interactive mode menu accepts a typed mode name" {
   printf 'tok\n555\nplan\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
-  grep -q 'CCTG_PERMISSION_MODE="plan"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE='plan'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu re-prompts on invalid choice then accepts a valid one" {
   # 99 (out of range) and bogus (unknown) are rejected; 2 finally selected.
   printf 'tok\n555\n99\nbogus\n2\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
-  grep -q 'CCTG_PERMISSION_MODE="acceptEdits"' "$CC_CHANNELS_DIR/mybot/launch.env"
+  grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"
   grep -qE '^mybot \|' "$REGISTRY"
 }
 
@@ -254,7 +264,7 @@ load test_helper
 @test "add: .env written atomically via write_token_env — content, 600, no temp residue" {
   BOT_TOKEN="atomictok" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 1
   [ "$status" -eq 0 ]
-  grep -q '^TELEGRAM_BOT_TOKEN=atomictok$' "$CC_CHANNELS_DIR/mybot/.env"
+  grep -q "^TELEGRAM_BOT_TOKEN='atomictok'\$" "$CC_CHANNELS_DIR/mybot/.env"
   [ "$(file_mode "$CC_CHANNELS_DIR/mybot/.env")" = "600" ]
   # the mktemp staging file must have been mv'd into place (no .env.* residue)
   run bash -c 'ls "$CC_CHANNELS_DIR/mybot"/.env.* 2>/dev/null'
