@@ -131,6 +131,8 @@ cctg attach myproject  # 라이브 세션 보기(Ctrl-b d 로 detach)
 
 끝이다. `cctg down myproject` 로 정지, `cctg restart myproject` 로 재기동한다.
 
+> 💬 **봇은 채널로 답하도록 지시된다.** 봇이 터미널에서만 "생각"하지 않고 항상 채팅으로 답하도록, CCTG 는 모든 봇에 짧은 reply 리마인더를 `claude --append-system-prompt` 로 주입한다. **기본 ON** 이며 `~/.claude/channels/cctg-reply-reminder.txt` 에 시드된다. 문구를 바꾸려면 그 파일을 편집하고, 끄려면 비우면 된다. `cctg doctor` 가 ON/OFF 를 표시한다. 자세히: **[docs/configuration.ko.md → 채널 reply 리마인더](docs/configuration.ko.md#채널-reply-리마인더)**.
+
 ## 자주 쓰는 명령
 
 ```text

@@ -36,6 +36,21 @@ ensure_shared_settings() {
 JSON
   te SHARED_CREATED "$SHARED_SETTINGS"
 }
+
+# 채널 reply 리마인더 텍스트를 부재 시 기본 문구로 시드(기본 ON). 봇 기동 시 이 파일의 내용이
+# claude --append-system-prompt 로 주입되어, 봇이 채널 메시지에 reply 도구로(quote-reply 포함)
+# 답하도록 강제한다. opt-out 은 파일을 비우는 것(`: > 파일`) — 존재하면 재시드하지 않으므로
+# 빈 파일이 유지되고 주입도 건너뛴다. 편집(수정)은 존재 파일을 덮어쓰지 않아 보존된다.
+# (삭제하면 다음 기동에 재시드된다 — 끄려면 삭제가 아니라 비운다.)
+ensure_reply_reminder() {
+  [ -e "$REPLY_REMINDER_FILE" ] && return 0
+  mkdir -p "$(dirname "$REPLY_REMINDER_FILE")" 2>/dev/null || true
+  cat > "$REPLY_REMINDER_FILE" <<'TXT'
+You are running as a CCTG chat-channel bot (Telegram/Discord). Every user message reaches you through the channel, and your terminal/transcript output is NOT delivered to the user. Therefore you MUST reply by calling the channel's reply tool — a turn that ends without a reply tool call leaves the user with no response. When you reply, use the reply tool's quote-reply field (reply_to) to reference the message you are answering, especially when answering an earlier message or when several messages have stacked up.
+TXT
+  te REPLY_REMINDER_SEEDED "$(tilde "$REPLY_REMINDER_FILE")"
+}
+
 # 모드 유효성 검사
 valid_mode() { case " $VALID_MODES " in *" $1 "*) return 0;; *) return 1;; esac; }
 # detached 세션 폭 유효성 검사: 양의 정수이고 하한(20) 이상.

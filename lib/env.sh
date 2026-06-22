@@ -7,6 +7,10 @@ REGISTRY="${CC_TG_REGISTRY:-$CHANNELS_DIR/projects.conf}"
 # 전역 ~/.claude/settings.json 과 merge 되며(deny 는 union, deny 가 allow 보다 우선),
 # 여기 defaultMode 가 봇의 기본 권한 모드가 된다. 봇별 launch.env 의 CCTG_PERMISSION_MODE 가 우선한다.
 SHARED_SETTINGS="${CC_TG_SHARED_SETTINGS:-$CHANNELS_DIR/cctg-shared.settings.json}"
+# 모든 CCTG 봇에 --append-system-prompt 로 주입되는 채널 reply 리마인더 텍스트.
+# cctg 가 부재 시 기본 문구로 시드(기본 ON). 비우면 주입 안 함(opt-out), 편집하면 그 내용으로 주입.
+# 봇 세션에만 적용되며 사용자의 일반 claude 사용에는 영향 없다.
+REPLY_REMINDER_FILE="${CC_TG_REPLY_REMINDER_FILE:-$CHANNELS_DIR/cctg-reply-reminder.txt}"
 SESS_PREFIX="cctg-"
 # detached 세션 폭(칼럼)의 최종 폴백 기본값. tmux detached 기본은 80 이라 logs/snapshot 캡처가
 # 80 폭으로 잘린다 — client 미부착 상태에서도 더 넓은 출력을 보존하려고 new-session -x 로 고정한다.
