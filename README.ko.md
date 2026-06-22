@@ -6,6 +6,8 @@
 
 **CCTG**(Claude Code Tmux Gateway)는 macOS에서 **tmux + Claude Code + 채팅 게이트웨이(Telegram 또는 Discord)**를 묶어, 프로젝트별 Claude Code 채팅 봇을 휴대폰이나 채팅 클라이언트에서 띄우고 관리하는 런처다. 명령은 `cctg` 다.
 
+쉽게 말해 **클로드 코드(Claude Code)를 텔레그램 봇·디스코드 봇으로 연동**하고, 여러 프로젝트의 봇을 tmux 세션으로 **한 곳에서 손쉽게 기동·관리**하는 macOS용 CLI 도구다. 터미널을 계속 지켜보지 않아도 휴대폰이나 채팅 앱에서 **원격으로** Claude Code 작업을 시작하고 상태를 확인할 수 있다. (자주 찾는 키워드: 클로드 코드 텔레그램 봇, Claude Code 디스코드 봇, tmux 봇 게이트웨이, 맥OS CLI 봇 관리)
+
 각 프로젝트 봇은 자기만의 상태 디렉터리·토큰·작업 디렉터리·격리된 tmux 세션을 가지며, CCTG는 전역 채널 봇(`~/.claude/channels/<채널>/`)을 건드리지 않는다.
 
 > ⚠️ **프라이버시 — 먼저 읽으세요.** 봇은 받은 메시지를 자신의 작업 디렉터리에서 실행되는 Claude Code 프로세스로 중계하며, Claude Code는 그 내용을 처리를 위해 **Anthropic API로 전송**한다. 즉 봇과 주고받는 대화·코드·파일 내용이 제3자(Anthropic) 및 Telegram/Discord 인프라를 거친다. 민감한 저장소에 봇을 붙이기 전에 한 번 더 생각하고, `access.json` allowlist로 접근 주체를 본인(또는 신뢰된 사용자)으로 엄격히 제한하라.
