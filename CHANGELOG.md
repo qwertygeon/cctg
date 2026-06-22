@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-22
+
 ### Added
 - **Channel reply-reminder injected into every bot (on by default)**: so that a bot always answers *through the channel* (a bot's terminal/transcript output never reaches the user) and quote-replies with `reply_to`, CCTG now passes a short reminder to each bot via `claude --append-system-prompt`. The text lives in an editable plain-text file `~/.claude/channels/cctg-reply-reminder.txt`, seeded with a default the first time you `add`/`up` a bot. Customize by editing the file (preserved across upgrades — CCTG only writes it when missing); disable by **emptying** the file (an empty file is kept and skips injection; deleting it re-seeds on next `up`). It applies only to CCTG bot sessions, not your own `claude` usage. `cctg add` prints an ON notice and `cctg doctor` reports ON/OFF. A `UserPromptSubmit` hook in the shared `--settings` file was deliberately *not* used: Claude Code does not document whether a `--settings` `hooks` key merges with or replaces your global `~/.claude/settings.json` hooks, and a replace would strip your global hooks (e.g. a `git-guard` `PreToolUse` net) from every `bypassPermissions` bot session; `--append-system-prompt` touches no hooks. (`lib/env.sh`, `lib/util.sh`, `lib/session.sh`, `lib/commands.sh`, `messages/*.sh`, `tests/reply_reminder.bats`, docs)
 
@@ -148,7 +150,9 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/qwertygeon/cctg/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/qwertygeon/cctg/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/qwertygeon/cctg/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/qwertygeon/cctg/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/qwertygeon/cctg/compare/v0.3.0...v0.4.0
