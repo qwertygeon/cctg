@@ -1,4 +1,4 @@
-<!-- Thanks for contributing! See CONTRIBUTING.md before opening this PR. -->
+<!-- Fill in the sections below before opening this PR. -->
 
 ## Summary
 

@@ -17,10 +17,13 @@
 .env
 RELEASE_NOTES.md
 
-# .claude/ — AI 메타데이터 (전체 제외, docs/ 문서 추적)
+# .claude/ — AI 메타데이터 (전체 제외; docs/ 도 cctg-dev(private)로 이전·로컬 유지)
 .claude/*
-!.claude/docs/
-!.claude/docs/*.md
+
+# 내부 문서 — cctg-dev(private)로 이전, 로컬 유지(추적 안 함). 폴더 단위 + CLAUDE.md(루트 자동로드 예외)
+/CLAUDE.md
+docs/_internal/
+docs/specs/
 
 # AI workspace / SDD 파이프라인 워크스페이스 (실행 로그·결정 기록 — 저장소 추적 대상 아님)
 _ai-workspace/
