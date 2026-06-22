@@ -1,0 +1,20 @@
+# GitHub Pages (Jekyll) — project site for CCTG.
+# Renders index.md as the homepage with the Cayman theme. The title/description
+# below feed the page <title> and meta description (jekyll-seo-tag), which is what
+# search engines index. Source: this branch's root (deploy from branch → gh-pages /).
+title: CCTG — Claude Code Tmux Gateway
+description: >-
+  Easily connect and manage Telegram/Discord chat-bot gateways with tmux —
+  run a per-project Claude Code bot on macOS, controllable from your phone.
+theme: jekyll-theme-cayman
+show_downloads: true
+
+# Non-site files: keep them out of the build (they are still in the repo).
+exclude:
+  - lib
+  - tests
+  - completions
+  - scripts
+  - messages
+  - "*.sh"
+  - docs/specs
