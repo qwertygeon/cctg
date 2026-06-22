@@ -9,6 +9,9 @@ description: >-
 theme: jekyll-theme-cayman
 show_downloads: true
 
+# Google Search Console — jekyll-seo-tag emits the verification <meta> into <head>.
+google_site_verification: 8Ilnvj1NEOIDmlXWeSPT4vHuUD-eIthC9V9KFHk_CdY
+
 # Non-site files: keep them out of the build (they are still in the repo).
 exclude:
   - lib
