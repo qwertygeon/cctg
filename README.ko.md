@@ -193,7 +193,7 @@ CCTG는 Claude Code의 **channels** 구조(`~/.claude/channels/`)를 따른다: 
 | [권한 정책](docs/permissions.ko.md) | 공통 정책 + 봇별 모드, deny/allow, 기본 deny 목록 |
 | [설정·동작 원리](docs/configuration.ko.md) | CLI 언어, 환경변수/경로, 동작 방식, 로그 스냅샷 |
 
-프로젝트 메타: [기여](CONTRIBUTING.md) · [보안 정책](SECURITY.md) · [변경 로그](CHANGELOG.md) · [패키징 구조](docs/packaging.md) · [릴리스](docs/RELEASING.md) · [TODO / 향후 작업](docs/TODO.md)
+프로젝트 메타: [보안 정책](SECURITY.md) · [변경 로그](CHANGELOG.md)
 
 ## 제거
 
@@ -203,6 +203,6 @@ CCTG는 Claude Code의 **channels** 구조(`~/.claude/channels/`)를 따른다: 
 
 `cctg` 런처·자동완성·셸 rc 관리 블록·CCTG 자체 설정을 제거하지만, `~/.claude/channels/` 하위의 레지스트리·상태 디렉터리는 **건드리지 않는다** — 따라서 봇 등록·토큰은 재설치해도 보존된다. 상세는 [docs/installation.ko.md](docs/installation.ko.md#제거) 참조.
 
-## 기여 & 라이선스
+## 버전 & 라이선스
 
-기여는 환영한다 — [CONTRIBUTING.md](CONTRIBUTING.md) 참조. 버전은 저장소 루트의 `VERSION` 파일이 단일 소스(SoT)이며 `cctg version` 으로 확인한다. `cctg update` 는 전/후 버전을 함께 보여준다. 라이선스는 [MIT](LICENSE).
+버전은 저장소 루트의 `VERSION` 파일이 단일 소스(SoT)이며 `cctg version` 으로 확인한다. `cctg update` 는 전/후 버전을 함께 보여준다. 라이선스는 [MIT](LICENSE).

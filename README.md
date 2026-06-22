@@ -193,7 +193,7 @@ CCTG follows Claude Code's **channels** layout (`~/.claude/channels/`): each cha
 | [Permissions & policy](docs/permissions.md) | Shared policy + per‑bot modes, deny/allow, the default deny list |
 | [Configuration & internals](docs/configuration.md) | CLI language, env vars/paths, how it works, log snapshots |
 
-Project meta: [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [Packaging structure](docs/packaging.md) · [Releasing](docs/RELEASING.md) · [TODO / future work](docs/TODO.md)
+Project meta: [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ## Uninstall
 
@@ -203,6 +203,6 @@ Project meta: [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) 
 
 This removes the `cctg` launcher, completions, the shell rc managed block, and CCTG's own config — but **never** touches the registry or state directories under `~/.claude/channels/`, so your bot registrations and tokens survive a reinstall. Details in [docs/installation.md](docs/installation.md#uninstall).
 
-## Contributing & license
+## Version & license
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The version is sourced from the `VERSION` file at the repository root (the single source of truth); check it with `cctg version`, and `cctg update` shows the before/after versions. Licensed under [MIT](LICENSE).
+The version is sourced from the `VERSION` file at the repository root (the single source of truth); check it with `cctg version`, and `cctg update` shows the before/after versions. Licensed under [MIT](LICENSE).
