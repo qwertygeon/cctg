@@ -18,6 +18,7 @@
   - [레지스트리](#레지스트리)
   - [상태 격리](#상태-격리)
   - [공통 권한 정책](#공통-권한-정책)
+  - [채널 reply 리마인더](#채널-reply-리마인더)
   - [tmux 세션](#tmux-세션)
   - [`up` 기동 라인](#up-기동-라인)
   - [채널](#채널)
@@ -62,6 +63,7 @@ cctg lang clear      # 선호 설정을 제거한다 (자동 감지로 복귀)
 | `CC_CHANNELS_DIR` | `~/.claude/channels` | 채널 상태 루트 |
 | `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | 레지스트리 파일 |
 | `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | 공통 권한 정책 파일 |
+| `CC_TG_REPLY_REMINDER_FILE` | `$CC_CHANNELS_DIR/cctg-reply-reminder.txt` | 모든 봇에 주입되는 채널 reply 리마인더 텍스트 |
 | `CC_TG_SESS_WIDTH` | (미설정) | detached 세션 폭(칼럼) 오버라이드. `cctg common width` 전역 기본값보다 우선 |
 | `CCTG_LANG` | (미설정) | 일회성 CLI 언어 오버라이드(`en`/`ko`) |
 | `BINDIR` | `~/.local/bin` | 설치 위치(`install.sh` / `uninstall.sh`) |
@@ -110,6 +112,19 @@ name | working_dir | state_dir | channel
 
 공통 권한 정책(`cctg-shared.settings.json`)은 `claude --settings` 를 통해 모든 봇에 주입된다.
 
+### 채널 reply 리마인더
+
+모든 봇은 **매 턴** 채널의 reply 도구로(그리고 `reply_to` 로 quote-reply 하여) 답하도록 상기된다. 봇의 터미널/전사 출력은 사용자에게 전달되지 않기 때문이다. 이로써 봇이 답장을 보내지 않은 채 "혼잣말"만 하는 상황을 막는다.
+
+- **위치**: 평문 파일 `~/.claude/channels/cctg-reply-reminder.txt`. 봇을 처음 `add`/`up` 할 때 기본 문구로 시드된다.
+- **적용 방식**: `up` 시 CCTG 가 파일 내용을 `claude --append-system-prompt` 로 전달한다([`up` 기동 라인](#up-기동-라인) 참조). **기본 ON**.
+- **편집**: 파일을 수정하면 된다. CCTG 는 파일이 없을 때만 작성하므로 사용자 수정은 업그레이드에도 보존된다.
+- **비활성(opt-out)**: 파일을 비운다(`: > ~/.claude/channels/cctg-reply-reminder.txt`). 빈 파일은 그대로 유지되고 주입을 건너뛴다. 삭제하면 다음 `up` 에 기본 문구가 재시드되므로, 삭제가 아니라 비워라.
+- **적용 범위**: CCTG 봇 세션에만 영향. 사용자의 일반 `claude` 사용에는 영향 없다.
+- `cctg doctor` 가 리마인더 ON/OFF 를 표시한다.
+
+> **왜 settings 훅이 아닌가?** 초기 설계는 `cctg-shared.settings.json` 에 `UserPromptSubmit` 훅을 넣는 것이었다. 그러나 Claude Code 는 `--settings` 파일의 `hooks` 키가 전역 `~/.claude/settings.json` 의 hooks 와 병합되는지 대체되는지 문서화하지 않는다. 대체라면 모든 봇 세션(`bypassPermissions` 로 실행)이 전역 hooks — `git-guard` 류 `PreToolUse` 안전망 포함 — 를 잃는다. `--append-system-prompt` 는 hooks 를 건드리지 않아 이 위험이 없다.
+
 ### tmux 세션
 
 tmux 세션 이름은 `cctg-<name>` 규약을 따른다. 세션은 detached 라 tmux 가 폭을 80 칼럼으로 제한해 `logs`/snapshot 캡처가 잘릴 수 있어, CCTG 는 `new-session -x` 로 폭을 고정한다. 유효 폭은 다음 순서로 해석한다(첫 유효값 채택): 봇별 `CCTG_SESS_WIDTH`(`cctg config <name> width`) → env `CC_TG_SESS_WIDTH` → 전역 기본 `sess_width`(`cctg common width`, `~/.config/cctg/config`) → 내장 기본값 `100`. 각 후보는 20 이상의 정수여야 한다.
@@ -124,10 +139,11 @@ tmux 세션 이름은 `cctg-<name>` 규약을 따른다. 세션은 detached 라 
 4. 분리된 tmux 세션 안에서 다음을 실행:
 
 ```bash
-caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] [$CLAUDE_EXTRA_ARGS]
+caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] \
+  [--append-system-prompt "$(cat <reply-reminder>)"] [$CLAUDE_EXTRA_ARGS]
 ```
 
-`caffeinate -is` 는 봇이 실행되는 동안 시스템이 잠들지 않도록 막는다.
+`caffeinate -is` 는 봇이 실행되는 동안 시스템이 잠들지 않도록 막는다. `--append-system-prompt` 플래그는 [reply 리마인더](#채널-reply-리마인더) 파일이 비어 있지 않을 때만 추가된다.
 
 ### 채널
 
