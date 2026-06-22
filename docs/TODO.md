@@ -31,6 +31,7 @@
   - [P2 — doctor 점검 심화](#p2--doctor-점검-심화)
   - [P2 — update 실패 롤백](#p2--update-실패-롤백)
   - [P2 — main 브랜치 보호 활성화 (외부 repo 설정)](#p2--main-브랜치-보호-활성화-외부-repo-설정)
+  - [P1 — 내부 문서 비공개 전환 (private repo 이전 → 히스토리 purge)](#p1--내부-문서-비공개-전환-private-repo-이전--히스토리-purge)
   - [P3 — Homebrew tap 배포](#p3--homebrew-tap-배포)
   - [P3 — 릴리스 아티팩트 체크섬](#p3--릴리스-아티팩트-체크섬)
 - [사용편의성 (마찰 없는 향상)](#사용편의성-마찰-없는-향상)
@@ -125,6 +126,54 @@ liveness/복구/재부팅 이벤트가 능동 통지되지 않는다(직접 `sta
 
 - **무엇**: GitHub repo Settings → Branches 에서 `main` 에 "Require a pull request before merging" + "Require status checks (CI)" 보호 규칙 활성화. **코드로 처리 불가 — 저장소 소유자 수동 설정.** `docs/RELEASING.md` 에 이 보호가 전제임을 명시.
 - **주의**: 워크플로 `github.token` 태그 push 는 CI 를 재트리거하지 않는다. PR 시점 CI 가 실질 방어선.
+
+### P1 — 내부 문서 비공개 전환 (private repo 이전 → 히스토리 purge)
+
+repo 가 public 이므로 설계·개발·배포·AI 메타 문서가 모두 공개된다. 이 중 **내부 문서만** 비공개로 분리한다. 한 public repo 안에서 경로별 비공개는 불가하므로 **(B) 별도 private repo 이전**을 먼저 완료한 뒤 **(C) public repo 히스토리에서 제거**한다. 사용자 결정(2026-06-22, Discord): B → (완전 이전·검증) → C.
+
+> **전제·한계 (반드시 인지)**: 대상 파일은 이미 과거 커밋·릴리스 태그(v0.6.0/v0.7.0)·포크·GitHub 캐시에 **공개 이력으로 존재**한다. B 후 public 트리에서 제거해도 **히스토리엔 잔존**하며, 그 제거(C)는 force-push 가 필요하다. **이 repo 는 force-push 가 정책상 항상 차단**(git-guard + main 브랜치 보호)되므로 C 는 저장소 소유자가 보호를 일시 해제하고 **수동** 수행해야 한다(에이전트 대행 불가). 대상 경로에 **시크릿은 없다**(봇 토큰은 repo 밖 `~/.claude/channels`) → C 미수행 시 위험은 "개발 과정 노출" 수준.
+
+**문서 분류**
+
+| 구분 | 대상 |
+|---|---|
+| **공개 유지 (public)** | 도구(`cc-tg.sh`·`lib/`·`messages/`·`completions/`·`install.sh`·`uninstall.sh`·`scripts/`·`tests/`), 사용자 문서(`README(.ko).md`, `docs/installation(.ko).md`·`commands(.ko).md`·`configuration(.ko).md`·`permissions(.ko).md`·`telegram-setup(.ko).md`·`discord-setup(.ko).md`), `LICENSE`·`SECURITY.md`·`CHANGELOG.md`, Pages(`_config.yml`·`index.md`) |
+| **비공개 전환 (private)** | `.claude/`(추적 중: `docs/constitution.md`·`context.md`·`infra.md`), 루트 `CLAUDE.md`, `docs/specs/`(SDD 산출물 전체), `docs/TODO.md`(본 문서), `docs/i18n.md`·`docs/packaging.md`·`docs/RELEASING.md`, `CONTRIBUTING.md` |
+
+> 설계·개발·배포 프로세스 문서(i18n/packaging/RELEASING/CONTRIBUTING)를 전부 비공개로 전환 = **외부 기여를 받지 않는(닫힌 개발) 전제**. 공개 기여를 받을 계획이 생기면 재검토.
+
+**Phase B — private repo 이전 (선행)**
+
+1. private repo 생성(예: `cctg-internal`).
+2. 비공개 대상 이전. 옵션: (b1) 단순 복사(이력 없이, 최단), (b2) `git filter-repo --path <경로들>` 로 해당 경로만 추출해 **설계 이력 보존** 이전.
+3. 로컬 개발 연결(택1): (i) public 작업트리에서 해당 파일은 **로컬 유지**(gitignore)하되 private repo 와 별도 동기화, 또는 (ii) private repo 를 public repo 내 **private submodule** 로 마운트(`.claude/`·`docs/specs/` 등). submodule URL 은 노출되나 내용은 권한 없으면 접근 불가. *SDD 파이프라인은 로컬 파일을 읽으므로 로컬에 존재하면 동작 영향 없음.*
+4. public repo 추적 해제 커밋(PR `develop→main`): `git rm -r --cached <대상>` + `.gitignore` 갱신(`.claude/docs/` 화이트리스트 제거 — 현재 `!.claude/docs/` 가 추적시킴 — 및 `docs/specs/`·`docs/TODO.md`·`docs/i18n.md`·`docs/packaging.md`·`docs/RELEASING.md`·`CONTRIBUTING.md`·`CLAUDE.md` 추가). → 이 시점부터 **새 트리에선 비공개**(히스토리 잔존).
+5. 참조 정리: `README(.ko).md`·`SECURITY.md` 등에서 비공개로 가는 문서 링크 제거/대체. Pages `_config.yml` 의 `exclude`·`.dockerignore` 정합. **`gh-pages` 브랜치(현재 main 기준이라 동일 파일 포함)에서도 제거.**
+
+**Phase C — 히스토리에서 완전 제거 (커밋 재작성, B 완전 이전·백업 후)**
+
+목표: 과거 **모든 커밋**에서 비공개 대상 파일을 지워 public 이력에 남지 않게 한다. **가능하다.** 단 커밋을 하나씩 손으로 고치는 게 아니라 **히스토리 재작성 도구**로 전 커밋에서 해당 경로를 제거한다(영향 커밋·태그의 SHA 가 모두 바뀐다).
+
+1. 전제: Phase B 로 대상이 private repo 에 안전 이전·검증 완료 + 로컬 백업 확보(재작성은 비가역).
+2. **재작성 도구**: `git filter-repo`(권장, 빠름·정확) 또는 BFG. `filter-branch` 는 느리고 오류가 많아 비권장.
+   ```bash
+   git filter-repo --invert-paths \
+     --path .claude --path CLAUDE.md --path docs/specs \
+     --path docs/TODO.md --path docs/i18n.md --path docs/packaging.md \
+     --path docs/RELEASING.md --path CONTRIBUTING.md
+   ```
+   → 지정 경로가 전 히스토리에서 사라지고 영향 커밋·태그가 새 SHA 로 재작성된다.
+3. **원격 덮어쓰기 = force-push 필요**: `git push --force --all` + `git push --force --tags`.
+   - ⚠️ 이 repo 는 force-push 가 **정책상 항상 차단**(git-guard hook + `permissions.deny` + main 브랜치 보호). → **소유자가 본인 터미널에서 수동** 수행하며, 사전에 main(및 develop/gh-pages) 브랜치 보호를 **일시 해제**해야 한다. **에이전트는 force-push 대행 불가.**
+4. **태그/릴리스**: `v0.1.0`~`v0.7.0` 태그가 재작성된다(또는 옛 커밋에 고아로 남음). filter-repo 가 태그도 재작성하므로 `--force --tags` 로 재push. GitHub Release 객체는 유지되나 소스 트리 기준 커밋이 바뀐다.
+5. **gh-pages**: 동일 파일 포함 → 함께 재작성하거나, 더 간단히 **비공개 파일 없는 상태로 브랜치 재생성**(deploy 소스라 이력 가치 낮음).
+6. **검증**: `git log --all -- <경로>` 가 공백, `git cat-file` 로 옛 blob 미접근 확인.
+7. **완전 삭제 불가 요소 (정직히)**: 이미 생성된 **포크**는 별도 저장소라 못 지운다(소유자에게 삭제 요청만). GitHub 은 옛 커밋을 **SHA 직접 접근·캐시**로 일정 기간 보존 → 완전 제거하려면 force-push 후 **GitHub Support 에 고아 커밋·캐시 purge 요청**. 검색엔진/제3자 캐시도 시간차 잔존. 대상에 **시크릿은 없으므로**(토큰은 repo 밖) 잔존의 실제 위험은 "과정 노출" 수준.
+
+- **사용편의성/완성도**: 공개 표면을 사용자 가치(도구+사용법)로 좁혀 군더더기 제거. 단 닫힌 개발 전제이므로 기여 유입은 포기.
+- **규모**: B 중 / C 대(수동·파괴적).
+
+> **메모**: 본 계획을 public `docs/TODO.md` 에 적으면 계획 자체가 공개된다. `docs/TODO.md` 는 Phase B 비공개 대상이므로 B 수행 시 private repo 로 함께 이전된다.
 
 ### P3 — Homebrew tap 배포
 
