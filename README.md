@@ -6,6 +6,8 @@
 
 **CCTG** (Claude Code Tmux Gateway) is a macOS launcher that ties together **tmux + Claude Code + a chat gateway (Telegram or Discord)**, so you can run and manage a per‑project Claude Code chat bot from your phone or any chat client. The command is `cctg`.
 
+In short, it's a macOS CLI that **connects Claude Code to Telegram and Discord bots** and uses **tmux** to launch, isolate, and **manage many per‑project bots from one place**. You don't have to babysit a terminal — start tasks and check status **remotely** from your phone or any chat app. (Common searches: run Claude Code from Telegram/Discord, Claude Code Telegram bot, Claude Code Discord bot, tmux bot gateway, macOS Claude Code bot manager.)
+
 Each project bot has its own state directory, token, working directory, and isolated tmux session — and CCTG never touches the global channel bot at `~/.claude/channels/<channel>/`.
 
 > ⚠️ **Privacy — read this first.** A bot relays the messages it receives to a Claude Code process running in its working directory, and Claude Code **sends that content to the Anthropic API** for processing. Conversations, code, and file contents you exchange with the bot therefore pass through a third party (Anthropic) and through Telegram/Discord infrastructure. Think twice before attaching a bot to a sensitive repository, and strictly limit who can reach it via the `access.json` allowlist (yourself, or trusted users only).
