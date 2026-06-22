@@ -9,6 +9,13 @@ description: >-
 theme: jekyll-theme-cayman
 show_downloads: true
 
+# Project-page URL (qwertygeon.github.io/cctg) — also lets jekyll-sitemap emit
+# absolute URLs in /sitemap.xml and jekyll-seo-tag set canonical links.
+url: "https://qwertygeon.github.io"
+baseurl: "/cctg"
+plugins:
+  - jekyll-sitemap
+
 # Google Search Console — jekyll-seo-tag emits the verification <meta> into <head>.
 google_site_verification: 8Ilnvj1NEOIDmlXWeSPT4vHuUD-eIthC9V9KFHk_CdY
 
