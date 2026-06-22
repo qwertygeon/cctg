@@ -160,8 +160,10 @@ up_one() {
 
   # 공통 설정(권한 정책)을 --settings 로 주입. 없으면 시드.
   ensure_shared_settings
-  local shared_arg=""
+  ensure_reply_reminder
+  local shared_arg="" reminder_q
   [ -f "$SHARED_SETTINGS" ] && shared_arg="--settings $(printf '%q' "$SHARED_SETTINGS")"
+  reminder_q="$(printf '%q' "$REPLY_REMINDER_FILE")"
 
   # 상태 디렉터리/토큰을 분리 주입하고 caffeinate로 sleep 방지하며 채널 세션 기동.
   # 봇별 launch.env(있으면)에서 CCTG_PERMISSION_MODE / CLAUDE_EXTRA_ARGS 를 읽어 claude 인자로 전달한다.
@@ -180,7 +182,8 @@ up_one() {
 && set +a \
 && MODE_ARG=\"\" \
 && { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
-&& caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
+&& { [ -s $reminder_q ] && set -- --append-system-prompt \"\$(cat $reminder_q)\" || set --; } \
+&& caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \"\$@\" \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   # new-session 실패(서버 기동 불가·리소스 부족·직전 race 등)를 확인 — 미확인 시 거짓 UP 보고.
   if ! start_session "$(sess_of "$name")" "$launch" "$(effective_sess_width "$sd")"; then
@@ -252,8 +255,10 @@ up_reserved() {
   need_claude || return 1
 
   ensure_shared_settings
-  local shared_arg=""
+  ensure_reply_reminder
+  local shared_arg="" reminder_q
   [ -f "$SHARED_SETTINGS" ] && shared_arg="--settings $(printf '%q' "$SHARED_SETTINGS")"
+  reminder_q="$(printf '%q' "$REPLY_REMINDER_FILE")"
 
   local sd_env plugin
   sd_env="$(channel_spec "$ch" statedir_env)"
@@ -266,7 +271,8 @@ up_reserved() {
 && set +a \
 && MODE_ARG=\"\" \
 && { [ -n \"\${CCTG_PERMISSION_MODE:-}\" ] && MODE_ARG=\"--permission-mode \${CCTG_PERMISSION_MODE}\" || true; } \
-&& caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \${CLAUDE_EXTRA_ARGS:-}; exec bash"
+&& { [ -s $reminder_q ] && set -- --append-system-prompt \"\$(cat $reminder_q)\" || set --; } \
+&& caffeinate -is claude --channels $plugin $shared_arg \${MODE_ARG} \"\$@\" \${CLAUDE_EXTRA_ARGS:-}; exec bash"
 
   if ! start_session "$(sess_of "$ch")" "$launch" "$(effective_sess_width "$sd")"; then
     te ERR_UP_FAILED "$ch"; return 1

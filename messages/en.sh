@@ -6,6 +6,7 @@
 # language. Keep the key set identical to ko.sh (key parity); only values differ per language.
 
 CCTG_MSG_SHARED_CREATED="Created shared settings: %s (defaultMode=bypassPermissions + deny safety net)\n"
+CCTG_MSG_REPLY_REMINDER_SEEDED="Seeded channel reply-reminder: %s (bots are instructed to reply via the channel; edit to customize, empty the file to disable)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: this action requires jq. Edit directly with 'cctg common edit', or install jq (brew install jq).\n"
 CCTG_MSG_ERR_NO_TMUX="ERROR: tmux not found on PATH — install tmux (brew install tmux).\n"
 CCTG_MSG_ERR_NO_CLAUDE="ERROR: claude CLI not found on PATH — install Claude Code before starting a bot.\n"
@@ -73,6 +74,7 @@ CCTG_MSG_ADD_DONE_ALLOWLIST="  seeded %s into the allowlist (no pairing needed)\
 CCTG_MSG_ADD_DONE_PAIRING="  DM the bot to get a pairing code, then approve it from the bot's /access skill.\n"
 CCTG_MSG_ADD_DONE_MODE="  permission mode: %s  (shared: %s common / per-bot: %s config %s)\n"
 CCTG_MSG_ADD_DONE_NEXT="Next: %s up %s  → DM the bot and it responds right away.\n"
+CCTG_MSG_ADD_DONE_REPLY_REMINDER="  reply-reminder: ON — the bot is instructed to answer via the channel (quote-reply). Customize/disable: %s\n"
 
 # rm
 CCTG_MSG_RM_DONE="Unregistered: %s\n"
@@ -178,6 +180,8 @@ CCTG_MSG_DOCTOR_DEFAULTMODE="  defaultMode: %s\n"
 CCTG_MSG_DOCTOR_DENYALLOW="  deny: %s / allow: %s\n"
 CCTG_MSG_DOCTOR_NOJQ="  (no jq — check with 'cctg common show')\n"
 CCTG_MSG_DOCTOR_SHARED_NONE="  (none yet — created on first add/up)\n"
+CCTG_MSG_DOCTOR_REPLY_REMINDER_ON="Reply-reminder: ON  (%s — injected into bots via --append-system-prompt)\n"
+CCTG_MSG_DOCTOR_REPLY_REMINDER_OFF="Reply-reminder: OFF  (%s — empty or absent; empty the file to keep it off)\n"
 CCTG_MSG_DOCTOR_PLUGIN_HINT="  (the channel plugins must be installed globally, e.g. /plugin install <channel>@claude-plugins-official for: %s)\n"
 CCTG_MSG_DOCTOR_INTEGRITY="--- install integrity ---\n"
 CCTG_MSG_DOCTOR_ENV_PERM_OK="  ok   bot token files (.env): all 600 (%s checked)\n"

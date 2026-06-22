@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Channel reply-reminder injected into every bot (on by default)**: so that a bot always answers *through the channel* (a bot's terminal/transcript output never reaches the user) and quote-replies with `reply_to`, CCTG now passes a short reminder to each bot via `claude --append-system-prompt`. The text lives in an editable plain-text file `~/.claude/channels/cctg-reply-reminder.txt`, seeded with a default the first time you `add`/`up` a bot. Customize by editing the file (preserved across upgrades — CCTG only writes it when missing); disable by **emptying** the file (an empty file is kept and skips injection; deleting it re-seeds on next `up`). It applies only to CCTG bot sessions, not your own `claude` usage. `cctg add` prints an ON notice and `cctg doctor` reports ON/OFF. A `UserPromptSubmit` hook in the shared `--settings` file was deliberately *not* used: Claude Code does not document whether a `--settings` `hooks` key merges with or replaces your global `~/.claude/settings.json` hooks, and a replace would strip your global hooks (e.g. a `git-guard` `PreToolUse` net) from every `bypassPermissions` bot session; `--append-system-prompt` touches no hooks. (`lib/env.sh`, `lib/util.sh`, `lib/session.sh`, `lib/commands.sh`, `messages/*.sh`, `tests/reply_reminder.bats`, docs)
+
 ## [0.6.0] - 2026-06-20
 
 ### Added
