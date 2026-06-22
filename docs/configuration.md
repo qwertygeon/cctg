@@ -18,6 +18,7 @@
   - [Registry](#registry)
   - [State isolation](#state-isolation)
   - [Shared permission policy](#shared-permission-policy)
+  - [Channel reply reminder](#channel-reply-reminder)
   - [tmux sessions](#tmux-sessions)
   - [The `up` launch line](#the-up-launch-line)
   - [Channels](#channels)
@@ -62,6 +63,7 @@ Some text remains language-neutral regardless of the resolved language: the gene
 | `CC_CHANNELS_DIR` | `~/.claude/channels` | Channel state root |
 | `CC_TG_REGISTRY` | `$CC_CHANNELS_DIR/projects.conf` | Registry file |
 | `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | Shared permission policy file |
+| `CC_TG_REPLY_REMINDER_FILE` | `$CC_CHANNELS_DIR/cctg-reply-reminder.txt` | Channel reply-reminder text injected into every bot |
 | `CC_TG_SESS_WIDTH` | (unset) | Detached session width override (columns); beats the `cctg common width` global default |
 | `CCTG_LANG` | (unset) | One-off CLI language override (`en`/`ko`) |
 | `BINDIR` | `~/.local/bin` | Install location (`install.sh` / `uninstall.sh`) |
@@ -110,6 +112,19 @@ Per-bot state is isolated under `~/.claude/channels/<name>/`. Each bot gets a se
 
 The shared permission policy (`cctg-shared.settings.json`) is injected into every bot via `claude --settings`.
 
+### Channel reply reminder
+
+Every bot is reminded — on each turn — to answer **through the channel reply tool** (and to quote-reply with `reply_to`), because a bot's terminal/transcript output never reaches the user. This keeps bots from "thinking out loud" without ever sending a reply.
+
+- **Where**: a plain-text file at `~/.claude/channels/cctg-reply-reminder.txt`, seeded with a default message the first time you `add` or `up` a bot.
+- **How it's applied**: on `up`, CCTG passes the file's contents to `claude --append-system-prompt` (see [the `up` launch line](#the-up-launch-line)). It is **on by default**.
+- **Customize**: edit the file — your text is preserved across upgrades (CCTG only writes it when it is missing).
+- **Disable (opt-out)**: empty the file (`: > ~/.claude/channels/cctg-reply-reminder.txt`). An empty file is kept as-is and skips injection. Deleting the file instead re-seeds the default on the next `up`, so empty it rather than delete it.
+- **Scope**: this affects only CCTG bot sessions; your own `claude` usage is untouched.
+- `cctg doctor` shows whether the reminder is ON or OFF.
+
+> **Why not a settings hook?** An earlier design put a `UserPromptSubmit` hook in `cctg-shared.settings.json`. Claude Code does not document whether a `--settings` file's `hooks` key merges with or replaces your global `~/.claude/settings.json` hooks; if it replaces them, every bot session (which runs `bypassPermissions`) would lose your global hooks — including a `git-guard`-style `PreToolUse` safety net. `--append-system-prompt` touches no hooks and avoids that risk.
+
 ### tmux sessions
 
 tmux session names follow the `cctg-<name>` convention. Sessions are detached, so tmux would otherwise cap the width at 80 columns and truncate `logs`/snapshot capture. CCTG pins the width with `new-session -x`. The effective width resolves in this order (first valid wins): the bot's `CCTG_SESS_WIDTH` (`cctg config <name> width`) → env `CC_TG_SESS_WIDTH` → the global default `sess_width` (`cctg common width`, in `~/.config/cctg/config`) → the built-in default `100`. Each candidate must be an integer ≥ 20.
@@ -124,10 +139,11 @@ On `up`, the launcher does roughly:
 4. run, inside a detached tmux session:
 
 ```bash
-caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] [$CLAUDE_EXTRA_ARGS]
+caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] \
+  [--append-system-prompt "$(cat <reply-reminder>)"] [$CLAUDE_EXTRA_ARGS]
 ```
 
-`caffeinate -is` prevents the system from sleeping while the bot runs.
+`caffeinate -is` prevents the system from sleeping while the bot runs. The `--append-system-prompt` flag is added only when the [reply-reminder](#channel-reply-reminder) file is non-empty.
 
 ### Channels
 

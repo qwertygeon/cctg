@@ -131,6 +131,8 @@ cctg attach myproject  # watch the live session (detach with Ctrl-b d)
 
 That's it. Stop with `cctg down myproject`, restart with `cctg restart myproject`.
 
+> 💬 **Bots are told to reply through the channel.** So that a bot always answers in chat (instead of "thinking" only in its terminal), CCTG injects a short reply-reminder into every bot via `claude --append-system-prompt`. It's **on by default**, seeded at `~/.claude/channels/cctg-reply-reminder.txt`. Edit that file to customize the wording, or empty it to turn the reminder off. `cctg doctor` shows whether it's on. Details: **[docs/configuration.md → Channel reply reminder](docs/configuration.md#channel-reply-reminder)**.
+
 ## Everyday commands
 
 ```text
