@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-22
+
+### Added
+- **Channel reply-reminder injected into every bot (on by default)**: so that a bot always answers *through the channel* (a bot's terminal/transcript output never reaches the user) and quote-replies with `reply_to`, CCTG now passes a short reminder to each bot via `claude --append-system-prompt`. The text lives in an editable plain-text file `~/.claude/channels/cctg-reply-reminder.txt`, seeded with a default the first time you `add`/`up` a bot. Customize by editing the file (preserved across upgrades — CCTG only writes it when missing); disable by **emptying** the file (an empty file is kept and skips injection; deleting it re-seeds on next `up`). It applies only to CCTG bot sessions, not your own `claude` usage. `cctg add` prints an ON notice and `cctg doctor` reports ON/OFF. A `UserPromptSubmit` hook in the shared `--settings` file was deliberately *not* used: Claude Code does not document whether a `--settings` `hooks` key merges with or replaces your global `~/.claude/settings.json` hooks, and a replace would strip your global hooks (e.g. a `git-guard` `PreToolUse` net) from every `bypassPermissions` bot session; `--append-system-prompt` touches no hooks. (`lib/env.sh`, `lib/util.sh`, `lib/session.sh`, `lib/commands.sh`, `messages/*.sh`, `tests/reply_reminder.bats`, docs)
+
 ## [0.6.0] - 2026-06-20
 
 ### Added
@@ -101,14 +106,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-06-16
 
 ### Added
-- Automated release publishing (`.github/workflows/release.yml`): pushing a `VERSION` change to `main` re-runs the CI gates, creates the `v{VERSION}` tag, and publishes a GitHub Release with notes extracted from the matching `CHANGELOG.md` section (idempotent — skips if the tag already exists). `docs/RELEASING.md` now documents the `develop → main` branch policy and the version-bump-triggered flow.
+- Automated release publishing (`.github/workflows/release.yml`): pushing a `VERSION` change to `main` re-runs the CI gates, creates the `v{VERSION}` tag, and publishes a GitHub Release with notes extracted from the matching `CHANGELOG.md` section (idempotent — skips if the tag already exists).
 - Opt-in periodic log snapshots for crash/reboot coverage: `cctg config <name> snapshot <seconds|off>` (min 5s, off by default). While the bot runs, a lightweight background watcher re-captures the tmux pane (rendered text) to `<state>/last-session.log` every N seconds and self-terminates when the session ends, so `cctg logs` shows a recent snapshot even after a crash or reboot that never ran `down`. `down` stops the watcher and takes a final snapshot. Shown in `cctg config <name> show`; bash/zsh completions updated.
 - A [bats](https://github.com/bats-core/bats-core) test suite under `tests/` (81 tests) covering `add`/`rm`/`rename`/`config`/`common`/`status --json`/`lang`/`logs`/`up`/`down`/`restart`/`doctor`/`version`, the snapshot watcher lifecycle, the dispatcher, and the registry / reserved-name / state-dir safety guards. Tests run against an isolated state tree with a stateful fake `tmux` (`tests/stubs/tmux`), so they touch no real bots or tmux server. A `test` job runs them in CI.
 - `cctg status --json` for machine-readable output (array of `{name, state, running, cwd, stateDir, mode, session, uptimeSeconds, issues}` with locale-independent tokens; requires `jq`), and per-reason recovery hints (`↳ ...`) printed under each `BROKEN` bot in the text view.
 - Bot log persistence: `cctg down` snapshots the tmux pane (rendered text, ~2000 lines) to `<state>/last-session.log` (600 perms), and `cctg logs` falls back to that snapshot when the bot is stopped — so logs survive session end.
 - Non-interactive `cctg add` flags for CI/scripting: `--id <num>`, `--token-env <VAR>`, `--token-stdin`, `--mode <m>`. A token flag switches `add` to non-interactive mode (then `--id` is required; `--mode` optional, defaulting to the shared policy). The token is never accepted as an argv to avoid process-list exposure. bash/zsh completions updated.
 - GitHub Actions CI (`.github/workflows/ci.yml`): `bash -n` syntax check, `shellcheck -S warning` on logic scripts, and the `scripts/check-i18n-keys.sh` key-parity lint on every push/PR to `main`. Status badge added to both READMEs.
-- `docs/RELEASING.md` documenting the version-bump → tag → GitHub Release procedure (VERSION is the SoT, tags are `v{VERSION}`).
 
 ### Fixed
 - Exit codes for successful commands: `cctg config <bot> mode|args` on a *stopped* bot, and `cctg status` with one or more bots registered, no longer return a non-zero exit status (the command branch had ended on a falsy `is_running`/`found` test). Surfaced by the new test suite; matters for `&&` chaining and scripting.
@@ -122,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - English `README.md` as the primary doc, with the Korean version preserved as `README.ko.md` and a language switcher on both.
 - Privacy / data-flow notice and an "unofficial tool" disclaimer in the README.
 - `.gitignore` for macOS, editor, and `*.cctg-bak` artifacts.
-- Project meta files: `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, and GitHub issue/PR templates.
+- Project meta files: `SECURITY.md`, `CHANGELOG.md`, and GitHub issue/PR templates.
 - "Supported gateways" table in both READMEs documenting Claude Code's channel plugins (Telegram/Discord/iMessage/fakechat/Slack), their `~/.claude/channels/<channel>/` state dirs, `<CHANNEL>_STATE_DIR` overrides, and CCTG support status.
 
 ### Changed
@@ -145,7 +149,9 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/qwertygeon/cctg/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/qwertygeon/cctg/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/qwertygeon/cctg/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/qwertygeon/cctg/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/qwertygeon/cctg/compare/v0.3.0...v0.4.0

@@ -6,6 +6,8 @@
 
 **CCTG** (Claude Code Tmux Gateway) is a macOS launcher that ties together **tmux + Claude Code + a chat gateway (Telegram or Discord)**, so you can run and manage a per‑project Claude Code chat bot from your phone or any chat client. The command is `cctg`.
 
+In short, it's a macOS CLI that **connects Claude Code to Telegram and Discord bots** and uses **tmux** to launch, isolate, and **manage many per‑project bots from one place**. You don't have to babysit a terminal — start tasks and check status **remotely** from your phone or any chat app. (Common searches: run Claude Code from Telegram/Discord, Claude Code Telegram bot, Claude Code Discord bot, tmux bot gateway, macOS Claude Code bot manager.)
+
 Each project bot has its own state directory, token, working directory, and isolated tmux session — and CCTG never touches the global channel bot at `~/.claude/channels/<channel>/`.
 
 > ⚠️ **Privacy — read this first.** A bot relays the messages it receives to a Claude Code process running in its working directory, and Claude Code **sends that content to the Anthropic API** for processing. Conversations, code, and file contents you exchange with the bot therefore pass through a third party (Anthropic) and through Telegram/Discord infrastructure. Think twice before attaching a bot to a sensitive repository, and strictly limit who can reach it via the `access.json` allowlist (yourself, or trusted users only).
@@ -131,6 +133,8 @@ cctg attach myproject  # watch the live session (detach with Ctrl-b d)
 
 That's it. Stop with `cctg down myproject`, restart with `cctg restart myproject`.
 
+> 💬 **Bots are told to reply through the channel.** So that a bot always answers in chat (instead of "thinking" only in its terminal), CCTG injects a short reply-reminder into every bot via `claude --append-system-prompt`. It's **on by default**, seeded at `~/.claude/channels/cctg-reply-reminder.txt`. Edit that file to customize the wording, or empty it to turn the reminder off. `cctg doctor` shows whether it's on. Details: **[docs/configuration.md → Channel reply reminder](docs/configuration.md#channel-reply-reminder)**.
+
 ## Everyday commands
 
 ```text
@@ -189,7 +193,7 @@ CCTG follows Claude Code's **channels** layout (`~/.claude/channels/`): each cha
 | [Permissions & policy](docs/permissions.md) | Shared policy + per‑bot modes, deny/allow, the default deny list |
 | [Configuration & internals](docs/configuration.md) | CLI language, env vars/paths, how it works, log snapshots |
 
-Project meta: [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [Packaging structure](docs/packaging.md) · [Releasing](docs/RELEASING.md) · [TODO / future work](docs/TODO.md)
+Project meta: [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ## Uninstall
 
@@ -199,6 +203,6 @@ Project meta: [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) 
 
 This removes the `cctg` launcher, completions, the shell rc managed block, and CCTG's own config — but **never** touches the registry or state directories under `~/.claude/channels/`, so your bot registrations and tokens survive a reinstall. Details in [docs/installation.md](docs/installation.md#uninstall).
 
-## Contributing & license
+## Version & license
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The version is sourced from the `VERSION` file at the repository root (the single source of truth); check it with `cctg version`, and `cctg update` shows the before/after versions. Licensed under [MIT](LICENSE).
+The version is sourced from the `VERSION` file at the repository root (the single source of truth); check it with `cctg version`, and `cctg update` shows the before/after versions. Licensed under [MIT](LICENSE).

@@ -157,6 +157,7 @@ EOF
     # 등록 전 비정상 종료(쓰기 실패 등) 시 우리가 새로 만든 SD 만 정리한다(DEC-004, EXIT trap).
     # 사전에 존재하던 디렉터리는 절대 건드리지 않는다(P-002). 등록(point of no return) 후 trap 해제.
     ensure_shared_settings
+    ensure_reply_reminder
     CCTG_ADD_CLEANUP_DIR=""
     trap '[ -n "${CCTG_ADD_CLEANUP_DIR:-}" ] && rm -rf "$CCTG_ADD_CLEANUP_DIR"' EXIT
     [ -e "$SD" ] || CCTG_ADD_CLEANUP_DIR="$SD"
@@ -213,6 +214,10 @@ ENV
     local pmshow="${PMODE:-$(t FOLLOW_SHARED)}"
     t ADD_DONE_MODE "$pmshow" "$PROG" "$PROG" "$NAME"
     t ADD_DONE_NEXT "$PROG" "$NAME"
+    # 봇이 채널 메시지에 reply 도구로 답하도록 강제하는 리마인더가 기본 ON 임을 알린다(인지·편집·opt-out 경로).
+    if [ -s "$REPLY_REMINDER_FILE" ]; then
+      t ADD_DONE_REPLY_REMINDER "$(tilde "$REPLY_REMINDER_FILE")"
+    fi
 }
 
 cmd_rm() {
@@ -907,6 +912,12 @@ cmd_doctor() {
       fi
     else
       t DOCTOR_SHARED_NONE
+    fi
+    # 채널 reply 리마인더 상태(봇에 --append-system-prompt 로 주입). 비어 있거나 부재면 OFF(opt-out).
+    if [ -s "$REPLY_REMINDER_FILE" ]; then
+      t DOCTOR_REPLY_REMINDER_ON "$(tilde "$REPLY_REMINDER_FILE")"
+    else
+      t DOCTOR_REPLY_REMINDER_OFF "$(tilde "$REPLY_REMINDER_FILE")"
     fi
     t DOCTOR_PLUGIN_HINT "$IMPLEMENTED_CHANNELS"
 

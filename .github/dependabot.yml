@@ -1,0 +1,11 @@
+# Dependabot — keep GitHub Actions used by our workflows up to date.
+# cctg has no package-manager dependencies (pure Bash), so the only ecosystem
+# to track is the actions pinned in .github/workflows/*.yml (e.g. actions/checkout).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"

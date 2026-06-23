@@ -6,6 +6,8 @@
 
 **CCTG**(Claude Code Tmux Gateway)는 macOS에서 **tmux + Claude Code + 채팅 게이트웨이(Telegram 또는 Discord)**를 묶어, 프로젝트별 Claude Code 채팅 봇을 휴대폰이나 채팅 클라이언트에서 띄우고 관리하는 런처다. 명령은 `cctg` 다.
 
+쉽게 말해 **클로드 코드(Claude Code)를 텔레그램 봇·디스코드 봇으로 연동**하고, 여러 프로젝트의 봇을 tmux 세션으로 **한 곳에서 손쉽게 기동·관리**하는 macOS용 CLI 도구다. 터미널을 계속 지켜보지 않아도 휴대폰이나 채팅 앱에서 **원격으로** Claude Code 작업을 시작하고 상태를 확인할 수 있다. (자주 찾는 키워드: 클로드 코드 텔레그램 봇, Claude Code 디스코드 봇, tmux 봇 게이트웨이, 맥OS CLI 봇 관리)
+
 각 프로젝트 봇은 자기만의 상태 디렉터리·토큰·작업 디렉터리·격리된 tmux 세션을 가지며, CCTG는 전역 채널 봇(`~/.claude/channels/<채널>/`)을 건드리지 않는다.
 
 > ⚠️ **프라이버시 — 먼저 읽으세요.** 봇은 받은 메시지를 자신의 작업 디렉터리에서 실행되는 Claude Code 프로세스로 중계하며, Claude Code는 그 내용을 처리를 위해 **Anthropic API로 전송**한다. 즉 봇과 주고받는 대화·코드·파일 내용이 제3자(Anthropic) 및 Telegram/Discord 인프라를 거친다. 민감한 저장소에 봇을 붙이기 전에 한 번 더 생각하고, `access.json` allowlist로 접근 주체를 본인(또는 신뢰된 사용자)으로 엄격히 제한하라.
@@ -131,6 +133,8 @@ cctg attach myproject  # 라이브 세션 보기(Ctrl-b d 로 detach)
 
 끝이다. `cctg down myproject` 로 정지, `cctg restart myproject` 로 재기동한다.
 
+> 💬 **봇은 채널로 답하도록 지시된다.** 봇이 터미널에서만 "생각"하지 않고 항상 채팅으로 답하도록, CCTG 는 모든 봇에 짧은 reply 리마인더를 `claude --append-system-prompt` 로 주입한다. **기본 ON** 이며 `~/.claude/channels/cctg-reply-reminder.txt` 에 시드된다. 문구를 바꾸려면 그 파일을 편집하고, 끄려면 비우면 된다. `cctg doctor` 가 ON/OFF 를 표시한다. 자세히: **[docs/configuration.ko.md → 채널 reply 리마인더](docs/configuration.ko.md#채널-reply-리마인더)**.
+
 ## 자주 쓰는 명령
 
 ```text
@@ -189,7 +193,7 @@ CCTG는 Claude Code의 **channels** 구조(`~/.claude/channels/`)를 따른다: 
 | [권한 정책](docs/permissions.ko.md) | 공통 정책 + 봇별 모드, deny/allow, 기본 deny 목록 |
 | [설정·동작 원리](docs/configuration.ko.md) | CLI 언어, 환경변수/경로, 동작 방식, 로그 스냅샷 |
 
-프로젝트 메타: [기여](CONTRIBUTING.md) · [보안 정책](SECURITY.md) · [변경 로그](CHANGELOG.md) · [패키징 구조](docs/packaging.md) · [릴리스](docs/RELEASING.md) · [TODO / 향후 작업](docs/TODO.md)
+프로젝트 메타: [보안 정책](SECURITY.md) · [변경 로그](CHANGELOG.md)
 
 ## 제거
 
@@ -199,6 +203,6 @@ CCTG는 Claude Code의 **channels** 구조(`~/.claude/channels/`)를 따른다: 
 
 `cctg` 런처·자동완성·셸 rc 관리 블록·CCTG 자체 설정을 제거하지만, `~/.claude/channels/` 하위의 레지스트리·상태 디렉터리는 **건드리지 않는다** — 따라서 봇 등록·토큰은 재설치해도 보존된다. 상세는 [docs/installation.ko.md](docs/installation.ko.md#제거) 참조.
 
-## 기여 & 라이선스
+## 버전 & 라이선스
 
-기여는 환영한다 — [CONTRIBUTING.md](CONTRIBUTING.md) 참조. 버전은 저장소 루트의 `VERSION` 파일이 단일 소스(SoT)이며 `cctg version` 으로 확인한다. `cctg update` 는 전/후 버전을 함께 보여준다. 라이선스는 [MIT](LICENSE).
+버전은 저장소 루트의 `VERSION` 파일이 단일 소스(SoT)이며 `cctg version` 으로 확인한다. `cctg update` 는 전/후 버전을 함께 보여준다. 라이선스는 [MIT](LICENSE).
