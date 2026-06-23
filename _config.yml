@@ -27,4 +27,3 @@ exclude:
   - scripts
   - messages
   - "*.sh"
-  - docs/specs

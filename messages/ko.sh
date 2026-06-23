@@ -5,6 +5,7 @@
 # en.sh 와 동일한 키 집합을 유지한다(키 패리티). 값만 언어별로 다르다.
 
 CCTG_MSG_SHARED_CREATED="공통 설정 생성: %s (defaultMode=bypassPermissions + deny 안전망)\n"
+CCTG_MSG_REPLY_REMINDER_SEEDED="채널 reply 리마인더 시드: %s (봇이 채널 reply 도구로 답하도록 지시 — 편집해 문구 변경, 파일을 비우면 비활성)\n"
 CCTG_MSG_ERR_NEED_JQ="ERROR: 이 동작은 jq가 필요합니다. 'cctg common edit'로 직접 편집하거나 jq를 설치하세요 (brew install jq).\n"
 CCTG_MSG_ERR_NO_TMUX="ERROR: PATH 에서 tmux 를 찾지 못했습니다 — tmux 를 설치하세요 (brew install tmux).\n"
 CCTG_MSG_ERR_NO_CLAUDE="ERROR: PATH 에서 claude CLI 를 찾지 못했습니다 — 봇 기동 전 Claude Code 를 설치하세요.\n"
@@ -72,6 +73,7 @@ CCTG_MSG_ADD_DONE_ALLOWLIST="  allowlist에 %s 시드함 (페어링 불필요)\n
 CCTG_MSG_ADD_DONE_PAIRING="  봇에 DM해서 페어링 코드를 받은 뒤, 봇의 /access 스킬에서 승인하세요.\n"
 CCTG_MSG_ADD_DONE_MODE="  권한 모드: %s  (공통: %s common / 봇별: %s config %s)\n"
 CCTG_MSG_ADD_DONE_NEXT="다음: %s up %s  → 봇에 DM하면 바로 응답합니다.\n"
+CCTG_MSG_ADD_DONE_REPLY_REMINDER="  reply 리마인더: ON — 봇이 채널로(quote-reply) 답하도록 지시됩니다. 변경/비활성: %s\n"
 
 # rm
 CCTG_MSG_RM_DONE="등록 해제: %s\n"
@@ -177,6 +179,8 @@ CCTG_MSG_DOCTOR_DEFAULTMODE="  defaultMode: %s\n"
 CCTG_MSG_DOCTOR_DENYALLOW="  deny: %s 개 / allow: %s 개\n"
 CCTG_MSG_DOCTOR_NOJQ="  (jq 없음 — 'cctg common show' 로 확인)\n"
 CCTG_MSG_DOCTOR_SHARED_NONE="  (아직 없음 — 첫 add/up 시 생성)\n"
+CCTG_MSG_DOCTOR_REPLY_REMINDER_ON="reply 리마인더: ON  (%s — 봇에 --append-system-prompt 로 주입)\n"
+CCTG_MSG_DOCTOR_REPLY_REMINDER_OFF="reply 리마인더: OFF  (%s — 비어 있거나 부재. 끈 상태 유지하려면 파일을 비워 둠)\n"
 CCTG_MSG_DOCTOR_PLUGIN_HINT="  (채널 플러그인은 전역 설치 필요, 예: /plugin install <channel>@claude-plugins-official — 대상: %s)\n"
 CCTG_MSG_DOCTOR_INTEGRITY="--- 설치 무결성 ---\n"
 CCTG_MSG_DOCTOR_ENV_PERM_OK="  ok   봇 토큰 파일(.env): 모두 600 (%s개 점검)\n"
