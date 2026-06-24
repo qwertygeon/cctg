@@ -97,6 +97,8 @@ _cctg() {
       (( CURRENT == 3 )) && compadd -- --json --help ;;
     lang)
       (( CURRENT == 3 )) && compadd -- show en ko clear --help ;;
+    update)
+      compadd -- --version --latest --list --alias --no-alias --help ;;
   esac
 }
 

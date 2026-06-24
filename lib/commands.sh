@@ -835,14 +835,15 @@ cmd_lang() {
 }
 
 cmd_update() {
-    # 설치 매니페스트에서 레포 위치·모드를 읽어 git pull 후 재설치한다.
+    # 설치 매니페스트에서 레포 위치·모드·핀을 읽어 버전 액션에 따라 재설치한다.
     CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cctg"
     MANIFEST="$CONFIG_DIR/install.conf"
-    REPO="" MODE="copy" BINDIR=""
+    REPO="" MODE="copy" BINDIR="" PINNED=""
     if [ -f "$MANIFEST" ]; then
       REPO="$(awk -F= '$1=="repo"{print substr($0,index($0,"=")+1)}'   "$MANIFEST")"
       MODE="$(awk -F= '$1=="mode"{print substr($0,index($0,"=")+1)}'   "$MANIFEST")"
       BINDIR="$(awk -F= '$1=="bindir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+      PINNED="$(awk -F= '$1=="pinned"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
     fi
     # 매니페스트가 없으면(구버전 설치 등) 심볼릭 설치인 경우 $0 링크로 레포를 역추적
     if [ -z "$REPO" ] && [ -L "$0" ]; then
@@ -858,28 +859,79 @@ cmd_update() {
       t ERR_REPO_HINT "$MANIFEST" >&2
       exit 1
     fi
-    OLDVER="$(cctg_version)"
-    t UPDATE_START "$REPO" "$MODE" "$OLDVER"
-    if ! git -C "$REPO" pull --ff-only; then
-      die ERR_GIT_PULL
-    fi
-    # 두 모드 모두 install.sh 재실행(멱등). link 모드라도 자동완성은 DATA_DIR 로 "복사"되므로
-    # git pull 만으로는 갱신되지 않는다 — 재실행으로 자동완성 재복사·재링크·매니페스트 갱신을 일괄 처리.
-    inst_args=""
-    [ "$MODE" = "link" ] && inst_args="--dev"
-    # 별칭 처리: update 는 install 과 달리 기본 'cg' 를 강제하지 않는다.
-    #   --alias→cg / --alias=NAME→NAME / --no-alias→제거 / 옵션 없으면 기존 별칭 그대로 유지(keep).
-    alias_arg="--alias-keep"
+
+    # 인자에서 버전 액션·별칭 전달 인자를 파싱한다.
+    #   --version X|--version=X → pin / --latest → 핀 해제 / --list → 목록(조회만)
+    #   별칭: install 과 달리 기본 'cg' 강제 안 함 — 옵션 없으면 keep.
+    ver_action="none"; ver_val=""; alias_arg="--alias-keep"; _expv=0
     for a in "$@"; do
+      if [ "$_expv" = 1 ]; then ver_action="pin"; ver_val="$a"; _expv=0; continue; fi
       case "$a" in
-        --alias)    alias_arg="--alias" ;;
-        --alias=*)  alias_arg="$a" ;;
-        --no-alias) alias_arg="--no-alias" ;;
+        --version)   _expv=1 ;;
+        --version=*) ver_action="pin"; ver_val="${a#--version=}" ;;
+        --latest)    ver_action="latest" ;;
+        --list)      ver_action="list" ;;
+        --alias)     alias_arg="--alias" ;;
+        --alias=*)   alias_arg="$a" ;;
+        --no-alias)  alias_arg="--no-alias" ;;
       esac
     done
-    inst_args="${inst_args:+$inst_args }$alias_arg"
+    [ "$_expv" = 1 ] && die ERR_UPDATE_VERSION_ARG
+
+    # --list: fetch 후 태그 목록 출력(조회 전용, 설치 안 함). '*'=현재 설치, '#'=고정.
+    if [ "$ver_action" = "list" ]; then
+      git -C "$REPO" fetch --tags --quiet 2>/dev/null || t UPDATE_LIST_FETCHFAIL >&2
+      curv="$(cctg_version)"
+      t UPDATE_LIST_HEADER
+      git -C "$REPO" tag --list 'v*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | while IFS= read -r v; do
+        [ -n "$v" ] || continue
+        mark=""
+        [ "$v" = "$curv" ] && mark="*"
+        [ -n "$PINNED" ] && [ "$v" = "$PINNED" ] && mark="$mark#"
+        printf '  %-2s v%s\n' "$mark" "$v"
+      done
+      return 0
+    fi
+
+    OLDVER="$(cctg_version)"
+    inst_args=""
+    [ "$MODE" = "link" ] && inst_args="--dev"
+
+    # git pull(추적 브랜치 최신)은 핀이 없는 일반 update 에서만 수행한다.
+    # --version/--latest 는 install.sh 가 fetch·checkout/archive 를 직접 처리한다.
+    case "$ver_action" in
+      pin)
+        t UPDATE_START "$REPO" "$MODE" "$OLDVER"
+        inst_args="$inst_args --version=$ver_val $alias_arg"
+        ;;
+      latest)
+        t UPDATE_START "$REPO" "$MODE" "$OLDVER"
+        inst_args="$inst_args --latest $alias_arg"
+        ;;
+      none)
+        if [ -n "$PINNED" ]; then
+          # 핀 상태: 임의 최신 갱신 금지. 별칭 변경만 있으면 핀을 재확정하며 적용.
+          if [ "$alias_arg" = "--alias-keep" ]; then
+            t UPDATE_PINNED_HOLD "$PINNED"
+            return 0
+          fi
+          t UPDATE_START "$REPO" "$MODE" "$OLDVER"
+          inst_args="$inst_args --version=$PINNED $alias_arg"
+        else
+          t UPDATE_START "$REPO" "$MODE" "$OLDVER"
+          if ! git -C "$REPO" pull --ff-only; then
+            die ERR_GIT_PULL
+          fi
+          inst_args="$inst_args $alias_arg"
+        fi
+        ;;
+    esac
+
+    # install.sh 재실행(멱등): 자동완성 재복사·재링크·매니페스트(버전·핀) 갱신을 일괄 처리.
     BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh" $inst_args
-    NEWVER="$(head -n1 "$REPO/VERSION" 2>/dev/null || printf '%s' "$OLDVER")"
+    # 설치 버전 SoT 는 매니페스트 version=(copy+핀 은 레포 VERSION 과 다를 수 있어 매니페스트 우선).
+    NEWVER="$(awk -F= '$1=="version"{print substr($0,index($0,"=")+1)}' "$MANIFEST" 2>/dev/null)"
+    [ -n "$NEWVER" ] || NEWVER="$(head -n1 "$REPO/VERSION" 2>/dev/null || printf '%s' "$OLDVER")"
     t UPDATE_VERSION "$OLDVER" "$NEWVER"
     # 자동완성은 현재 셸 세션에 캐싱되어 있어 즉시 반영되지 않는다(zsh: ~/.zcompdump + 로드된 _cctg).
     t UPDATE_COMPLETION_HINT

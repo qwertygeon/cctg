@@ -348,10 +348,10 @@ $ cctg doctor
 ### `update`
 
 ```
-cctg update [--alias | --alias=NAME | --no-alias]
+cctg update [--version X.Y.Z | --latest | --list] [--alias | --alias=NAME | --no-alias]
 ```
 
-레포에서 `git pull --ff-only` 를 실행한 뒤 `install.sh` 를 재실행(멱등) 하고, 이전 → 새 버전을 출력한다. [installation.md](installation.md) 를 참조한다.
+버전 옵션이 없을 때: **핀이 없으면** `git pull --ff-only` 후 `install.sh` 재실행(멱등, 기존 동작), **핀 상태면** 고정 버전을 유지하고 변경 방법을 안내한다(예기치 않은 업그레이드 방지). `--version X.Y.Z` 는 특정 릴리스로 전환·고정, `--latest` 는 추적 브랜치 최신 복귀·핀 해제, `--list` 는 사용 가능한 버전 목록(`*`=설치됨, `#`=고정)을 출력한다. 이전 → 새 버전을 출력한다. [installation.md](installation.ko.md) 를 참조한다.
 
 별칭 처리는 신규 설치와 다르다: **별칭 옵션이 없으면 현재 별칭을 그대로 유지한다**(update 는 `cg` 를 강제로 추가하지 않는다). `--alias` 는 `cg` 추가, `--alias=NAME` 은 임의 이름 지정, `--no-alias` 는 기존 별칭 제거.
 
