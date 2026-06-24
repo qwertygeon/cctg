@@ -86,6 +86,10 @@ _cctg() {
         COMPREPLY=( $(compgen -W "show en ko clear --help" -- "$cur") )
       fi
       ;;
+    update)
+      # update [--version X.Y.Z | --latest | --list] [--alias|--no-alias] — 다중 위치 플래그
+      COMPREPLY=( $(compgen -W "--version --latest --list --alias --no-alias --help" -- "$cur") )
+      ;;
   esac
 }
 complete -F _cctg cctg

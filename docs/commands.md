@@ -348,10 +348,10 @@ $ cctg doctor
 ### `update`
 
 ```
-cctg update [--alias | --alias=NAME | --no-alias]
+cctg update [--version X.Y.Z | --latest | --list] [--alias | --alias=NAME | --no-alias]
 ```
 
-Runs `git pull --ff-only` in the repository, then re-runs `install.sh` (idempotent), and prints the old → new version. See [installation.md](installation.md).
+With no version option: when **not pinned**, runs `git pull --ff-only` then re-runs `install.sh` (idempotent, the original behavior); when **pinned**, it holds the pinned version and prints how to change it (no surprise upgrade). `--version X.Y.Z` switches to and pins a specific release; `--latest` returns to the tracking branch's latest and clears the pin; `--list` lists available versions (`*` = installed, `#` = pinned). Prints the old → new version. See [installation.md](installation.md).
 
 Alias handling on update differs from a fresh install: **without an alias option the current alias is left exactly as-is** (update never force-adds `cg`). `--alias` adds `cg`, `--alias=NAME` sets a custom name, and `--no-alias` removes an existing alias.
 
