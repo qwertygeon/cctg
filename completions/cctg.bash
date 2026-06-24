@@ -75,9 +75,9 @@ _cctg() {
       fi
       ;;
     status)
-      # status [--json]
+      # status [--json] [-a|--all]
       if [ "$COMP_CWORD" -eq 2 ]; then
-        COMPREPLY=( $(compgen -W "--json --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--json -a --all --help" -- "$cur") )
       fi
       ;;
     lang)

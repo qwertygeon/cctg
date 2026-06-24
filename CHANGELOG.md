@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`cctg status -a` / `--all`**: opt-in flag to show the full list — `stopped` bots and the per-bot **last-activity** line — which the default view now hides. `--all` is an alias of `-a`. Shell completions (bash + zsh) and `status --help` cover the flag. (`lib/commands.sh`, `messages/*.sh`, `completions/*`, docs, `tests/status_view.bats`)
+
+### Changed
+- **`cctg status` default view shows only `RUNNING` / `DEAD` / `BROKEN`**: when many bots are registered the status output was getting long, so `stopped` bots and the per-bot last-activity line are now hidden by default and shown only with `-a` / `--all`. `RUNNING`/`DEAD`/`BROKEN` (states that may need attention) stay visible. The **first line now summarizes the total registered target count** (project bots + present global channel bots) with a hint to use `-a` — so a filtered or empty-looking view never hides the fact that targets exist. **`status --json` is unchanged** and always emits the full set, a stable interface for scripts (backward-compat safety net). (`lib/commands.sh`, `messages/*.sh`, docs)
+
 ## [0.8.0] - 2026-06-24
 
 ### Added

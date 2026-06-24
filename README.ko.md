@@ -143,7 +143,7 @@ cctg <command> [args]
                    [--token-env <VAR>|--token-stdin] [--mode <m>] [--group ...]
   rm <name> [--purge]      rename <old> <new> [--keep-dir]
   up <name...|all>         down <name...|all>       restart <name...|all>
-  status [--json]          logs <name> [N]          attach <name>
+  status [--json] [-a]     logs <name> [N]          attach <name>
   config <name> [...]      common [...]             lang [show|en|ko|clear]
   doctor    update    version    help
 ```
