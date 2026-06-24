@@ -74,7 +74,7 @@ cd cctg
 ./install.sh
 ```
 
-`install.sh` 는 의존성을 점검하고 `cctg` 를 `~/.local/bin/cctg` 에 배치하며, 셸 자동완성을 설치하고, PATH·자동완성을 위한 관리 블록을 셸 rc에 추가한다. 재실행해도 안전하다. 그 뒤 새 터미널을 열거나(`source ~/.zshrc`) 확인한다:
+`install.sh` 는 의존성을 점검하고 `cctg` 를 `~/.local/bin/cctg` 에 배치하며, 짧은 별칭 명령 `cg` 를 함께 설치하고(기본값; `--no-alias` 로 생략, `--alias=NAME` 으로 이름 변경), 셸 자동완성을 설치하고, PATH·자동완성을 위한 관리 블록을 셸 rc에 추가한다. 재실행해도 안전하다. 최신 대신 특정 릴리스를 설치하려면 `--version X.Y.Z` 를 쓴다(이후 `cctg update --version X.Y.Z` / `--latest` / `--list` 로 전환). 그 뒤 새 터미널을 열거나(`source ~/.zshrc`) 확인한다:
 
 ```bash
 cctg doctor

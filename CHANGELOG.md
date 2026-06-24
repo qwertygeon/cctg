@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-24
+
+### Added
+- **Version-pinned install / update (`--version` / `--latest` / `--list`)**: you can now install or switch to a specific released version (git tag `vX.Y.Z`) and pin to it. `install.sh --version X.Y.Z` (or `vX.Y.Z`) installs that release; `cctg update --version X.Y.Z` switches to it; `cctg update --latest` returns to the tracking branch's latest and clears the pin; `cctg update --list` lists available versions (`*` = installed, `#` = pinned). The pin is recorded in the manifest (`install.conf` `pinned=`, plus `track_branch=` for `--latest` restore), so while pinned a plain `cctg update` holds the version (no surprise upgrade) and reports how to change it. **copy installs** extract the tag tree via `git archive` — the repo's working tree and `HEAD` are left untouched; **`--dev` (symlink) installs** use `git checkout --detach` and therefore refuse when the working tree is dirty (no auto-stash). Downgrades print a warning. Tag lookups are `git`-only (no `gh` dependency) and tolerate being offline (fall back to locally fetched tags). Opt-in: a plain `install.sh`/`cctg update` with no version flag behaves exactly as before. (`install.sh`, `lib/commands.sh`, `messages/*.sh`, `completions/*`, docs)
+- **Short alias command `cg` (installed by default; `install.sh --no-alias` to skip)**: `install.sh` now also installs a second command name — `cg` by default — that behaves identically to `cctg` (`cc-tg.sh` derives its program name from `basename "$0"`, so help/hints render under the alias too). Pick a different name with `--alias=NAME`, or skip/remove it with `--no-alias`. The chosen name is recorded in the install manifest (`install.conf` `alias=`). Shell completions follow the alias automatically: bash appends `complete -F _cctg <name>` to the eagerly-sourced completion file, and zsh adds the name to the `#compdef` tag — no completion-function changes needed (the function reads the registry, not the invoked name). Invalid names (`cctg`, names with spaces/special chars or a leading `-`) are rejected, and an existing non-symlink at the target path is refused rather than clobbered. `uninstall.sh` removes the alias symlink (only when it points at our managed target).
+  - **`cctg update` / `cg update` alias policy** differs from a fresh install: with no alias option the alias is left exactly as-is (`update` never force-adds `cg`); `update --alias` adds `cg`, `update --alias=NAME` sets a custom name, and `update --no-alias` removes an existing alias. Internally `cmd_update` forwards an `--alias-keep` flag to the re-run installer so the manifest alias (and its completion injection) is preserved across updates. (`install.sh`, `uninstall.sh`, `lib/commands.sh`, `messages/*.sh`)
+
 ## [0.7.0] - 2026-06-22
 
 ### Added
@@ -149,7 +156,8 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/qwertygeon/cctg/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/qwertygeon/cctg/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/qwertygeon/cctg/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/qwertygeon/cctg/compare/v0.5.0...v0.5.1
