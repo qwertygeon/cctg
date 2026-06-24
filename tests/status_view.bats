@@ -28,7 +28,7 @@ make_jqless_path() {
 @test "status: shows Telegram and Discord display names per bot (SC-018)" {
   seed_bot tgbot                      # telegram (helper adds --id 555)
   seed_discord dcbot
-  run cctg status
+  run cctg status -a                  # bots are stopped → need -a to render them
   [ "$status" -eq 0 ]
   [[ "$output" == *"Telegram"* ]]
   [[ "$output" == *"Discord"* ]]
@@ -37,7 +37,7 @@ make_jqless_path() {
 @test "status: shows a last-activity line for a running bot" {
   seed_bot mybot
   mark_running mybot
-  run cctg status
+  run cctg status -a                  # activity row only shown with -a
   [ "$status" -eq 0 ]
   [[ "$output" == *" ago"* ]]         # last-activity line ("last  <dur> ago")
 }
@@ -46,7 +46,7 @@ make_jqless_path() {
   seed_bot deadbot
   mark_running deadbot
   export FAKE_PS_TREE="$FAKE_TMUX_PANE_PID 1 bash"   # claude-less tree → DEAD
-  run cctg status
+  run cctg status -a                                 # DEAD activity row only with -a
   [ "$status" -eq 0 ]
   [[ "$output" == *"[DEAD"* ]]
   [[ "$output" == *" ago"* ]]
@@ -61,7 +61,7 @@ make_jqless_path() {
 
 @test "status: with jq shows dmPolicy and group count for a discord bot (SC-019)" {
   seed_discord dcbot                  # --id absent → pairing, groups {}
-  run cctg status
+  run cctg status -a                  # bot is stopped → need -a to render it
   [ "$status" -eq 0 ]
   [[ "$output" == *"pairing"* ]]
   [[ "$output" == *"0 groups"* ]]
@@ -69,7 +69,7 @@ make_jqless_path() {
 
 @test "status: without jq degrades to display name only, no error (SC-020)" {
   seed_discord dcbot                  # seeded while jq is available (heredoc path)
-  PATH="$(make_jqless_path)" run cctg status
+  PATH="$(make_jqless_path)" run cctg status -a   # bot is stopped → need -a
   [ "$status" -eq 0 ]
   [[ "$output" == *"Discord"* ]]
 }
@@ -78,7 +78,7 @@ make_jqless_path() {
 
 @test "status: cwd and state render on separate lines (B)" {
   seed_bot mybot
-  run cctg status
+  run cctg status -a                  # stopped bot → need -a to render its paths
   [ "$status" -eq 0 ]
   [[ "$output" == *"cwd"* ]]
   [[ "$output" == *"state"* ]]
@@ -89,7 +89,7 @@ make_jqless_path() {
 @test "status: home paths are shortened to ~ (C)" {
   mkdir -p "$HOME/proj"
   seed_bot hbot "$HOME/proj"
-  run cctg status
+  run cctg status -a                     # stopped bot → need -a to render its paths
   [ "$status" -eq 0 ]
   [[ "$output" == *"~/proj"* ]]          # cwd shown tilde-shortened
   [[ "$output" != *"$HOME/proj"* ]]      # not the full absolute home path
@@ -103,7 +103,7 @@ make_jqless_path() {
   seed_bot charlie     # broken: remove its token
   mark_running bravo
   rm -f "$CC_CHANNELS_DIR/charlie/.env"
-  run cctg status
+  run cctg status -a                  # ordering test includes stopped → need -a
   [ "$status" -eq 0 ]
   local r b s
   r=$(grep -n '\[RUNNING\] bravo'  <<<"$output" | head -1 | cut -d: -f1)
@@ -188,4 +188,69 @@ set_created() {
   pt=$(grep -n '\[RUNNING\] telegram' <<<"$output" | head -1 | cut -d: -f1)
   [ -n "$pd" ] && [ -n "$pt" ]
   [ "$pd" -lt "$pt" ]   # discord (later session_created) sorts above telegram
+}
+
+# --- v0.8.1/001: default running-filter + total summary + -a/--all ---
+
+@test "status: default hides stopped bots; -a reveals them (DEC-001)" {
+  seed_bot stoppedbot                 # registered, not running → stopped
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"stoppedbot"* ]]   # hidden by default
+  run cctg status -a
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stoppedbot"* ]]   # shown with -a
+  [[ "$output" == *"[stopped]"* ]]
+}
+
+@test "status: --all is an alias of -a (stopped shown)" {
+  seed_bot stoppedbot
+  run cctg status --all
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stoppedbot"* ]]
+}
+
+@test "status: default hides the last-activity row; -a shows it (DEC-001)" {
+  seed_bot mybot
+  mark_running mybot
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" != *" ago"* ]]         # activity hidden by default
+  run cctg status -a
+  [ "$status" -eq 0 ]
+  [[ "$output" == *" ago"* ]]         # activity shown with -a
+}
+
+@test "status: first line summarizes total target count (DEC-002)" {
+  seed_bot a
+  seed_bot b
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == *"2"* ]]        # "Targets: 2 total" / "타겟 총 2개"
+  [[ "$output" == *"-a"* ]]           # default carries the -a hint
+  run cctg status -a
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"use -a"* ]]       # no "use -a" hint when already showing all
+}
+
+@test "status: DEAD and BROKEN stay visible by default (scope A)" {
+  seed_bot deadbot
+  mark_running deadbot
+  export FAKE_PS_TREE="$FAKE_TMUX_PANE_PID 1 bash"   # claude-less tree → DEAD
+  run cctg status
+  unset FAKE_PS_TREE
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[DEAD"* ]]        # DEAD shown without -a
+  seed_bot brokebot
+  rm -f "$CC_CHANNELS_DIR/brokebot/.env"
+  run cctg status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[BROKEN"* ]]      # BROKEN shown without -a
+}
+
+@test "status --json is unaffected by the filter (always full)" {
+  seed_bot stoppedbot
+  run cctg status --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stoppedbot"* ]]   # json always includes stopped bots
 }

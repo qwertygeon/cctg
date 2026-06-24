@@ -127,7 +127,7 @@ seed_global() {
   # the per-bot tree is the same fixture, so isolate: only crashed is running+dead
   # by running this assertion on ordering of dead(crashed) vs stopped(idle).
   export FAKE_PS_TREE="$(dead_tree)"
-  run cctg status
+  run cctg status -a                  # ordering vs stopped → need -a (stopped hidden by default)
   [ "$status" -eq 0 ]
   # With the dead tree, both running sessions read DEAD; idle is stopped.
   # DEAD must appear before stopped in the rendered order.

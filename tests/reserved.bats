@@ -31,7 +31,7 @@ seed_global() {
 @test "status: a running reserved global bot shows a last-activity line" {
   seed_global telegram
   mark_running telegram                 # cctg-telegram session running; default ps tree → claude alive
-  run cctg status
+  run cctg status -a                    # last-activity row only shown with -a (DEC-001)
   [ "$status" -eq 0 ]
   [[ "$output" == *" ago"* ]]
 }
