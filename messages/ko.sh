@@ -223,7 +223,7 @@ CCTG_MSG_USAGE_LOGS="사용법: %s logs <이름> [N]\n"
 CCTG_MSG_USAGE_ATTACH="사용법: %s attach <이름>\n"
 CCTG_MSG_USAGE_LANG="사용법: %s lang [show | en | ko | clear]\n"
 CCTG_MSG_USAGE_DOCTOR="사용법: %s doctor\n"
-CCTG_MSG_USAGE_UPDATE="사용법: %s update\n"
+CCTG_MSG_USAGE_UPDATE="사용법: %s update [--alias | --alias=NAME | --no-alias]\n  옵션 없으면 별칭은 그대로 유지. --alias=cg 추가 / --alias=NAME=임의 이름 / --no-alias=제거.\n"
 CCTG_MSG_USAGE_VERSION="사용법: %s version\n"
 CCTG_MSG_USAGE_HELP="사용법: %s help\n"
 

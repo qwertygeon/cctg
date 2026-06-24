@@ -20,7 +20,14 @@
 #   ./install.sh --no-completions # 자동완성 설치 생략
 #   ./install.sh --no-shell-setup # 셸 rc 자동 설정 생략
 #   ./install.sh --lang en|ko     # CLI 출력 언어 시드(미지정 시 로케일 자동 감지)
+#   ./install.sh                  # 짧은 별칭 명령 'cg' 가 기본으로 함께 설치된다(자동완성 포함)
+#   ./install.sh --alias=NAME     # 별칭 이름을 NAME 으로 지정
+#   ./install.sh --no-alias       # 별칭을 설치하지 않는다(있으면 제거)
 #   BINDIR=~/bin ./install.sh     # 설치 위치 변경
+#
+# 별칭은 기본 활성(이름 'cg')이며, 끄려면 --no-alias 를 준다. 선택한 이름은
+# 매니페스트에 기록된다. `cctg update` 의 별칭 처리 정책은 cmd_update 참조
+# (옵션 없으면 기존 별칭 유지, --no-alias 로 제거).
 #
 # 재실행해도 안전하다(idempotent). 기존 cctg 는 갱신된다.
 
@@ -43,6 +50,12 @@ SHELL_SETUP=1
 MARK_BEGIN="# >>> cctg >>>"
 MARK_END="# <<< cctg <<<"
 
+# 별칭 모드. ""(미지정)=기본 'cg' 설치 | cg | name(:_alias_name) | none(설치 안 함/제거) |
+# keep(매니페스트 alias= 를 그대로 승계 — `cctg update` 가 별칭을 바꾸지 않을 때 쓰는 내부 모드).
+DEFAULT_ALIAS="cg"
+_alias_mode=""
+_alias_name=""
+
 LANG_OPT=""
 _expect_lang=0
 for arg in "$@"; do
@@ -54,6 +67,10 @@ for arg in "$@"; do
     --no-shell-setup)  SHELL_SETUP=0 ;;
     --lang)            _expect_lang=1 ;;
     --lang=*)          LANG_OPT="${arg#--lang=}" ;;
+    --alias)           _alias_mode="cg" ;;
+    --alias=*)         _alias_mode="name"; _alias_name="${arg#--alias=}" ;;
+    --no-alias)        _alias_mode="none" ;;
+    --alias-keep)      _alias_mode="keep" ;;
     -h|--help)
       awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"
       exit 0 ;;
@@ -109,6 +126,24 @@ else
 fi
 [ "$missing" = 0 ] || { err "필수 의존성을 먼저 설치하세요. 설치를 중단합니다."; exit 1; }
 
+# 1-1) 별칭 결정. 기존 매니페스트의 alias= 를 읽어두고(이전 별칭 정리·keep 승계에 사용),
+#      모드에 따라 최종 별칭 이름을 정한다. 미지정(직접 install 실행)은 기본 'cg'.
+OLD_ALIAS=""
+[ -f "$MANIFEST" ] && OLD_ALIAS="$(awk -F= '$1=="alias"{print substr($0,index($0,"=")+1)}' "$MANIFEST" 2>/dev/null || true)"
+case "$_alias_mode" in
+  cg)   ALIAS="$DEFAULT_ALIAS" ;;
+  name) ALIAS="$_alias_name" ;;
+  none) ALIAS="" ;;
+  keep) ALIAS="$OLD_ALIAS" ;;
+  "")   ALIAS="$DEFAULT_ALIAS" ;;
+esac
+if [ -n "$ALIAS" ]; then
+  case "$ALIAS" in
+    cctg) err "별칭 이름으로 'cctg' 는 쓸 수 없습니다."; exit 1 ;;
+    *[!A-Za-z0-9_-]*|-*) err "별칭 이름이 올바르지 않습니다: '$ALIAS' (영문/숫자/_/-, 첫 글자는 -, 불가)"; exit 1 ;;
+  esac
+fi
+
 # 2) 설치 위치 준비. 기존 cctg(파일/링크 무엇이든)는 우리가 관리하는 이름이므로 갱신한다
 mkdir -p "$BINDIR"
 chmod +x "$SRC"
@@ -119,8 +154,10 @@ rm -f "$DEST"
 #   copy(릴리스): 패키지를 libexec 로 복사하고 bin → libexec/cc-tg.sh 심볼릭.
 #                 동반 파일(VERSION·messages/)이 cc-tg.sh 옆에 함께 복사되어, 레포를 지워도 동작한다.
 LIBEXEC_INSTALLED=""
+BIN_TARGET=""
 if [ "$MODE" = "link" ]; then
   ln -sfn "$SRC" "$DEST"
+  BIN_TARGET="$SRC"
   ok "심볼릭 링크(개발): $DEST -> $SRC"
 else
   mkdir -p "$LIBEXECDIR"
@@ -138,8 +175,38 @@ else
     cp -R "$REPO_DIR/messages" "$LIBEXECDIR/messages"
   fi
   ln -sfn "$LIBEXECDIR/cc-tg.sh" "$DEST"
+  BIN_TARGET="$LIBEXECDIR/cc-tg.sh"
   LIBEXEC_INSTALLED="$LIBEXECDIR"
   ok "복사(릴리스): $LIBEXECDIR  (bin 심볼릭: $DEST)"
+fi
+
+# 3-0) 별칭(opt-in) bin 심볼릭 처리.
+#   - 이전 별칭이 다른 이름으로 바뀌었거나(--alias=NEW) 제거(--no-alias)되면, 이전 별칭 심볼릭을 정리한다.
+#   - 우리 대상(BIN_TARGET) 을 가리키는 심볼릭만 건드린다(사용자의 다른 파일은 보존).
+_remove_alias_link() {  # $1=별칭 이름
+  local p="$BINDIR/$1"
+  if [ -L "$p" ]; then
+    rm -f "$p"; ok "별칭 제거: $p"
+  elif [ -e "$p" ]; then
+    warn "별칭 정리 건너뜀: $p 는 심볼릭이 아닙니다(직접 확인하세요)."
+  fi
+}
+if [ -n "$OLD_ALIAS" ] && [ "$OLD_ALIAS" != "$ALIAS" ]; then
+  _remove_alias_link "$OLD_ALIAS"
+fi
+if [ -n "$ALIAS" ]; then
+  ap="$BINDIR/$ALIAS"
+  if [ -e "$ap" ] && [ ! -L "$ap" ]; then
+    err "별칭 '$ALIAS' 생성 실패: $ap 가 이미 존재하며 심볼릭이 아닙니다. 다른 이름(--alias=NAME)을 쓰세요."; exit 1
+  fi
+  ln -sfn "$BIN_TARGET" "$ap"
+  ok "별칭 명령: $ap -> $BIN_TARGET"
+  # $BINDIR 밖의 동명 명령을 가리는지 안내(우리 $BINDIR 가 PATH 앞쪽이면 별칭이 우선).
+  existing="$(command -v "$ALIAS" 2>/dev/null || true)"
+  case "$existing" in
+    ""|"$ap") ;;
+    *) warn "'$ALIAS' 는 기존 명령($existing)과 이름이 겹칩니다. PATH 에서 $BINDIR 가 앞서면 별칭이 우선합니다." ;;
+  esac
 fi
 
 # 3-1) 셸 자동완성 설치 (bash/zsh). 실패해도 설치 전체는 중단하지 않는다.
@@ -151,9 +218,17 @@ if [ "$COMPLETIONS" = 1 ]; then
   zsh_dir="$DATA_DIR/zsh/site-functions"
   if [ -f "$bash_src" ] && mkdir -p "$bash_dir" 2>/dev/null && cp "$bash_src" "$bash_dir/cctg" 2>/dev/null; then
     BASHCOMP="$bash_dir/cctg"; ok "bash 자동완성: $BASHCOMP"
+    # 별칭에도 동일 완성 함수 등록(파일은 rc 에서 직접 source 되므로 한 줄 추가로 충분).
+    [ -n "$ALIAS" ] && printf 'complete -F _cctg %s\n' "$ALIAS" >> "$BASHCOMP" && ok "bash 자동완성(별칭): $ALIAS"
   fi
   if [ -f "$zsh_src" ] && mkdir -p "$zsh_dir" 2>/dev/null && cp "$zsh_src" "$zsh_dir/_cctg" 2>/dev/null; then
     ZSHCOMP="$zsh_dir/_cctg"; ok "zsh 자동완성: $ZSHCOMP"
+    # 별칭을 #compdef 태그에 추가(compinit 이 _cctg 함수를 cctg·별칭 모두에 연결).
+    if [ -n "$ALIAS" ]; then
+      ztmp="$(mktemp)"
+      awk -v a="$ALIAS" 'NR==1{print "#compdef cctg " a; next} {print}' "$ZSHCOMP" > "$ztmp" && mv "$ztmp" "$ZSHCOMP"
+      ok "zsh 자동완성(별칭): $ALIAS"
+    fi
   fi
 fi
 
@@ -205,6 +280,7 @@ mkdir -p "$CONFIG_DIR"
   printf 'bashcomp=%s\n'  "$BASHCOMP"
   printf 'zshcomp=%s\n'   "$ZSHCOMP"
   printf 'shellrc=%s\n'   "$SHELLRC"
+  printf 'alias=%s\n'     "$ALIAS"
 } > "$MANIFEST"
 
 # 3-4) CLI 출력 언어 시드 — 매니페스트와 분리된 사용자 설정 파일(update 가 보존).
@@ -231,3 +307,4 @@ ok "매니페스트 기록: $MANIFEST (v$VER)"
 echo
 echo "설치 완료(cctg v$VER, $MODE). 새 터미널을 열거나 셸을 다시 로드한 뒤 확인하세요:"
 echo "    cctg doctor"
+[ -n "$ALIAS" ] && echo "    $ALIAS doctor   # 별칭으로도 동일하게 동작합니다"

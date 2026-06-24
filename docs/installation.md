@@ -96,6 +96,8 @@ Symlinks `~/.local/bin/cctg` **directly** to the repository's `cc-tg.sh`. Edits 
 | `--no-completions` | Skip installing bash/zsh completions. |
 | `--no-shell-setup` | Skip adding the managed block to your shell rc. |
 | `--lang en\|ko` | Seed the CLI output language. Without this, the installer auto-detects from `$LC_ALL`/`$LANG` (`ko*` or `*_KR*` → `ko`, otherwise `en`). |
+| `--alias` / `--alias=NAME` | Install a short alias command that behaves identically to `cctg`, with completions. `install.sh` installs `cg` by default even without this flag; use `--alias=NAME` to choose a different name. The name is recorded in the manifest. |
+| `--no-alias` | Do not install the alias (removes it if one exists). |
 | `-h` / `--help` | Print help and exit. |
 | `BINDIR=~/bin ./install.sh` | Change the install location (default `~/.local/bin`). |
 | `CCTG_LIBEXEC=...` | Change the libexec package directory (default `~/.local/libexec/cctg`). |

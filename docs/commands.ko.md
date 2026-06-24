@@ -348,10 +348,12 @@ $ cctg doctor
 ### `update`
 
 ```
-cctg update
+cctg update [--alias | --alias=NAME | --no-alias]
 ```
 
 레포에서 `git pull --ff-only` 를 실행한 뒤 `install.sh` 를 재실행(멱등) 하고, 이전 → 새 버전을 출력한다. [installation.md](installation.md) 를 참조한다.
+
+별칭 처리는 신규 설치와 다르다: **별칭 옵션이 없으면 현재 별칭을 그대로 유지한다**(update 는 `cg` 를 강제로 추가하지 않는다). `--alias` 는 `cg` 추가, `--alias=NAME` 은 임의 이름 지정, `--no-alias` 는 기존 별칭 제거.
 
 ```console
 $ cctg update

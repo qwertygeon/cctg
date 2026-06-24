@@ -348,10 +348,12 @@ $ cctg doctor
 ### `update`
 
 ```
-cctg update
+cctg update [--alias | --alias=NAME | --no-alias]
 ```
 
 Runs `git pull --ff-only` in the repository, then re-runs `install.sh` (idempotent), and prints the old → new version. See [installation.md](installation.md).
+
+Alias handling on update differs from a fresh install: **without an alias option the current alias is left exactly as-is** (update never force-adds `cg`). `--alias` adds `cg`, `--alias=NAME` sets a custom name, and `--no-alias` removes an existing alias.
 
 ```console
 $ cctg update
