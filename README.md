@@ -74,7 +74,7 @@ cd cctg
 ./install.sh
 ```
 
-`install.sh` checks dependencies, places `cctg` at `~/.local/bin/cctg`, installs shell completions, and adds a managed block to your shell rc for PATH + completions. It is safe to re‑run. Then open a new terminal (or `source ~/.zshrc`) and verify:
+`install.sh` checks dependencies, places `cctg` at `~/.local/bin/cctg`, installs a short alias command `cg` (default; `--no-alias` to skip, `--alias=NAME` to rename), installs shell completions, and adds a managed block to your shell rc for PATH + completions. It is safe to re‑run. Then open a new terminal (or `source ~/.zshrc`) and verify:
 
 ```bash
 cctg doctor
