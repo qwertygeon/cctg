@@ -17,7 +17,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # annotated 태그 생성·기존 태그 확인을 위해 전체 히스토리·태그를 받는다.
           fetch-depth: 0
