@@ -43,7 +43,7 @@ cctg <command> [args]
   common [...]
   up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
   restart <name...|all|telegram|discord>
-  status [--json]              logs <name|telegram|discord> [N]          attach <name>
+  status [--json] [-a]         logs <name|telegram|discord> [N]          attach <name>
   lang [show|en|ko|clear]
   doctor    update    version    help
 ```
@@ -183,12 +183,14 @@ $ cctg restart telegram
 ### `status`
 
 ```
-cctg status [--json]
+cctg status [--json] [-a|--all]
 ```
 
-봇별 상태를 출력한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `DEAD` / `BROKEN` / `stopped` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), **최근활동** 라인, 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다. 정렬 순서는 `RUNNING → DEAD → BROKEN → stopped`.
+봇별 상태를 출력한다. 첫 줄에 **등록된 총 타겟 수**(프로젝트 봇 + 존재하는 전역 채널 봇)를 요약한다. 각 봇에 대해 상태 — `RUNNING`(가동 시간 포함) / `DEAD` / `BROKEN` / `stopped` — 와 작업·상태 디렉터리 경로, 권한 모드(또는 `shared`), 채널을 보여준다. `jq` 가 있고 `access.json` 이 존재하면 채널 행에 DM 정책과 그룹 항목 수(토폴로지)도 표시한다. 정렬 순서는 `RUNNING → DEAD → BROKEN → stopped`.
 
-**최근활동** 라인(`최근활동  <기간> 전`)은 봇이 마지막으로 출력을 낸 시점을 보여준다. 실행 중 세션은 tmux `#{window_activity}` 시각에서, 정지된 봇은 `last-session.log` 스냅샷 mtime 으로 폴백하며, 신호가 없으면 라인을 생략한다. '살아있지만 멈춘' 봇 식별용 보조 지표이며 `DEAD` 헬스 판정과는 별개다.
+**기본 출력은 `RUNNING`·`DEAD`·`BROKEN` 만** 보여준다 — 조치가 필요할 수 있는 상태들이다. `stopped` 봇과 봇별 **최근활동** 라인은 `-a` / `--all` 을 줄 때만 표시된다. 첫 줄 요약에는 숨김이 있을 때 `-a` 안내가 붙고, `-a` 일 때는 `(전체 표시)` 로 바뀐다. (`--json` 은 영향받지 않으며 항상 전체를 출력한다 — 스크립트용 안정 인터페이스.)
+
+**최근활동** 라인(`최근활동  <기간> 전`, `-a` 일 때 표시)은 봇이 마지막으로 출력을 낸 시점을 보여준다. 실행 중 세션은 tmux `#{window_activity}` 시각에서, 정지된 봇은 `last-session.log` 스냅샷 mtime 으로 폴백하며, 신호가 없으면 라인을 생략한다. '살아있지만 멈춘' 봇 식별용 보조 지표이며 `DEAD` 헬스 판정과는 별개다.
 
 봇의 `tmux` 세션은 살아있으나 내부 `claude` 프로세스가 종료되면 `DEAD` 다(크래시·종료 시 launch 의 `exec bash` 꼬리 때문에 pane 에 bash 만 남아 "실행 중"처럼 보이던 거짓 UP). 세션 pane 의 프로세스 자손 트리에서 `claude` 존재 여부로 감지하며, `restart` 복구 힌트를 출력한다(`up` 은 자동 재기동하지 않음).
 
@@ -199,7 +201,8 @@ cctg status [--json]
 `--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`dead`/`broken`/`stopped`), `running`(불리언 — `dead` 면 `false`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`; `dead` 면 `null`), `lastActivitySeconds`(마지막 활동 이후 경과 초, 미상이면 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
 
 ```console
-$ cctg status
+$ cctg status          # running/dead/broken 만 + 총 타겟 요약
+$ cctg status -a       # stopped 봇과 최근활동 라인까지 표시
 $ cctg status --json
 ```
 

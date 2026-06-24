@@ -43,7 +43,7 @@ cctg <command> [args]
   common [...]
   up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
   restart <name...|all|telegram|discord>
-  status [--json]              logs <name|telegram|discord> [N]          attach <name>
+  status [--json] [-a]         logs <name|telegram|discord> [N]          attach <name>
   lang [show|en|ko|clear]
   doctor    update    version    help
 ```
@@ -183,12 +183,14 @@ $ cctg restart telegram
 ### `status`
 
 ```
-cctg status [--json]
+cctg status [--json] [-a|--all]
 ```
 
-Prints per-bot status. For each bot it shows the state — `RUNNING` (with uptime) / `DEAD` / `BROKEN` / `stopped` — plus the working and state directory paths, the permission mode (or `shared`), a **last-activity** line, and the channel. When `jq` is present and `access.json` exists, the channel line also shows the DM policy and the number of group entries (topology). Bots are listed `RUNNING → DEAD → BROKEN → stopped`.
+Prints per-bot status. The first line summarizes the **total number of registered targets** (project bots + present global channel bots). For each bot it shows the state — `RUNNING` (with uptime) / `DEAD` / `BROKEN` / `stopped` — plus the working and state directory paths, the permission mode (or `shared`), and the channel. When `jq` is present and `access.json` exists, the channel line also shows the DM policy and the number of group entries (topology). Bots are listed `RUNNING → DEAD → BROKEN → stopped`.
 
-The **last-activity** line (`last  <dur> ago`) shows how long ago the bot last produced output. For a live session it comes from the tmux `#{window_activity}` time; for a stopped bot it falls back to the `last-session.log` snapshot mtime; when no signal exists the line is omitted. It is an auxiliary indicator for spotting a bot that is up but idle/stalled — distinct from the `DEAD` health check.
+**Default view shows only `RUNNING`, `DEAD`, and `BROKEN` bots** — the states that may need attention. `stopped` bots and the per-bot **last-activity** line are hidden unless you pass `-a` / `--all`. The summary line carries a hint to use `-a` when anything is hidden; with `-a` it reads `(showing all)`. (`--json` is unaffected and always emits the full set — a stable interface for scripts.)
+
+The **last-activity** line (`last  <dur> ago`, shown with `-a`) shows how long ago the bot last produced output. For a live session it comes from the tmux `#{window_activity}` time; for a stopped bot it falls back to the `last-session.log` snapshot mtime; when no signal exists the line is omitted. It is an auxiliary indicator for spotting a bot that is up but idle/stalled — distinct from the `DEAD` health check.
 
 A bot is `DEAD` when its `tmux` session is still alive but the `claude` process inside it has exited (a crash/exit leaves a bare `bash` in the pane via the launch's `exec bash` tail, which would otherwise look "running"). The state is detected by walking the session pane's process descendant tree for a `claude` process. A `restart` hint is printed; `up` does not auto-restart it.
 
@@ -199,7 +201,8 @@ A `--- global channel bots ---` section is appended for each reserved channel wh
 `--json` emits a machine-readable array of objects with locale-independent tokens (requires `jq`). Each object has `name`, `state` (`running`/`dead`/`broken`/`stopped`), `running` (bool — `false` for `dead`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds` (or `null`; `null` for `dead`), `lastActivitySeconds` (seconds since last activity, or `null` when unknown), and `issues` (e.g. `no-cwd`, `no-token`).
 
 ```console
-$ cctg status
+$ cctg status          # running/dead/broken only + total summary
+$ cctg status -a       # include stopped bots and the last-activity line
 $ cctg status --json
 ```
 

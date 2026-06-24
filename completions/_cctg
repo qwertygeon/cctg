@@ -94,7 +94,7 @@ _cctg() {
         esac
       fi ;;
     status)
-      (( CURRENT == 3 )) && compadd -- --json --help ;;
+      (( CURRENT == 3 )) && compadd -- --json -a --all --help ;;
     lang)
       (( CURRENT == 3 )) && compadd -- show en ko clear --help ;;
     update)

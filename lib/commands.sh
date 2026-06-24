@@ -535,7 +535,7 @@ _status_class_reserved() {
 # state 는 호출측(_status_class)이 이미 판정한 값을 그대로 받는다 — 여기서 재판정(claude_alive)
 # 하지 않아 봇당 ps 스캔이 1회(분류 시)로 끝난다. 버킷 순서로 정렬도 호출측이 제어.
 _status_render_project_bot() {
-  local n="$1" state="$2" row cwd sd issues created up pm ch_disp dm gc
+  local n="$1" state="$2" show_all="${3:-0}" row cwd sd issues created up pm ch_disp dm gc
   row="$(lookup "$n")"
   cwd="$(expand "$(cut -f1 <<<"$row")")"
   sd="$(expand "$(cut -f2 <<<"$row")")"
@@ -566,9 +566,10 @@ _status_render_project_bot() {
   t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
   t STATUS_MODE "$pm"
   # last-activity(보조 지표): RUNNING/DEAD 는 tmux window_activity, stopped 는 마지막 스냅샷 mtime. broken 은 생략.
+  # -a/--all 일 때만 표시한다(DEC-001 — 기본 출력 간결화).
   local _live=0 _act _d
   case "$state" in running|dead) _live=1 ;; esac
-  if [ "$state" != broken ] && _act="$(last_activity_epoch "$n" "$sd" "$_live")"; then
+  if [ "$show_all" = 1 ] && [ "$state" != broken ] && _act="$(last_activity_epoch "$n" "$sd" "$_live")"; then
     _d=$(( $(date +%s) - _act )); [ "$_d" -lt 0 ] && _d=0   # 클록 스큐로 음수면 0 으로 클램프
     t STATUS_LAST_ACTIVITY "$(fmt_dur "$_d")"
   fi
@@ -589,7 +590,7 @@ _status_render_project_bot() {
 
 # status: 예약어 전역 봇 1건 렌더.
 _status_render_reserved_bot() {
-  local ch="$1" state="$2" sd cwd issues sess created up pm
+  local ch="$1" state="$2" show_all="${3:-0}" sd cwd issues sess created up pm
   sd="$CHANNELS_DIR/$ch"
   # 전역 봇은 레지스트리에 cwd 없음(DEC-001). RUNNING 시 실제 세션 cwd 를 tmux 로 조회하고,
   # 그 외(DEAD/STOPPED 등)엔 호출 시점 $PWD 를 표시하면 오해 소지가 있어 "—"(미상)로 둔다.
@@ -617,10 +618,10 @@ _status_render_reserved_bot() {
   pm="$(mode_of "$sd")"; [ -z "$pm" ] && pm="$(t SHARED_WORD)"
   t STATUS_PATHS "$(tilde "$cwd")" "$(tilde "$sd")"
   t STATUS_MODE "$pm"
-  # last-activity(보조 지표) — 프로젝트 봇과 동일 규칙.
+  # last-activity(보조 지표) — 프로젝트 봇과 동일 규칙. -a/--all 일 때만 표시(DEC-001).
   local _live=0 _act _d
   case "$state" in running|dead) _live=1 ;; esac
-  if [ "$state" != broken ] && _act="$(last_activity_epoch "$ch" "$sd" "$_live")"; then
+  if [ "$show_all" = 1 ] && [ "$state" != broken ] && _act="$(last_activity_epoch "$ch" "$sd" "$_live")"; then
     _d=$(( $(date +%s) - _act )); [ "$_d" -lt 0 ] && _d=0   # 클록 스큐로 음수면 0 으로 클램프
     t STATUS_LAST_ACTIVITY "$(fmt_dur "$_d")"
   fi
@@ -643,10 +644,30 @@ _sort_bucket_by_created() {
 }
 
 cmd_status() {
-    [ "${1:-}" = "--json" ] && { status_json; return; }
-    if [ -n "${1:-}" ]; then te ERR_STATUS_UNKNOWN_FLAG "$1"; usage >&2; exit 1; fi
+    # 플래그 파싱: --json(기계용 — 항상 전체) / -a|--all(stopped·최근활동 포함). 그 외 거부.
+    local show_all=0 _arg
+    for _arg in "$@"; do
+      case "$_arg" in
+        --json)    status_json; return ;;
+        -a|--all)  show_all=1 ;;
+        *)         te ERR_STATUS_UNKNOWN_FLAG "$_arg"; usage >&2; exit 1 ;;
+      esac
+    done
 
     warn_no_tmux_readonly   # tmux 없으면 모든 봇이 stopped/broken 으로 보이는 오인 방지(경고만)
+
+    # 첫 줄 요약: 등록된 총 타겟 수(프로젝트 봇 + 존재하는 예약 전역 봇). 기본 모드는 stopped·
+    # 최근활동을 숨기므로(DEC-001) 화면이 비어 보여도 총 수로 존재를 알린다(빈 화면 방지, DEC-002).
+    local _total_proj _total_reserved=0 _rch
+    _total_proj="$(all_names | grep -c .)"
+    for _rch in $RESERVED_NAMES; do
+      channel_spec "$_rch" plugin >/dev/null 2>&1 || continue
+      [ -d "$CHANNELS_DIR/$_rch" ] || continue
+      _total_reserved=$(( _total_reserved + 1 ))
+    done
+    t STATUS_SUMMARY "$(( _total_proj + _total_reserved ))"
+    if [ "$show_all" = 1 ]; then t STATUS_ALL_SHOWN; else t STATUS_ALL_HINT; fi
+
     t STATUS_GLOBAL "$CHANNELS_DIR"
     t STATUS_PROJECT_HEADER
     found=0
@@ -669,6 +690,8 @@ cmd_status() {
     # 렌더에 그대로 넘겨 재판정(ps 재스캔)을 피한다.
     local st bucket
     for st in running dead broken stopped; do
+      # 기본 모드는 stopped 버킷을 숨긴다 — -a/--all 일 때만 표시(DEC-001).
+      [ "$show_all" = 0 ] && [ "$st" = stopped ] && continue
       case "$st" in
         running) bucket="$p_running" ;;
         dead)    bucket="$p_dead" ;;
@@ -677,7 +700,7 @@ cmd_status() {
       esac
       while IFS= read -r n; do
         [ -z "$n" ] && continue
-        _status_render_project_bot "$n" "$st"
+        _status_render_project_bot "$n" "$st" "$show_all"
       done <<< "$bucket"
     done
     if [ "$found" = 0 ]; then t STATUS_NONE; fi
@@ -700,6 +723,7 @@ cmd_status() {
     r_dead="$(_sort_bucket_by_created "$r_dead")"
     local ch_found=0 rst rbucket
     for rst in running dead broken stopped; do
+      [ "$show_all" = 0 ] && [ "$rst" = stopped ] && continue   # 기본 모드 stopped 숨김(DEC-001)
       case "$rst" in
         running) rbucket="$r_running" ;;
         dead)    rbucket="$r_dead" ;;
@@ -709,7 +733,7 @@ cmd_status() {
       while IFS= read -r ch; do
         [ -z "$ch" ] && continue
         [ "$ch_found" = 0 ] && { t STATUS_RESERVED_HEADER; ch_found=1; }
-        _status_render_reserved_bot "$ch" "$rst"
+        _status_render_reserved_bot "$ch" "$rst" "$show_all"
       done <<< "$rbucket"
     done
 }
