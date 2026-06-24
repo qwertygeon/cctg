@@ -224,7 +224,7 @@ CCTG_MSG_USAGE_LOGS="Usage: %s logs <name> [N]\n"
 CCTG_MSG_USAGE_ATTACH="Usage: %s attach <name>\n"
 CCTG_MSG_USAGE_LANG="Usage: %s lang [show | en | ko | clear]\n"
 CCTG_MSG_USAGE_DOCTOR="Usage: %s doctor\n"
-CCTG_MSG_USAGE_UPDATE="Usage: %s update\n"
+CCTG_MSG_USAGE_UPDATE="Usage: %s update [--alias | --alias=NAME | --no-alias]\n  Without an option the alias is left as-is. --alias adds 'cg' / --alias=NAME a custom name / --no-alias removes it.\n"
 CCTG_MSG_USAGE_VERSION="Usage: %s version\n"
 CCTG_MSG_USAGE_HELP="Usage: %s help\n"
 

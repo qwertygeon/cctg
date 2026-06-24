@@ -96,6 +96,8 @@ cd cctg
 | `--no-completions` | bash/zsh 자동완성 설치를 건너뛴다. |
 | `--no-shell-setup` | 셸 rc 관리 블록 추가를 건너뛴다. |
 | `--lang en\|ko` | CLI 출력 언어를 시드한다. 미지정 시 `$LC_ALL`/`$LANG` 에서 자동 감지한다(`ko*` 또는 `*_KR*` → `ko`, 그 외 `en`). |
+| `--alias` / `--alias=NAME` | `cctg` 와 동일하게 동작하는 짧은 별칭 명령을 자동완성과 함께 설치한다. `install.sh` 는 이 플래그가 없어도 기본으로 `cg` 를 설치하며, `--alias=NAME` 으로 다른 이름을 지정할 수 있다. 이름은 매니페스트에 기록된다. |
+| `--no-alias` | 별칭을 설치하지 않는다(있으면 제거). |
 | `-h` / `--help` | 도움말을 출력하고 종료한다. |
 | `BINDIR=~/bin ./install.sh` | 설치 위치를 변경한다(기본 `~/.local/bin`). |
 | `CCTG_LIBEXEC=...` | libexec 패키지 디렉터리를 변경한다(기본 `~/.local/libexec/cctg`). |

@@ -867,6 +867,17 @@ cmd_update() {
     # git pull 만으로는 갱신되지 않는다 — 재실행으로 자동완성 재복사·재링크·매니페스트 갱신을 일괄 처리.
     inst_args=""
     [ "$MODE" = "link" ] && inst_args="--dev"
+    # 별칭 처리: update 는 install 과 달리 기본 'cg' 를 강제하지 않는다.
+    #   --alias→cg / --alias=NAME→NAME / --no-alias→제거 / 옵션 없으면 기존 별칭 그대로 유지(keep).
+    alias_arg="--alias-keep"
+    for a in "$@"; do
+      case "$a" in
+        --alias)    alias_arg="--alias" ;;
+        --alias=*)  alias_arg="$a" ;;
+        --no-alias) alias_arg="--no-alias" ;;
+      esac
+    done
+    inst_args="${inst_args:+$inst_args }$alias_arg"
     BINDIR="${BINDIR:-$HOME/.local/bin}" "$REPO/install.sh" $inst_args
     NEWVER="$(head -n1 "$REPO/VERSION" 2>/dev/null || printf '%s' "$OLDVER")"
     t UPDATE_VERSION "$OLDVER" "$NEWVER"

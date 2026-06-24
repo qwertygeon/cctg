@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Short alias command `cg` (installed by default; `install.sh --no-alias` to skip)**: `install.sh` now also installs a second command name — `cg` by default — that behaves identically to `cctg` (`cc-tg.sh` derives its program name from `basename "$0"`, so help/hints render under the alias too). Pick a different name with `--alias=NAME`, or skip/remove it with `--no-alias`. The chosen name is recorded in the install manifest (`install.conf` `alias=`). Shell completions follow the alias automatically: bash appends `complete -F _cctg <name>` to the eagerly-sourced completion file, and zsh adds the name to the `#compdef` tag — no completion-function changes needed (the function reads the registry, not the invoked name). Invalid names (`cctg`, names with spaces/special chars or a leading `-`) are rejected, and an existing non-symlink at the target path is refused rather than clobbered. `uninstall.sh` removes the alias symlink (only when it points at our managed target).
+  - **`cctg update` / `cg update` alias policy** differs from a fresh install: with no alias option the alias is left exactly as-is (`update` never force-adds `cg`); `update --alias` adds `cg`, `update --alias=NAME` sets a custom name, and `update --no-alias` removes an existing alias. Internally `cmd_update` forwards an `--alias-keep` flag to the re-run installer so the manifest alias (and its completion injection) is preserved across updates. (`install.sh`, `uninstall.sh`, `lib/commands.sh`, `messages/*.sh`)
+
 ## [0.7.0] - 2026-06-22
 
 ### Added

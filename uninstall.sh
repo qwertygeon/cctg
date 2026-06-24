@@ -15,9 +15,11 @@ MANIFEST="$CONFIG_DIR/install.conf"
 # 매니페스트에서 설치 경로를 읽는다 (copy 설치는 bin 이 libexec/cc-tg.sh 로의 심볼릭).
 BINDIR_M=""
 LIBEXECDIR_M=""
+ALIAS_M=""
 if [ -f "$MANIFEST" ]; then
   BINDIR_M="$(awk -F= '$1=="bindir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
   LIBEXECDIR_M="$(awk -F= '$1=="libexecdir"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
+  ALIAS_M="$(awk -F= '$1=="alias"{print substr($0,index($0,"=")+1)}' "$MANIFEST")"
 fi
 # BINDIR 우선순위: 환경변수 > 매니페스트 bindir= > 기본값
 BINDIR="${BINDIR:-${BINDIR_M:-$HOME/.local/bin}}"
@@ -40,6 +42,21 @@ elif [ -f "$DEST" ]; then
   fi
 else
   echo "설치된 cctg 없음: $DEST"
+fi
+
+# 별칭(opt-in) bin 제거 — 우리 대상(레포 cc-tg.sh 또는 libexec/cc-tg.sh)을 가리키는 심볼릭만 제거한다.
+if [ -n "$ALIAS_M" ]; then
+  ALIAS_DEST="$BINDIR/$ALIAS_M"
+  if [ -L "$ALIAS_DEST" ]; then
+    atarget="$(readlink "$ALIAS_DEST")"
+    if [ "$atarget" = "$SRC" ] || { [ -n "$LIBEXECDIR_M" ] && [ "$atarget" = "$LIBEXECDIR_M/cc-tg.sh" ]; }; then
+      rm "$ALIAS_DEST"; echo "제거됨(별칭): $ALIAS_DEST"
+    else
+      echo "건너뜀: $ALIAS_DEST 는 다른 대상($atarget)을 가리킵니다. 직접 확인하세요."
+    fi
+  elif [ -e "$ALIAS_DEST" ]; then
+    echo "건너뜀: $ALIAS_DEST 는 심볼릭이 아닙니다. 직접 확인하세요."
+  fi
 fi
 
 # libexec 패키지 디렉터리 제거 (copy 설치 — 우리 cc-tg.sh 가 든 디렉터리만)
