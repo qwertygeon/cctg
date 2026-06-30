@@ -18,6 +18,15 @@ SESS_PREFIX="cctg-"
 # CCTG_CONFIG sess_width) > 본 기본값 순으로 effective_sess_width() 가 해석한다(lib/config.sh).
 SESS_WIDTH_DEFAULT=100
 
+# 일괄 up/restart(여러 타겟)에서 타겟 사이 직렬화 노브. 각 claude --channels 기동은
+# fire-and-forget 라, 다중 타겟을 한 번에 띄우면 여러 인스턴스가 거의 동시에 부팅되어
+# 공용 전역 상태(~/.claude) 경합으로 채널 연결이 하나만 살아남을 수 있다. 직전 봇이
+# 자리잡은 뒤 다음을 띄워 동시 부팅을 회피한다(await_up_settled).
+#   READY_TIMEOUT: 직전 봇의 claude 가동(claude_alive)을 폴링하는 상한(초).
+#   SETTLE: 가동 확인 후 채널 등록이 자리잡도록 두는 정착 여유(초). 0 이면 사실상 비활성.
+CC_TG_UP_READY_TIMEOUT="${CC_TG_UP_READY_TIMEOUT:-15}"
+CC_TG_UP_SETTLE="${CC_TG_UP_SETTLE:-3}"
+
 # claude --permission-mode 가 받는 유효한 모드 (claude --help 기준)
 VALID_MODES="acceptEdits auto bypassPermissions default dontAsk plan"
 
