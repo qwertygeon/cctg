@@ -482,18 +482,33 @@ _lifecycle_run() {
   local action="$1"; shift
   need_tmux || return 1
   local ok=0 fail=0 failed="" arg n
+  # 다중 타겟 up/restart 직렬화: 각 기동은 fire-and-forget 라 여러 봇을 한 번에 띄우면
+  # 동시 부팅으로 채널 연결이 하나만 살아남을 수 있다. 직전 반복이 봇을 '새로' 기동했으면
+  # (just_launched=1) 다음 타겟 기동 전에 그 봇이 자리잡을 때까지 대기한다. 단일 타겟·down·
+  # 실패 직후엔 대기하지 않는다(불필요한 지연 방지). 상태는 함수-로컬, 헬퍼는 동적 스코프로 공유.
+  local just_launched=0 last_launched=""
+  _lifecycle_step() {
+    local t="$1"
+    [ "$just_launched" = 1 ] && await_up_settled "$last_launched"
+    just_launched=0
+    if _lifecycle_apply "$action" "$t"; then
+      ok=$((ok+1))
+      case "$action" in up|restart) just_launched=1; last_launched="$t" ;; esac
+    else
+      fail=$((fail+1)); failed="${failed:+$failed }$t"
+    fi
+  }
   for arg in "$@"; do
     if [ "$arg" = all ]; then
       while IFS= read -r n; do
         [ -n "$n" ] || continue
-        if _lifecycle_apply "$action" "$n"; then ok=$((ok+1)); else fail=$((fail+1)); failed="${failed:+$failed }$n"; fi
+        _lifecycle_step "$n"
       done < <(all_names)
-    elif _lifecycle_apply "$action" "$arg"; then
-      ok=$((ok+1))
     else
-      fail=$((fail+1)); failed="${failed:+$failed }$arg"
+      _lifecycle_step "$arg"
     fi
   done
+  unset -f _lifecycle_step
   # 단일 타겟은 per-target 출력으로 충분 — 요약은 2건 이상일 때만(하위호환, FR-005).
   if [ $((ok+fail)) -ge 2 ]; then
     if [ "$fail" -eq 0 ]; then t MULTI_SUMMARY_OK "$action" "$ok"

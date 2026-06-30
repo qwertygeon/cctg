@@ -52,6 +52,20 @@ start_session() {
   tmux new-session -d -x "${3:-$SESS_WIDTH_DEFAULT}" -s "$1" bash -lc "$2"
 }
 
+# 직전에 기동한 봇이 부팅을 끝낼 때까지 대기 — 다음 봇과의 동시 부팅 레이스 회피
+# (_lifecycle_run 이 다중 타겟 up/restart 사이에 호출). start_session 은 fire-and-forget
+# 라 claude 가 채널에 붙기 전에 리턴하므로, claude 가동(claude_alive)을 CC_TG_UP_READY_TIMEOUT
+# 초까지 폴링한 뒤 CC_TG_UP_SETTLE 초의 정착 여유를 둔다. claude_alive 는 가동 신호일 뿐
+# 채널 등록 완료보다 이르므로 SETTLE 여유를 더한다. $1=직전 봇/채널명.
+await_up_settled() {
+  local name="$1" waited=0
+  while [ "$waited" -lt "$CC_TG_UP_READY_TIMEOUT" ]; do
+    claude_alive "$name" && break
+    sleep 1; waited=$((waited+1))
+  done
+  [ "$CC_TG_UP_SETTLE" -gt 0 ] && sleep "$CC_TG_UP_SETTLE" || true
+}
+
 # 봇의 마지막 활동 시각(epoch) 을 stdout 으로. 세션 생존($3=1)이면 tmux #{window_activity}(라이브
 # 출력 활동 시각), 비실행이면 last-session.log mtime(마지막 down 스냅샷) 으로 폴백한다.
 # 알 수 없으면(미실행·미스냅샷·비숫자) 비-0 반환. $1=봇/채널명 $2=상태디렉터리 $3=세션생존(1/0).

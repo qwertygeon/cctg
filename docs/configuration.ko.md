@@ -65,6 +65,8 @@ cctg lang clear      # 선호 설정을 제거한다 (자동 감지로 복귀)
 | `CC_TG_SHARED_SETTINGS` | `$CC_CHANNELS_DIR/cctg-shared.settings.json` | 공통 권한 정책 파일 |
 | `CC_TG_REPLY_REMINDER_FILE` | `$CC_CHANNELS_DIR/cctg-reply-reminder.txt` | 모든 봇에 주입되는 채널 reply 리마인더 텍스트 |
 | `CC_TG_SESS_WIDTH` | (미설정) | detached 세션 폭(칼럼) 오버라이드. `cctg common width` 전역 기본값보다 우선 |
+| `CC_TG_UP_READY_TIMEOUT` | `15` | 다중 타겟 `up`/`restart`: 다음 봇 기동 전 직전 봇의 `claude` 가동을 폴링하는 상한(초) |
+| `CC_TG_UP_SETTLE` | `3` | 다중 타겟 `up`/`restart`: 가동 확인 후 채널 등록이 자리잡도록 두는 정착 여유(초). `0` 이면 직렬화 사실상 비활성 |
 | `CCTG_LANG` | (미설정) | 일회성 CLI 언어 오버라이드(`en`/`ko`) |
 | `BINDIR` | `~/.local/bin` | 설치 위치(`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | 복사 설치 패키지 디렉터리(`install.sh`) |
