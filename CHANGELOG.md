@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-06-30
+
 ### Fixed
 - **Multi-target `cctg up`/`restart` now staggers launches so every channel connects**: launching several bots at once (`cctg up a b c`) used to boot the `claude --channels` processes near-simultaneously (each launch is fire-and-forget), so they raced on shared global Claude state under `~/.claude` and typically only **one** bot's channel ended up connected — whereas starting them one command at a time worked. `_lifecycle_run` now waits for the previously launched bot to settle before launching the next: it polls the previous bot's `claude` liveness (up to `CC_TG_UP_READY_TIMEOUT`, default 15s) then pauses a short settle (`CC_TG_UP_SETTLE`, default 3s). A single target, `down`, and the launch right after a *failed* target add no wait, so single-bot and `down` behavior is unchanged. Set `CC_TG_UP_SETTLE=0` to disable staggering. No new command or flag (env knobs only). (`lib/env.sh`, `lib/session.sh`, `lib/commands.sh`, `tests/up_serialize.bats`, `tests/stubs/sleep`, docs)
 
@@ -167,7 +169,8 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/qwertygeon/cctg/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/qwertygeon/cctg/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/qwertygeon/cctg/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/qwertygeon/cctg/compare/v0.6.0...v0.7.0
