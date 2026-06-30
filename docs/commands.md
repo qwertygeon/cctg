@@ -139,6 +139,8 @@ The working directory and the bot's `.env` (token) must exist, or `up` reports a
 
 **Multiple targets**: `up`, `down`, and `restart` accept several targets at once (names, reserved channel names, and/or `all`), processed sequentially left to right. Processing is **continue-on-error** — a failing target does not stop the rest. When two or more targets are processed, a summary line (succeeded / failed counts, with failed names) is printed, and the command exits non-zero if any target failed. A single target behaves exactly as before (no summary line).
 
+**Launch staggering (`up`/`restart`)**: each bot is launched fire-and-forget, so starting several at once (`cctg up a b c`) boots them near-simultaneously and they race on shared global Claude state under `~/.claude` — often leaving only one channel actually connected. To avoid this, `up`/`restart` wait for the previous bot to settle before launching the next: poll the previous bot's `claude` liveness (up to `CC_TG_UP_READY_TIMEOUT`, default 15s) then pause a short settle (`CC_TG_UP_SETTLE`, default 3s). A single target, `down`, and the launch right after a *failed* target add no wait. Set `CC_TG_UP_SETTLE=0` to disable staggering. (See [Configuration & internals](configuration.md).)
+
 **Global channel bots (`telegram` / `discord`)**: passing a reserved channel name bypasses the registry and uses `~/.claude/channels/<channel>/` as the state directory. The working directory (`cwd`) is whatever directory you run `cctg up` from at that moment. A **sole-owner guard** refuses startup if a `cctg-<channel>` tmux session already exists or if `bot.pid` in the state directory holds a live PID (the plugin's own runner is active). A missing `.env` is also refused.
 
 ```console

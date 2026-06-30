@@ -15,6 +15,10 @@ setup() {
   export CCTG_LANG=en            # stable English output for assertions
   # A developer-exported width override would skew width-resolution assertions.
   unset CC_TG_SESS_WIDTH
+  # Multi-target up/restart now staggers launches via await_up_settled. Default the
+  # settle to 0 so generic lifecycle tests don't incur the real settle wait; the
+  # serialization tests override CC_TG_UP_SETTLE and opt into the logging sleep stub.
+  export CC_TG_UP_SETTLE=0
   mkdir -p "$HOME" "$XDG_CONFIG_HOME"
 
   # Default working dir for bots that need an existing cwd.

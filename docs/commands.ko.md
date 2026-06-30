@@ -139,6 +139,8 @@ cctg up <name...|all|telegram|discord>
 
 **다중 타겟**: `up`·`down`·`restart` 는 여러 타겟(이름·예약 채널명·`all`)을 한 번에 받아 좌→우 **순차** 처리한다. 처리는 **continue-on-error** — 한 타겟이 실패해도 나머지를 계속 진행한다. 2개 이상 처리하면 요약 1줄(성공/실패 수, 실패 타겟명)을 출력하고, 하나라도 실패하면 비0 으로 종료한다. 단일 타겟은 기존과 동일(요약 없음).
 
+**기동 직렬화(`up`/`restart`)**: 각 봇은 fire-and-forget 로 기동되어, 여러 개를 한 번에 띄우면(`cctg up a b c`) 거의 동시에 부팅되고 `~/.claude` 의 공용 전역 Claude 상태를 두고 경합한다 — 흔히 한 채널만 실제로 연결된 채 남는다. 이를 피하려고 `up`/`restart` 는 다음 봇을 띄우기 전 직전 봇이 자리잡을 때까지 대기한다: 직전 봇의 `claude` 가동을 폴링(상한 `CC_TG_UP_READY_TIMEOUT`, 기본 15초)한 뒤 짧은 정착 여유(`CC_TG_UP_SETTLE`, 기본 3초)를 둔다. 단일 타겟·`down`·**실패한** 타겟 직후의 기동은 대기하지 않는다. `CC_TG_UP_SETTLE=0` 으로 직렬화를 끌 수 있다. ([설정·내부 동작](configuration.ko.md) 참조.)
+
 **전역 채널 봇 (`telegram` / `discord`)**: 예약 이름을 전달하면 레지스트리 없이 `~/.claude/channels/<channel>/` 을 상태 디렉터리로 사용한다. 작업 디렉터리(`cwd`)는 `cctg up` 실행 시점의 현재 디렉터리(`$PWD`)다. **단독소유자 가드**: `cctg-<channel>` tmux 세션이 이미 존재하거나 상태 디렉터리의 `bot.pid` 에 살아 있는 PID 가 있으면(플러그인 러너 활성) 기동을 거부한다. `.env` 가 없어도 거부한다.
 
 ```console

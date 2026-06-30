@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Fake sleep for the cctg test suite — observable and instant ONLY when opted in.
+#
+# Serialization tests (await_up_settled) need to (a) avoid real multi-second waits
+# and (b) observe how many times sleep was invoked. When $FAKE_SLEEP_LOG names a
+# writable file, this stub appends one line per call (the requested duration) and
+# returns immediately. When $FAKE_SLEEP_LOG is unset it execs the real sleep, so
+# tests that rely on genuine timing (e.g. the log snapshotter) are unaffected.
+if [ -n "${FAKE_SLEEP_LOG:-}" ]; then
+  printf '%s\n' "${1:-0}" >> "$FAKE_SLEEP_LOG"
+  exit 0
+fi
+exec /bin/sleep "$@"
