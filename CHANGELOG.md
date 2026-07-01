@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`cctg help` / `config` usage strings now list every option**: the top-level help and the `config` usage-on-error string omitted `config`'s `width`/`cwd`/`token` actions and `common`'s `width`, so the built-in help understated what the CLI actually accepts. Both were completed in the `en`/`ko` message catalogs so `cctg help` matches the real surface. (`messages/en.sh`, `messages/ko.sh`)
+
+### Documentation
+- **User docs audited against the source and rewritten for a natural setup order**: the Telegram/Discord setup guides now walk **bot creation → `cctg add` registration → `cctg up`** in execution order, with concrete BotFather / Discord Developer Portal steps and a note that `cctg add`/`up` replace the plugin's own `configure`/`--channels` steps. `commands.md` documents every command option with examples (including interactive forms), and a dedicated **"Global channel bots"** section collects the `telegram`/`discord` reserved-name exceptions so they don't muddy the per-project flow. Corrected several code/doc mismatches (stopped global-bot `logs` has no snapshot; `status` global-bot `cwd` display; install manifest keys 8→11; `update` pinned-hold and `--version`/`--latest`/`--list`; snapshot `≥5` enforced only on the command path). `EDITOR` documented. (`docs/*`)
+
 ## [0.8.2] - 2026-06-30
 
 ### Fixed

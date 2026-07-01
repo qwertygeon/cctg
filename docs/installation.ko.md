@@ -56,12 +56,13 @@ cd cctg
 
 ## `install.sh` 가 하는 일
 
-`./install.sh` 실행은 네 단계를 수행한다.
+`./install.sh` 실행은 다음 단계를 수행한다.
 
 1. **의존성 점검.** `tmux` 와 `claude` 는 필수이며, 둘 중 하나라도 `PATH` 에 없으면 설치를 중단한다. `caffeinate` 도 점검하지만, 없을 경우 경고만 출력한다.
 2. **런처 배치.** `~/.local/bin/cctg` 에 둔다(복사인지 심볼릭 링크인지는 설치 모드가 결정한다 — 아래 참조).
-3. **셸 자동완성 설치.** bash·zsh 용.
-4. **멱등 관리 블록 추가.** 셸 rc 파일에 `PATH` 와 자동완성을 활성화하는 블록을 추가한다.
+3. **짧은 별칭 명령 설치.** 기본 `cg` — `cctg` 와 동일하게 동작하며 자체 자동완성을 갖는다. `--no-alias` 로 건너뛰거나 `--alias=NAME` 으로 이름을 바꾼다.
+4. **셸 자동완성 설치.** bash·zsh 용.
+5. **멱등 관리 블록 추가.** 셸 rc 파일에 `PATH` 와 자동완성을 활성화하는 블록을 추가한다.
 
 ## 설치 모드
 
@@ -133,7 +134,7 @@ cd cctg
 
 ### 매니페스트·언어 설정
 
-- `install.sh` 는 `~/.config/cctg/install.conf` 에 매니페스트를 기록한다. 키: `repo`, `mode`, `version`, `bindir`, `libexecdir`, `bashcomp`, `zshcomp`, `shellrc`. `cctg update` 와 `uninstall.sh` 가 이 매니페스트를 읽는다.
+- `install.sh` 는 `~/.config/cctg/install.conf` 에 매니페스트를 기록한다. 키: `repo`, `mode`, `version`, `bindir`, `libexecdir`, `bashcomp`, `zshcomp`, `shellrc`, `alias`(설치된 별칭 이름, 없으면 빈 값), `pinned`(고정된 버전, 최신 추적 시 빈 값), `track_branch`(비고정 설치가 따르는 브랜치). `cctg update` 와 `uninstall.sh` 가 이 매니페스트를 읽는다.
 - CLI 언어 설정은 `~/.config/cctg/config`(`lang=...`)에 분리 저장되어 `cctg update` 가 보존한다.
 
 ## PATH 설정
@@ -163,14 +164,28 @@ cctg doctor
 ## 업데이트
 
 ```bash
-cctg update
+cctg update [--version X.Y.Z | --latest | --list] [--alias | --alias=NAME | --no-alias]
 ```
 
-`cctg update` 는 매니페스트에서 레포 위치와 설치 모드를 읽어 `git pull --ff-only` 를 실행한 뒤 `install.sh`(멱등)를 다시 실행한다. 이전 → 이후 버전을 출력한다.
+**버전 옵션 없이** 실행하면 `cctg update` 는 매니페스트에서 레포 위치·설치 모드를 읽고:
+
+- **고정(pin)되지 않았으면** — `git pull --ff-only` 후 `install.sh`(멱등)를 다시 실행하고 이전 → 이후 버전을 출력한다;
+- **고정되어 있으면**(이전에 `--version` 지정) — 최신으로 pull 하지 **않는다**. 고정 버전을 유지하고 변경 방법을 안내하므로, 일상적인 `update` 가 예기치 않은 업그레이드를 일으키지 않는다.
+
+버전 옵션:
+
+- `--version X.Y.Z` — 특정 릴리스(git 태그 `vX.Y.Z`)로 전환하고 **고정**한다. `install.sh` 가 태그를 fetch(best-effort — 오프라인이면 로컬 태그로 진행)하고, 형식 오류·존재하지 않는 버전은 거부하며, 다운그레이드 시 경고한다.
+- `--latest` — 추적 브랜치 최신으로 돌아가고 고정을 **해제**한다. 추적 브랜치가 불명확하거나 워킹 트리가 더러우면(자동 stash 없음) 거부한다.
+- `--list` — 설치하지 않고 가용 버전을 나열한다. `*` = 현재 설치, `#` = 고정.
+
+update 시 별칭 처리는 신규 설치와 다르다: **옵션이 없으면 현재 별칭을 그대로 둔다**(update 는 `cg` 를 강제로 추가하지 않는다). `--alias` 는 `cg` 추가, `--alias=NAME` 은 커스텀 이름, `--no-alias` 는 기존 별칭 제거.
 
 - **복사 설치** 의 경우 새 런처가 libexec 디렉터리로 다시 복사된다.
-- **개발(`--dev`) 설치** 의 경우 pull 직후 런처가 이미 최신이며, 자동완성은 데이터 디렉터리로 복사되므로 다시 실행하면 갱신된다.
+- **개발(`--dev`) 설치** 의 경우 pull 직후 런처가 이미 최신이며, 자동완성은 데이터 디렉터리로 복사되므로 다시 실행하면 갱신된다. (고정된 `--dev` 설치는 `git checkout --detach` 를 쓰며 더러운 트리에서는 거부된다.)
 - 커밋되지 않은 로컬 변경으로 fast-forward 가 막히면 `update` 는 아무것도 덮어쓰지 않고 멈춘다 — 레포를 정리한 뒤 다시 시도한다.
+- 자동완성은 현재 셸에 캐싱되므로, 방금 갱신된 자동완성은 새 셸(또는 `compinit` 재실행) 에서만 반영된다.
+
+[`update` 명령 레퍼런스](commands.md#update)도 참고.
 
 ## 제거
 
@@ -181,6 +196,7 @@ cctg update
 `uninstall.sh` 는 CCTG가 설치한 모든 것을 제거한다.
 
 - `~/.local/bin/cctg` — 단, **CCTG가 설치한 것임을 확인한 뒤에만** 제거한다(심볼릭 링크 대상 또는 복사 파일 내부의 정체성 문자열을 확인한다). 경로가 다른 대상을 가리키면 그대로 둔다.
+- 별칭 심볼릭 링크(`cg`, 또는 매니페스트에 기록된 별칭 이름) — 역시 CCTG 자신의 심볼릭 링크일 때만 제거하며, 그 이름을 차지한 일반 파일은 그대로 둔다.
 - libexec 패키지 디렉터리(복사 설치의 경우).
 - 매니페스트에 기록된 bash/zsh 자동완성 파일.
 - 셸 rc 관리 블록 — `# >>> cctg >>>` / `# <<< cctg <<<` 마커 사이의 내용만.

@@ -43,19 +43,20 @@ CCTG drives the official Telegram plugin, which must be installed **globally** i
 
 ## Step 2 — Create a NEW bot with BotFather
 
-1. Open [@BotFather](https://t.me/BotFather) in Telegram.
-2. Send the command `/newbot`.
-3. Choose a **display name** (shown in chats).
-4. Choose a **username** — it must end in `bot` (for example `myproject_helper_bot`).
-5. BotFather replies with a **bot token** that looks like:
+1. Open [@BotFather](https://t.me/BotFather) in Telegram and send `/newbot`.
+2. Choose a **display name** — shown in chat headers; anything, spaces allowed.
+3. Choose a **username** — a unique handle that must end in `bot` (for example `myproject_helper_bot`). This becomes the bot's link, `t.me/myproject_helper_bot`.
+4. BotFather replies with a **bot token** that looks like:
 
    ```
    123456789:ABCdefGhIJKlmNoPQRstuVWXyz1234567890
    ```
 
-Keep this token private — anyone with it can control the bot.
+   Copy the **whole** token, including the leading number and colon. Keep it safe for Step 4 — anyone with it can control the bot, so treat it like a password.
 
 > **It must be a brand-new bot.** Each project bot polls Telegram with its own token. If you reuse one token across two running processes, the two pollers conflict and messages are dropped. Create a separate bot for every CCTG bot you register.
+>
+> **You do NOT run the plugin's own `/telegram:configure` or `--channels` steps.** The plugin README documents those for a standalone global bot; with CCTG, `cctg add` stores the token and `cctg up` launches the bot with the right channel flags for you.
 
 ## Step 3 — Find your numeric Telegram ID
 

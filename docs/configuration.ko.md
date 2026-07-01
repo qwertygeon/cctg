@@ -68,6 +68,7 @@ cctg lang clear      # 선호 설정을 제거한다 (자동 감지로 복귀)
 | `CC_TG_UP_READY_TIMEOUT` | `15` | 다중 타겟 `up`/`restart`: 다음 봇 기동 전 직전 봇의 `claude` 가동을 폴링하는 상한(초) |
 | `CC_TG_UP_SETTLE` | `3` | 다중 타겟 `up`/`restart`: 가동 확인 후 채널 등록이 자리잡도록 두는 정착 여유(초). `0` 이면 직렬화 사실상 비활성 |
 | `CCTG_LANG` | (미설정) | 일회성 CLI 언어 오버라이드(`en`/`ko`) |
+| `EDITOR` | `vi` | `config <name> edit` · `common edit` 가 여는 편집기 |
 | `BINDIR` | `~/.local/bin` | 설치 위치(`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | 복사 설치 패키지 디렉터리(`install.sh`) |
 
@@ -167,6 +168,8 @@ cctg config myproject snapshot off   # 비활성화 (기본값)
 ```
 
 봇이 실행되는 동안 가벼운 백그라운드 watcher 가 N초마다 페인을 동일한 `last-session.log` 로 다시 캡처하고, 세션이 끝나면 자동으로 종료한다. 크래시/재부팅 이후에는 `cctg logs` 가 가장 최근 스냅샷(최대 N초 이내로 오래된 상태)을 보여준다. `restart` 는 변경된 간격을 적용한다.
+
+> 최소 `5`초 하한은 `cctg config … snapshot` **명령**에서만 강제된다. `up` 자체는 **양의 정수면** watcher 를 기동하므로, `launch.env` 를 `config edit` 로 직접 `2` 같은 더 작은 값으로 편집하면 기동 시 그대로 반영된다 — 하한은 명령 경로를 지키는 것이지 기동 경로를 지키는 것이 아니다.
 
 ---
 

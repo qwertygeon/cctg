@@ -68,6 +68,7 @@ Some text remains language-neutral regardless of the resolved language: the gene
 | `CC_TG_UP_READY_TIMEOUT` | `15` | Multi-target `up`/`restart`: max seconds to poll the previous bot's `claude` liveness before launching the next |
 | `CC_TG_UP_SETTLE` | `3` | Multi-target `up`/`restart`: settle seconds after liveness, letting the channel register before the next launch. `0` effectively disables staggering |
 | `CCTG_LANG` | (unset) | One-off CLI language override (`en`/`ko`) |
+| `EDITOR` | `vi` | Editor opened by `config <name> edit` and `common edit` |
 | `BINDIR` | `~/.local/bin` | Install location (`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | Copy-install package dir (`install.sh`) |
 
@@ -167,6 +168,8 @@ cctg config myproject snapshot off   # disable (default)
 ```
 
 While the bot runs, a lightweight background watcher re-captures the pane every N seconds to the same `last-session.log` and exits automatically when the session ends. After a crash/reboot, `cctg logs` then shows the most recent snapshot (at most N seconds stale). `restart` applies a changed interval.
+
+> The `5`-second minimum is enforced by the `cctg config … snapshot` command. `up` itself starts the watcher for **any positive integer**, so a `launch.env` hand-edited (via `config edit`) to a smaller value like `2` is still honored at launch — the floor guards the command path, not the launch path.
 
 ---
 

@@ -56,12 +56,13 @@ cd cctg
 
 ## What `install.sh` does
 
-Running `./install.sh` performs four steps:
+Running `./install.sh` performs these steps:
 
 1. **Checks dependencies.** `tmux` and `claude` are required; the installer aborts if either is not on your `PATH`. `caffeinate` is checked too, but a missing `caffeinate` only prints a warning.
 2. **Places the launcher** at `~/.local/bin/cctg` (the install mode decides whether this is a copy or a symlink — see below).
-3. **Installs shell completions** for bash and zsh.
-4. **Adds an idempotent managed block** to your shell rc file that enables `PATH` and completions.
+3. **Installs a short alias command** — `cg` by default — that behaves identically to `cctg`, with its own completions. Skip it with `--no-alias`, or choose a different name with `--alias=NAME`.
+4. **Installs shell completions** for bash and zsh.
+5. **Adds an idempotent managed block** to your shell rc file that enables `PATH` and completions.
 
 ## Install modes
 
@@ -133,7 +134,7 @@ To apply the changes, open a new terminal or `source` the relevant rc (e.g. `sou
 
 ### Manifest and language config
 
-- `install.sh` writes a manifest at `~/.config/cctg/install.conf` with the keys: `repo`, `mode`, `version`, `bindir`, `libexecdir`, `bashcomp`, `zshcomp`, `shellrc`. Both `cctg update` and `uninstall.sh` read this manifest.
+- `install.sh` writes a manifest at `~/.config/cctg/install.conf` with the keys: `repo`, `mode`, `version`, `bindir`, `libexecdir`, `bashcomp`, `zshcomp`, `shellrc`, `alias` (the installed alias name, empty if none), `pinned` (the pinned version, empty when tracking latest), and `track_branch` (the branch a non-pinned install follows). Both `cctg update` and `uninstall.sh` read this manifest.
 - The CLI language preference is stored separately in `~/.config/cctg/config` (`lang=...`) so that `cctg update` preserves it.
 
 ## PATH setup
@@ -163,14 +164,28 @@ cctg doctor
 ## Updating
 
 ```bash
-cctg update
+cctg update [--version X.Y.Z | --latest | --list] [--alias | --alias=NAME | --no-alias]
 ```
 
-`cctg update` reads the repo location and install mode from the manifest, runs `git pull --ff-only`, then re-runs `install.sh` (which is idempotent). It prints the old → new version.
+With **no version option**, `cctg update` reads the repo location and install mode from the manifest and:
+
+- **when not pinned** — runs `git pull --ff-only`, then re-runs `install.sh` (idempotent), and prints the old → new version;
+- **when pinned** (a `--version` was set earlier) — it does **not** pull to latest. It holds the pinned version and prints how to change it, so a routine `update` never causes a surprise upgrade.
+
+Version options:
+
+- `--version X.Y.Z` — switch to and **pin** a specific released version (git tag `vX.Y.Z`). `install.sh` fetches tags (best-effort; works offline against local tags), rejects a malformed or nonexistent version, and warns on a downgrade.
+- `--latest` — return to the tracking branch's latest and **clear** the pin. Refused if the tracking branch is unknown or the working tree is dirty (no auto-stash).
+- `--list` — list available versions without installing; `*` marks the currently installed version and `#` the pinned one.
+
+Alias handling on update differs from a fresh install: **without an alias option the current alias is left exactly as-is** (update never force-adds `cg`). `--alias` adds `cg`, `--alias=NAME` sets a custom name, and `--no-alias` removes an existing alias.
 
 - For a **copy install**, the new launcher is re-copied into the libexec directory.
-- For a **dev (`--dev`) install**, the launcher is already current right after the pull; completions are copied to the data directory, so re-running refreshes them.
+- For a **dev (`--dev`) install**, the launcher is already current right after the pull; completions are copied to the data directory, so re-running refreshes them. (A pinned `--dev` install uses `git checkout --detach` and is refused on a dirty tree.)
 - If uncommitted local changes prevent a fast-forward, `update` stops without overwriting anything — clean up the repo and try again.
+- Completions are cached by your current shell, so a just-updated completion set only takes effect in a new shell (or after re-running `compinit`).
+
+See also the [`update` command reference](commands.md#update).
 
 ## Uninstalling
 
@@ -181,6 +196,7 @@ cctg update
 `uninstall.sh` removes everything CCTG installed:
 
 - `~/.local/bin/cctg` — but **only after verifying CCTG installed it** (it checks the symlink target, or the identity string inside the copied file). If the path points somewhere else, it is left untouched.
+- The alias symlink (`cg`, or the manifest's recorded alias name) — again only if it is CCTG's own symlink; a non-symlink file occupying that name is left untouched.
 - The libexec package directory (for copy installs).
 - The bash/zsh completion files recorded in the manifest.
 - The shell rc managed block — only the content between the `# >>> cctg >>>` / `# <<< cctg <<<` markers.
