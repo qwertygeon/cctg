@@ -68,6 +68,7 @@ Some text remains language-neutral regardless of the resolved language: the gene
 | `CC_TG_UP_READY_TIMEOUT` | `15` | Multi-target `up`/`restart`: max seconds to poll the previous bot's `claude` liveness before launching the next |
 | `CC_TG_UP_SETTLE` | `3` | Multi-target `up`/`restart`: settle seconds after liveness, letting the channel register before the next launch. `0` effectively disables staggering |
 | `CCTG_LANG` | (unset) | One-off CLI language override (`en`/`ko`) |
+| `EDITOR` | `vi` | Editor opened by `config <name> edit` and `common edit` |
 | `BINDIR` | `~/.local/bin` | Install location (`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | Copy-install package dir (`install.sh`) |
 

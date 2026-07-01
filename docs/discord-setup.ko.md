@@ -55,17 +55,29 @@ CCTG 는 공식 Discord 플러그인을 구동하며, 이 플러그인은 Claude
 
 ## 2단계 — Discord 애플리케이션·봇 생성
 
-> **이 단계는 CCTG 가 아니라 Discord 개발자 포털 UI 와 `discord@claude-plugins-official` 플러그인의 요구사항을 따른다.** 정확한 메뉴 이름, privileged intent, OAuth2 scope 는 Discord 와 플러그인이 정의하며 변경될 수 있다. 아래 목록은 대략적인 방향으로만 참고하고, 권위 있는 intent/scope 요구사항은 플러그인 문서와 [Discord 공식 개발자 문서](https://discord.com/developers/docs)를 따른다.
+봇은 **[Discord 개발자 포털](https://discord.com/developers/applications)** 에서 만든다 — 이 단계는 CCTG 가 아니라 Discord 와 `discord@claude-plugins-official` 플러그인에 속한다. 순서대로 따른다.
 
-대략적인 순서는 다음과 같다.
+1. **애플리케이션 생성.** 개발자 포털을 열고 **New Application** 을 클릭한 뒤 이름을 지정하고 확인한다.
+2. **봇 추가.** 좌측 사이드바에서 **Bot** 을 열고 봇의 **username** 을 설정한다.
+3. **메시지 본문 intent 활성화.** 같은 **Bot** 페이지에서 **Privileged Gateway Intents** 로 스크롤해 **Message Content Intent** 를 켠다. 이걸 켜지 않으면 봇이 모든 메시지를 빈 본문으로 받아, 사용자가 보낸 내용을 전혀 볼 수 없다.
+4. **봇 토큰 복사.** 같은 **Bot** 페이지의 **Token** 에서 **Reset Token** 을 클릭하고 값을 복사한다. **한 번만** 표시되므로 3단계용으로 안전한 곳에 보관한다. 이 토큰을 가진 사람은 누구나 봇을 제어할 수 있으니 비밀번호처럼 취급한다.
+5. **봇을 서버에 초대.** Discord 는 봇과 같은 서버에 있지 않으면 DM 을 허용하지 않는다. **OAuth2 → URL Generator** 로 가서 **`bot`** scope 를 체크하고, **Bot Permissions** 에서 다음을 활성화한다.
+   - View Channels
+   - Send Messages
+   - Send Messages in Threads
+   - Read Message History
+   - Attach Files
+   - Add Reactions
 
-1. [Discord 개발자 포털](https://discord.com/developers/applications)을 열고 새 **애플리케이션**을 만든다.
-2. 그 애플리케이션에 **Bot** 을 추가한다.
-3. 봇의 **토큰**을 복사한다 — 이 토큰을 CCTG 에 전달한다. 토큰을 가진 사람은 누구나 봇을 제어할 수 있으므로 비공개로 유지한다.
-4. 플러그인이 요구하는 **privileged intent** 를 활성화한다. 플러그인이 메시지 본문을 읽어야 한다면 보통 message-content privileged intent 를 켜야 하지만, 정확한 요구사항은 가정하지 말고 플러그인 문서로 확인한다.
-5. 적절한 봇 scope·권한을 가진 **OAuth2 초대 URL** 로 봇을 서버에 초대한다. 이 또한 플러그인과 Discord 가 명시한 대로 따른다.
+   **Integration Type** 를 **Guild Install** 로 설정하고, **Generated URL** 을 복사해 브라우저에서 열어 본인이 속한 서버에 봇을 추가한다.
 
-봇이 서버에 들어가고 토큰을 확보했으면 CCTG 로 돌아온다.
+   > DM 전용으로는 권한이 하나도 필요 없지만, 지금 켜 두면 나중에 서버 채널에서 봇을 쓰려 할 때 다시 오지 않아도 된다 ([4단계](#4단계--group-으로-서버-채널-추가)).
+
+봇이 서버에 들어가고 토큰을 확보했으면 3단계를 위해 CCTG 로 돌아온다.
+
+> **플러그인 자체의 `/discord:configure` 나 `--channels` 단계는 실행하지 않는다.** 플러그인 README 는 그 단계들을 독립 전역 봇용으로 안내하지만, CCTG 에서는 `cctg add` 가 토큰을 저장하고 `cctg up` 이 올바른 채널 플래그로 봇을 기동한다.
+>
+> **라벨이 바뀌었다면:** Discord 포털 UI 는 시간이 지나며 바뀐다. 현재 intent/scope 요구사항의 권위 있는 출처는 `discord@claude-plugins-official` 플러그인의 자체 README 와 [Discord 공식 개발자 문서](https://discord.com/developers/docs)다.
 
 ## 3단계 — `cctg add` 로 봇 등록
 

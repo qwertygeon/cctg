@@ -68,6 +68,7 @@ cctg lang clear      # 선호 설정을 제거한다 (자동 감지로 복귀)
 | `CC_TG_UP_READY_TIMEOUT` | `15` | 다중 타겟 `up`/`restart`: 다음 봇 기동 전 직전 봇의 `claude` 가동을 폴링하는 상한(초) |
 | `CC_TG_UP_SETTLE` | `3` | 다중 타겟 `up`/`restart`: 가동 확인 후 채널 등록이 자리잡도록 두는 정착 여유(초). `0` 이면 직렬화 사실상 비활성 |
 | `CCTG_LANG` | (미설정) | 일회성 CLI 언어 오버라이드(`en`/`ko`) |
+| `EDITOR` | `vi` | `config <name> edit` · `common edit` 가 여는 편집기 |
 | `BINDIR` | `~/.local/bin` | 설치 위치(`install.sh` / `uninstall.sh`) |
 | `CCTG_LIBEXEC` | `~/.local/libexec/cctg` | 복사 설치 패키지 디렉터리(`install.sh`) |
 

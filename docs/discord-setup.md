@@ -55,17 +55,29 @@ CCTG drives the official Discord plugin, which must be installed **globally** in
 
 ## Step 2 — Create a Discord application and bot
 
-> **This step follows Discord's own developer portal UI and the `discord@claude-plugins-official` plugin's requirements — not CCTG.** The exact menu names, privileged intents, and OAuth2 scopes are defined by Discord and the plugin, and can change. Treat the list below as general orientation, and follow the plugin documentation and [Discord's official developer docs](https://discord.com/developers/docs) for the authoritative intent/scope requirements.
+You create the bot in **[Discord's Developer Portal](https://discord.com/developers/applications)** — this step belongs to Discord and the `discord@claude-plugins-official` plugin, not to CCTG. Follow it in order:
 
-In broad strokes you will:
+1. **Create the application.** Open the Developer Portal, click **New Application**, give it a name, and confirm.
+2. **Add the bot.** In the left sidebar, open **Bot**, then set a **username** for the bot.
+3. **Enable the message-content intent.** Still on the **Bot** page, scroll to **Privileged Gateway Intents** and turn on **Message Content Intent**. Without it the bot receives every message with empty text and can never see what you send.
+4. **Copy the bot token.** On the same **Bot** page, under **Token**, click **Reset Token** and copy the value. It is shown **only once** — keep it somewhere safe for Step 3. Anyone with this token can control the bot, so treat it like a password.
+5. **Invite the bot to a server.** Discord will not let you DM a bot unless you share a server with it. Go to **OAuth2 → URL Generator**, tick the **`bot`** scope, then under **Bot Permissions** enable:
+   - View Channels
+   - Send Messages
+   - Send Messages in Threads
+   - Read Message History
+   - Attach Files
+   - Add Reactions
 
-1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create a new **application**.
-2. Add a **Bot** to that application.
-3. Copy the bot's **token** — this is what you give to CCTG. Keep it private; anyone with it can control the bot.
-4. Enable any **privileged intents** the plugin requires. If the plugin needs to read the text of messages, the message-content privileged intent typically has to be turned on — but confirm the exact requirement against the plugin documentation rather than assuming.
-5. Invite the bot to your server using an **OAuth2 invite URL** with the appropriate bot scope and permissions, again as specified by the plugin and Discord.
+   Set **Integration Type** to **Guild Install**, copy the **Generated URL**, open it in a browser, and add the bot to a server you belong to.
 
-Once the bot is in your server and you have its token, return to CCTG.
+   > For DM-only use you technically need zero permissions, but enabling them now saves a second trip when you later want the bot to work in server channels ([Step 4](#step-4--server-channels-with---group)).
+
+Once the bot is in your server and you have its token, return to CCTG for Step 3.
+
+> **You do NOT run the plugin's own `/discord:configure` or `--channels` steps.** The plugin README documents those for a standalone global bot; with CCTG, `cctg add` stores the token and `cctg up` launches the bot with the right channel flags for you.
+>
+> **If a label has moved:** Discord's portal UI changes over time. The `discord@claude-plugins-official` plugin's own README and [Discord's developer docs](https://discord.com/developers/docs) are the authoritative source for the current intent/scope requirements.
 
 ## Step 3 — Register the bot with `cctg add`
 

@@ -39,7 +39,7 @@
 cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
-  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|cwd <경로>|token]
+  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|width <칼럼|clear>|cwd <경로>|token]
   common [...]
   up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
   restart <name...|all|telegram|discord>
@@ -91,7 +91,10 @@ cctg add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VA
 | `--group <id>[:nomention][:allow=csv]` | Discord 서버 채널 접근(반복 가능). `id` 는 숫자여야 하고, `:nomention` 은 멘션 요구를 해제하며, `:allow=csv` 는 쉼표로 구분한 숫자 멤버 ID 목록이다. `jq` 가 필요하다. |
 
 ```console
+$ cctg add proj ~/code/proj                      # 대화형: 토큰·ID·모드를 순서대로 입력받음
 $ cctg add proj ~/code/proj --channel telegram --id 123456789 --token-env PROJ_BOT_TOKEN --mode acceptEdits
+$ cctg add mybot ~/code/mybot --channel discord --token-stdin              # --id 없음 → Discord 페어링
+$ cctg add mybot ~/code/mybot --channel discord --token-stdin --id 18469…  # --id 지정 → Discord allowlist
 $ cctg add gamebot ~/code/game --channel discord --token-stdin --group 555000111:nomention:allow=42,43
 ```
 
@@ -281,14 +284,17 @@ cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|of
 권한 모델 자체는 [permissions.md](permissions.md) 를 참조한다.
 
 ```console
-$ cctg config proj
+$ cctg config proj                      # show (기본)
+$ cctg config proj edit                 # launch.env 를 $EDITOR 로 연다
 $ cctg config proj mode bypassPermissions
+$ cctg config proj mode clear           # 공통 defaultMode 를 따름
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
 $ cctg config proj width 200
 $ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
+$ cctg config proj token                # 대화형: 토큰을 가려서 입력받음
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
 ```
@@ -314,12 +320,15 @@ cctg common [show | edit | mode <m> | width <칼럼|clear> | deny add|rm <rule> 
 봇의 유효 폭 해석 순서: 봇별 `width` → env `CC_TG_SESS_WIDTH` → 전역 `common width` → 내장 기본값(`100`). 전체 권한 모델은 [permissions.md](permissions.md) 를 참조한다.
 
 ```console
-$ cctg common
+$ cctg common                            # show (기본)
+$ cctg common edit                       # 공통 설정 파일을 $EDITOR 로 연다
 $ cctg common mode default
 $ cctg common width 160
 $ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
+$ cctg common deny rm "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
+$ cctg common allow rm "Read(~/notes/**)"
 ```
 
 ### `lang`

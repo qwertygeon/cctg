@@ -39,7 +39,7 @@
 cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
-  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>|cwd <path>|token]
+  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>|width <cols|clear>|cwd <path>|token]
   common [...]
   up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
   restart <name...|all|telegram|discord>
@@ -91,7 +91,10 @@ Flags:
 | `--group <id>[:nomention][:allow=csv]` | Discord server-channel access (repeatable). `id` must be numeric; `:nomention` clears the mention requirement; `:allow=csv` is a comma-separated list of numeric member IDs. Requires `jq`. |
 
 ```console
+$ cctg add proj ~/code/proj                      # interactive: prompts for token, ID, and mode
 $ cctg add proj ~/code/proj --channel telegram --id 123456789 --token-env PROJ_BOT_TOKEN --mode acceptEdits
+$ cctg add mybot ~/code/mybot --channel discord --token-stdin              # no --id → Discord pairing
+$ cctg add mybot ~/code/mybot --channel discord --token-stdin --id 18469…  # --id → Discord allowlist
 $ cctg add gamebot ~/code/game --channel discord --token-stdin --group 555000111:nomention:allow=42,43
 ```
 
@@ -281,14 +284,17 @@ Views or edits a bot's per-bot options, stored in `<state>/launch.env`. Changes 
 For the permission model itself, see [permissions.md](permissions.md).
 
 ```console
-$ cctg config proj
+$ cctg config proj                      # show (default)
+$ cctg config proj edit                 # open launch.env in $EDITOR
 $ cctg config proj mode bypassPermissions
+$ cctg config proj mode clear           # follow the shared defaultMode
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
 $ cctg config proj width 200
 $ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
+$ cctg config proj token                # interactive: masked token prompt
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
 ```
@@ -314,12 +320,15 @@ Views or edits the shared permission policy that is injected into every bot via 
 The effective width for a bot resolves as: per-bot `width` → env `CC_TG_SESS_WIDTH` → global `common width` → built-in default (`100`). For the full permission model, see [permissions.md](permissions.md).
 
 ```console
-$ cctg common
+$ cctg common                            # show (default)
+$ cctg common edit                       # open the shared settings file in $EDITOR
 $ cctg common mode default
 $ cctg common width 160
 $ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
+$ cctg common deny rm "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
+$ cctg common allow rm "Read(~/notes/**)"
 ```
 
 ### `lang`
