@@ -169,6 +169,8 @@ cctg config myproject snapshot off   # disable (default)
 
 While the bot runs, a lightweight background watcher re-captures the pane every N seconds to the same `last-session.log` and exits automatically when the session ends. After a crash/reboot, `cctg logs` then shows the most recent snapshot (at most N seconds stale). `restart` applies a changed interval.
 
+> The `5`-second minimum is enforced by the `cctg config … snapshot` command. `up` itself starts the watcher for **any positive integer**, so a `launch.env` hand-edited (via `config edit`) to a smaller value like `2` is still honored at launch — the floor guards the command path, not the launch path.
+
 ---
 
 [← Back to README](../README.md)

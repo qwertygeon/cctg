@@ -169,6 +169,8 @@ cctg config myproject snapshot off   # 비활성화 (기본값)
 
 봇이 실행되는 동안 가벼운 백그라운드 watcher 가 N초마다 페인을 동일한 `last-session.log` 로 다시 캡처하고, 세션이 끝나면 자동으로 종료한다. 크래시/재부팅 이후에는 `cctg logs` 가 가장 최근 스냅샷(최대 N초 이내로 오래된 상태)을 보여준다. `restart` 는 변경된 간격을 적용한다.
 
+> 최소 `5`초 하한은 `cctg config … snapshot` **명령**에서만 강제된다. `up` 자체는 **양의 정수면** watcher 를 기동하므로, `launch.env` 를 `config edit` 로 직접 `2` 같은 더 작은 값으로 편집하면 기동 시 그대로 반영된다 — 하한은 명령 경로를 지키는 것이지 기동 경로를 지키는 것이 아니다.
+
 ---
 
 [← README 로 돌아가기](../README.md)
