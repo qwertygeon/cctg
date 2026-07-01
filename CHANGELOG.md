@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-01
+
 ### Fixed
 - **`cctg help` / `config` usage strings now list every option**: the top-level help and the `config` usage-on-error string omitted `config`'s `width`/`cwd`/`token` actions and `common`'s `width`, so the built-in help understated what the CLI actually accepts. Both were completed in the `en`/`ko` message catalogs so `cctg help` matches the real surface. (`messages/en.sh`, `messages/ko.sh`)
 
@@ -175,7 +177,8 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/qwertygeon/cctg/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/qwertygeon/cctg/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/qwertygeon/cctg/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/qwertygeon/cctg/compare/v0.7.0...v0.8.0
