@@ -43,19 +43,20 @@ CCTG 는 공식 Telegram 플러그인을 구동하며, 이 플러그인은 Claud
 
 ## 2단계 — BotFather 로 새 봇 만들기
 
-1. Telegram 에서 [@BotFather](https://t.me/BotFather) 를 연다.
-2. `/newbot` 명령을 보낸다.
-3. **표시 이름**(채팅에 보이는 이름)을 정한다.
-4. **사용자명**을 정한다 — 반드시 `bot` 으로 끝나야 한다 (예: `myproject_helper_bot`).
-5. BotFather 가 다음과 같은 형태의 **봇 토큰**으로 응답한다.
+1. Telegram 에서 [@BotFather](https://t.me/BotFather) 를 열고 `/newbot` 을 보낸다.
+2. **표시 이름**을 정한다 — 채팅 헤더에 보이는 이름으로, 공백 포함 무엇이든 가능하다.
+3. **사용자명**을 정한다 — 고유해야 하고 반드시 `bot` 으로 끝나야 한다 (예: `myproject_helper_bot`). 이것이 봇의 링크 `t.me/myproject_helper_bot` 가 된다.
+4. BotFather 가 다음과 같은 형태의 **봇 토큰**으로 응답한다.
 
    ```
    123456789:ABCdefGhIJKlmNoPQRstuVWXyz1234567890
    ```
 
-이 토큰은 비공개로 보관한다 — 토큰을 가진 사람은 누구나 봇을 제어할 수 있다.
+   앞의 숫자와 콜론까지 포함해 토큰 **전체**를 복사한다. 4단계용으로 안전하게 보관한다 — 토큰을 가진 사람은 누구나 봇을 제어할 수 있으니 비밀번호처럼 취급한다.
 
 > **반드시 새 봇이어야 한다.** 각 프로젝트 봇은 자신의 토큰으로 Telegram 을 폴링한다. 하나의 토큰을 동시에 실행 중인 두 프로세스에서 재사용하면 두 폴러가 충돌하여 메시지가 누락된다. 등록하는 CCTG 봇마다 별도의 봇을 만든다.
+>
+> **플러그인 자체의 `/telegram:configure` 나 `--channels` 단계는 실행하지 않는다.** 플러그인 README 는 그 단계들을 독립 전역 봇용으로 안내하지만, CCTG 에서는 `cctg add` 가 토큰을 저장하고 `cctg up` 이 올바른 채널 플래그로 봇을 기동한다.
 
 ## 3단계 — 본인의 숫자 Telegram ID 확인
 

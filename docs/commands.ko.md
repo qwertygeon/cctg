@@ -20,6 +20,7 @@
   - [`status`](#status)
   - [`logs`](#logs)
   - [`attach`](#attach)
+- [전역 채널 봇](#전역-채널-봇)
 - [설정](#설정)
   - [`config`](#config)
     - [config cwd](#config-cwd)
@@ -39,7 +40,7 @@
 cctg <command> [args]
   add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
-  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|cwd <경로>|token]
+  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|width <칼럼|clear>|cwd <경로>|token]
   common [...]
   up <name...|all|telegram|discord>    down <name...|all|telegram|discord>
   restart <name...|all|telegram|discord>
@@ -70,6 +71,8 @@ cctg add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VA
 
 작업 디렉터리 `<cwd>` 에 대한 새 봇을 등록하고 상태 디렉터리를 `~/.claude/channels/<name>/` 에 스캐폴딩한다. 상태 디렉터리에는 봇 토큰(`.env`, 권한 `600`), 접근 정책(`access.json`), `inbox/`, 봇별 옵션(`launch.env`) 이 들어간다.
 
+모든 입력은 **디스크에 쓰기 전에** 검증되므로, 오타가 반쪽짜리 봇을 남기지 않는다. `add` 는 다음을 거부한다: 예약 이름(`telegram`/`discord`/`imessage`/`fakechat`), 이미 등록된 이름, 그리고 **다른 채널 봇처럼 보이는 기존 상태 디렉터리** — 디렉터리가 존재하고 CCTG `launch.env` 는 없으나 `.env` 또는 `access.json` 이 있는 경우. 빈 토큰·미지 플래그·잘못된 `--channel` 값도 거부한다.
+
 `add` 는 **기본적으로 대화형**이다 — 토큰(가림 입력), 채널 ID, 권한 모드를 프롬프트로 묻는다. `--token-env` 나 `--token-stdin` 을 주면 **비대화형 모드**로 전환되어 아무것도 묻지 않는다. 이때 Telegram 은 `--id` 도 함께 줘야 하며, 권한 모드는 `--mode` 를 주지 않으면 공통 정책을 따른다.
 
 채널 동작은 `--channel`(기본 `telegram`) 에 따라 다르다.
@@ -85,13 +88,16 @@ cctg add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VA
 |---|---|
 | `--channel telegram\|discord` | 채널 타입. 기본 `telegram`. |
 | `--id <num>` | 숫자 채널 ID. 비대화형 Telegram 에서는 필수, Discord 에서는 선택. `^[0-9]+$` 를 통과해야 한다. |
-| `--token-env <VAR>` | 환경 변수 `VAR` 에서 봇 토큰을 읽는다. 비대화형 모드로 전환된다. 토큰은 `argv` 로 전달하지 않는다(프로세스 목록에 노출되므로). |
+| `--token-env <VAR>` | 환경 변수 `VAR` 에서 봇 토큰을 읽는다. 비대화형 모드로 전환된다. 토큰은 `argv` 로 전달하지 않는다(프로세스 목록에 노출되므로). `<VAR>` 이름 자체가 `^[A-Za-z_][A-Za-z0-9_]*$` 를 통과해야 하며, 아니면 `add` 가 거부한다(`config <name> token --token-env` 도 동일 규칙). |
 | `--token-stdin` | stdin 에서 봇 토큰을 읽는다. 비대화형 모드로 전환된다. |
 | `--mode <m>` | 권한 모드: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`. |
-| `--group <id>[:nomention][:allow=csv]` | Discord 서버 채널 접근(반복 가능). `id` 는 숫자여야 하고, `:nomention` 은 멘션 요구를 해제하며, `:allow=csv` 는 쉼표로 구분한 숫자 멤버 ID 목록이다. `jq` 가 필요하다. |
+| `--group <id>[:nomention][:allow=csv]` | Discord 서버 채널 접근(반복 가능). `id` 는 숫자여야 하고, `:nomention` 은 멘션 요구를 해제하며, `:allow=csv` 는 쉼표로 구분한 숫자 멤버 ID 목록이다. **미지의 수식어**(예: `nomeniton` 같은 오타)는 조용히 무시하지 않고 거부하며, 모든 id/멤버는 쓰기 전에 숫자 검증된다. `jq` 가 필요하다. |
 
 ```console
+$ cctg add proj ~/code/proj                      # 대화형: 토큰·ID·모드를 순서대로 입력받음
 $ cctg add proj ~/code/proj --channel telegram --id 123456789 --token-env PROJ_BOT_TOKEN --mode acceptEdits
+$ cctg add mybot ~/code/mybot --channel discord --token-stdin              # --id 없음 → Discord 페어링
+$ cctg add mybot ~/code/mybot --channel discord --token-stdin --id 18469…  # --id 지정 → Discord allowlist
 $ cctg add gamebot ~/code/game --channel discord --token-stdin --group 555000111:nomention:allow=42,43
 ```
 
@@ -135,13 +141,13 @@ cctg up <name...|all|telegram|discord>
 
 `cctg-<name>` 이름의 detached `tmux` 세션에서 봇을 기동한다. 세션은 `caffeinate -is claude --channels <plugin> --settings <shared> [--permission-mode <mode>] [추가 인자]` 를 실행하며, 채널의 상태 디렉터리는 환경 변수(`TELEGRAM_STATE_DIR` / `DISCORD_STATE_DIR`) 로 주입된다. 공통 권한 정책은 `--settings` 로 주입되고, 봇별 `CCTG_PERMISSION_MODE`(`launch.env`) 가 공통 `defaultMode` 를 override 하며, `CLAUDE_EXTRA_ARGS` 가 뒤에 덧붙는다.
 
-작업 디렉터리와 봇의 `.env`(토큰) 가 존재해야 하며, 없으면 `up` 이 오류를 보고한다. 봇에 `CCTG_LOG_SNAPSHOT_INTERVAL` 이 설정되어 있으면 주기 스냅샷 watcher 도 함께 기동된다. `cctg up all` 은 등록된 모든 봇을 기동한다.
+작업 디렉터리, 봇의 `.env`(토큰), 그리고 `claude` 바이너리(`PATH` 상)가 모두 있어야 하며, 없으면 `up` 이 오류를 보고한다. 봇의 세션이 이미 실행 중이면 `up` 은 그대로 두며 — 그 세션이 **DEAD**(안의 `claude` 가 종료됨)면 중복 기동 대신 재시작 힌트를 출력한다. 봇에 `CCTG_LOG_SNAPSHOT_INTERVAL` 이 설정되어 있으면 주기 스냅샷 watcher 도 함께 기동된다. `cctg up all` 은 등록된 모든 봇을 기동한다.
 
 **다중 타겟**: `up`·`down`·`restart` 는 여러 타겟(이름·예약 채널명·`all`)을 한 번에 받아 좌→우 **순차** 처리한다. 처리는 **continue-on-error** — 한 타겟이 실패해도 나머지를 계속 진행한다. 2개 이상 처리하면 요약 1줄(성공/실패 수, 실패 타겟명)을 출력하고, 하나라도 실패하면 비0 으로 종료한다. 단일 타겟은 기존과 동일(요약 없음).
 
 **기동 직렬화(`up`/`restart`)**: 각 봇은 fire-and-forget 로 기동되어, 여러 개를 한 번에 띄우면(`cctg up a b c`) 거의 동시에 부팅되고 `~/.claude` 의 공용 전역 Claude 상태를 두고 경합한다 — 흔히 한 채널만 실제로 연결된 채 남는다. 이를 피하려고 `up`/`restart` 는 다음 봇을 띄우기 전 직전 봇이 자리잡을 때까지 대기한다: 직전 봇의 `claude` 가동을 폴링(상한 `CC_TG_UP_READY_TIMEOUT`, 기본 15초)한 뒤 짧은 정착 여유(`CC_TG_UP_SETTLE`, 기본 3초)를 둔다. 단일 타겟·`down`·**실패한** 타겟 직후의 기동은 대기하지 않는다. `CC_TG_UP_SETTLE=0` 으로 직렬화를 끌 수 있다. ([설정·내부 동작](configuration.ko.md) 참조.)
 
-**전역 채널 봇 (`telegram` / `discord`)**: 예약 이름을 전달하면 레지스트리 없이 `~/.claude/channels/<channel>/` 을 상태 디렉터리로 사용한다. 작업 디렉터리(`cwd`)는 `cctg up` 실행 시점의 현재 디렉터리(`$PWD`)다. **단독소유자 가드**: `cctg-<channel>` tmux 세션이 이미 존재하거나 상태 디렉터리의 `bot.pid` 에 살아 있는 PID 가 있으면(플러그인 러너 활성) 기동을 거부한다. `.env` 가 없어도 거부한다.
+> 예약 이름(`telegram` / `discord`)을 전달하면 프로젝트 봇이 아니라 **전역 채널 봇**을 대상으로 하며, 동작이 다르다 — 모든 차이는 [전역 채널 봇](#전역-채널-봇) 에 모아 두었다.
 
 ```console
 $ cctg up proj
@@ -159,7 +165,7 @@ cctg down <name...|all|telegram|discord>
 
 봇을 정지한다. `tmux` 세션을 종료하기 전에 세션 화면 스냅샷을 `<state>/last-session.log` 에 저장하여(정지 후에도 [`logs`](#logs) 가 동작하도록) 두고, 실행 중인 스냅샷 watcher 가 있으면 정지한다. `cctg down all` 은 등록된 모든 봇을 정지한다. 이미 정지된 봇을 정지해도 남아 있는 스냅샷 watcher PID 파일을 정리한다.
 
-**전역 채널 봇 (`telegram` / `discord`)**: `cctg-<channel>` tmux 세션만 종료한다. 채널 플러그인 자체의 러너(`bot.pid` 프로세스)는 종료 대상이 아니다 — 세션이 없을 때 이 한계를 출력 메시지로 안내한다.
+> 예약 이름 `telegram` / `discord` 의 `down` 은 동작이 다르다(스냅샷을 뜨지 않고, 플러그인 자체 러너는 건드리지 않는다) — [전역 채널 봇](#전역-채널-봇) 참조.
 
 ```console
 $ cctg down proj
@@ -198,7 +204,7 @@ cctg status [--json] [-a|--all]
 
 봇은 등록되어 있으나 작업 디렉터리가 없거나 `.env`(토큰) 가 없으면 `BROKEN` 이며, 사유별 복구 힌트가 출력된다.
 
-상태 디렉터리(`~/.claude/channels/<channel>/`)가 존재하는 예약 채널에 대해서는 `--- 전역 채널 봇 ---` 섹션이 이어서 출력된다. 전역 봇의 `cwd` 는 `cctg status` 를 실행한 시점의 현재 디렉터리다(전역 봇은 레지스트리에 작업 디렉터리가 없으므로).
+상태 디렉터리(`~/.claude/channels/<channel>/`)가 존재하는 예약 채널에 대해서는 `--- 전역 채널 봇 ---` 섹션이 이어서 출력된다. 전역 봇은 렌더링이 조금 다르다([전역 채널 봇](#전역-채널-봇) 참조).
 
 `--json` 은 로케일 무관 토큰으로 구성된 기계 판독용 객체 배열을 출력한다(`jq` 필요). 각 객체는 `name`, `state`(`running`/`dead`/`broken`/`stopped`), `running`(불리언 — `dead` 면 `false`), `cwd`, `stateDir`, `mode`, `channel`, `session`, `uptimeSeconds`(또는 `null`; `dead` 면 `null`), `lastActivitySeconds`(마지막 활동 이후 경과 초, 미상이면 `null`), `issues`(예: `no-cwd`, `no-token`) 를 가진다.
 
@@ -232,9 +238,9 @@ $ cctg status --json
 cctg logs <name|telegram|discord> [N]
 ```
 
-최근 `N` 줄의 로그를 출력한다(기본 `50`). 봇이 실행 중이면 라이브 `tmux` 화면을 읽는다(스크롤백 최대 2000줄). 정지 상태에서는 `<state>/last-session.log` 스냅샷([`down`](#down) 시 또는 주기 스냅샷터가 기록) 으로 대체한다. 정지 상태인데 스냅샷이 없으면 오류를 보고한다.
+최근 `N` 줄의 로그를 출력한다(기본 `50`; `N` 은 음이 아닌 정수여야 하며, 아니면 `logs` 가 오류를 낸다). 봇이 실행 중이면 라이브 `tmux` 화면을 읽는다(스크롤백 최대 2000줄). 정지 상태에서는 `<state>/last-session.log` 스냅샷([`down`](#down) 시 또는 주기 스냅샷터가 기록) 으로 대체한다. 정지 상태인데 스냅샷이 없으면 오류를 보고한다.
 
-예약 이름 `telegram`·`discord` 를 써서 `~/.claude/channels/<channel>/` 의 전역 봇 로그를 읽을 수 있다.
+> 예약 이름 `telegram` / `discord` 는 `~/.claude/channels/<channel>/` 의 전역 봇 로그를 읽지만, 정지된 전역 봇은 대체할 **스냅샷이 없다** — [전역 채널 봇](#전역-채널-봇) 참조.
 
 ```console
 $ cctg logs proj
@@ -254,6 +260,23 @@ cctg attach <name>
 $ cctg attach proj
 ```
 
+## 전역 채널 봇
+
+위의 설명은 모두 **프로젝트 봇** — 레지스트리에 `add` 하는 봇 — 에 대한 것이다. 예약 이름 `telegram`·`discord` 는 다르다: 등록된 봇을 가리키는 것이 아니라, 채널 플러그인이 `~/.claude/channels/<channel>/` 에 상태를 두는 **전역 채널 봇**을 제어한다. 이 섹션은 전역 봇이 다르게 동작하는 모든 지점을 모아, 위의 프로젝트 봇 흐름이 헷갈리지 않도록 한다.
+
+- **받는 명령.** `up`, `down`, `restart`, `status`, `logs`, `config` 이 `telegram` / `discord` 를 받는다. `add`, `rm`, `rename` 은 이들을 **거부**한다(예약 이름). `imessage`·`fakechat` 도 예약이지만 미구현이라 명령이 "미지원" 메시지로 거부한다.
+- **등록된 작업 디렉터리 없음.** 전역 봇은 레지스트리 항목이 없으므로 작업 디렉터리는 단지 `cctg up` 을 실행한 그 순간의 디렉터리다. `status` 에서 `cwd` 는 실행 중이면 **라이브 세션의 디렉터리**, 정지 상태면 `—` 로 표시된다 — `status` 를 실행한 디렉터리가 아니다.
+- **`up` 단독소유자 가드.** `cctg-<channel>` tmux 세션이 이미 있거나, 상태 디렉터리의 `bot.pid` 에 살아 있는 PID 가 있거나(플러그인 자체 러너 활성), `.env`(토큰) 가 없으면 기동을 거부한다. 세션은 있으나 그 안의 `claude` 가 종료됐으면(**DEAD**) 두 번째를 띄우는 대신 재시작 힌트를 출력한다.
+- **`down` 은 tmux 세션만 정지 — 스냅샷을 뜨지 않는다.** `cctg-<channel>` 세션을 종료하되 플러그인 자체 러너(`bot.pid`)는 건드리지 않는다. 프로젝트 봇과 달리 전역 봇은 **`down` 시 `last-session.log` 스냅샷을 기록하지 않고, 주기 스냅샷터도 절대 돌지 않는다.** 따라서 `cctg logs <channel>` 은 **실행 중일 때만** 의미가 있고, 정지 후에는 대체할 스냅샷이 없어 정지 상태라고 보고한다.
+- **`config` 는 옵션만 수정.** `config telegram|discord [mode|args|snapshot|width|token|…]` 는 프로젝트 봇처럼 전역 봇의 `launch.env`·토큰을 수정하지만, `config <channel> cwd` 는 **거부**된다 — 전역 봇은 바꿀 레지스트리 `cwd` 가 없다.
+
+```console
+$ cctg up telegram        # 현재 디렉터리에서 전역 Telegram 봇 기동
+$ cctg logs telegram      # 실행 중일 때만 의미 있음(down 후에는 스냅샷 없음)
+$ cctg config discord mode acceptEdits
+$ cctg down discord
+```
+
 ## 설정
 
 ### `config`
@@ -263,6 +286,8 @@ cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|of
 ```
 
 `<state>/launch.env` 에 저장되는 봇별 옵션을 보거나 수정한다. 변경은 다음 [`up`](#up) / [`restart`](#restart) 시 적용되며, 봇이 실행 중이면 `cctg` 가 재기동을 안내한다.
+
+> `config` 는 예약 이름 `telegram` / `discord` 도 받아 **전역 채널 봇**의 옵션을 수정할 수 있다 — 단 한 가지 예외로 `config <channel> cwd` 는 거부된다(전역 봇은 바꿀 레지스트리 `cwd` 가 없다). [전역 채널 봇](#전역-채널-봇) 참조.
 
 | 동작 | 의미 |
 |---|---|
@@ -281,14 +306,17 @@ cctg config <name> [show | edit | mode <m|clear> | args <str> | snapshot <초|of
 권한 모델 자체는 [permissions.md](permissions.md) 를 참조한다.
 
 ```console
-$ cctg config proj
+$ cctg config proj                      # show (기본)
+$ cctg config proj edit                 # launch.env 를 $EDITOR 로 연다
 $ cctg config proj mode bypassPermissions
+$ cctg config proj mode clear           # 공통 defaultMode 를 따름
 $ cctg config proj args "--model opus"
 $ cctg config proj snapshot 60
 $ cctg config proj snapshot off
 $ cctg config proj width 200
 $ cctg config proj width clear
 $ cctg config proj cwd ~/new/path/to/proj
+$ cctg config proj token                # 대화형: 토큰을 가려서 입력받음
 $ cctg config proj token --token-stdin
 $ cctg config proj token --token-env NEW_BOT_TOKEN
 ```
@@ -314,12 +342,15 @@ cctg common [show | edit | mode <m> | width <칼럼|clear> | deny add|rm <rule> 
 봇의 유효 폭 해석 순서: 봇별 `width` → env `CC_TG_SESS_WIDTH` → 전역 `common width` → 내장 기본값(`100`). 전체 권한 모델은 [permissions.md](permissions.md) 를 참조한다.
 
 ```console
-$ cctg common
+$ cctg common                            # show (기본)
+$ cctg common edit                       # 공통 설정 파일을 $EDITOR 로 연다
 $ cctg common mode default
 $ cctg common width 160
 $ cctg common width clear
 $ cctg common deny add "Bash(sudo *)"
+$ cctg common deny rm "Bash(sudo *)"
 $ cctg common allow add "Read(~/notes/**)"
+$ cctg common allow rm "Read(~/notes/**)"
 ```
 
 ### `lang`
