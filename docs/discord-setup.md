@@ -182,6 +182,7 @@ Besides DMs, a Discord bot can respond inside server channels. Each `--group` fl
 
 Notes:
 
+- **Finding the IDs**: enable **Developer Mode** in Discord (User Settings → Advanced → Developer Mode), then right-click a channel → **Copy Channel ID**, or right-click a user → **Copy User ID** (the same way you find your own ID for `--id`).
 - **Repeat `--group`** to seed multiple channels.
 - **All channel and member IDs must be numeric** (`^[0-9]+$`). A non-numeric value is refused and the bot is **not** registered (validation happens before the registry is written).
 - **`--group` requires `jq`** to be installed — it builds the variable-key JSON object with `jq`. If `jq` is missing, the command fails. (A plain `cctg add` without `--group` does not need `jq`.) Run `cctg doctor` to check whether `jq` is present.

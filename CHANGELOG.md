@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Discord `add` prompt and docs now say "user ID" instead of "user snowflake"**: the interactive `--id` prompt label (`channel_spec discord id_label`) and the Discord setup guides use "Discord user ID" — the term Discord's own UI uses ("Copy User ID") — because "snowflake" confused users. The channel/member "snowflake" mentions in the `--group` docs were renamed to "ID" for the same reason. Behavior is unchanged; only wording moved. (`lib/channels.sh`, `docs/discord-setup.md`, `docs/discord-setup.ko.md`)
 
 ### Documentation
-- **Discord setup guides lead with `--group`**: a Discord bot is normally used from a server channel, so the `cctg add` step now documents `--group` alongside the command synopsis, the interactive example seeds a channel, and a follow-up note explains that registering without `--group` yields a DM-only bot whose server channels can still be added later via the `/discord:access` skill. (`docs/discord-setup.md`, `docs/discord-setup.ko.md`)
+- **Discord setup guides lead with `--group`**: a Discord bot is normally used from a server channel, so the `cctg add` step now documents `--group` alongside the command synopsis, the interactive example seeds a channel, and a follow-up note explains that registering without `--group` yields a DM-only bot whose server channels can still be added later via the `/discord:access` skill. Step 4 also gains a tip on finding channel/user IDs via Discord's Developer Mode. (`docs/discord-setup.md`, `docs/discord-setup.ko.md`)
 
 ## [0.8.3] - 2026-07-01
 
