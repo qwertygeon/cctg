@@ -28,7 +28,7 @@ The end-to-end flow is:
 1. Install the Discord plugin in Claude Code (once, globally).
 2. Create a **new** Discord application and bot, copy its token, and invite the bot to your server.
 3. Register the bot with `cctg add --channel discord`.
-4. (Optional) Seed server channels with `--group`.
+4. Seed the server channels the bot should answer in with `--group` (the typical setup; skip it for a DM-only bot).
 5. Start it with `cctg up`.
 6. DM the bot, or mention it in a server channel.
 
@@ -40,7 +40,7 @@ Discord registration mirrors [Telegram](telegram-setup.md), but the access model
 
 - **The numeric ID is optional.** For Telegram, your numeric ID is required and seeds an allowlist immediately. For Discord, the ID (`--id`) is optional, and whether you provide it decides your **DM access policy**:
   - **Without `--id`** (default): the bot starts in **pairing** mode. The first time you DM it, the plugin gives you a pairing code, which you approve from your terminal.
-  - **With `--id <your user snowflake>`**: the bot starts in **allowlist** mode and trusts your account right away — no pairing step.
+  - **With `--id <your user ID>`**: the bot starts in **allowlist** mode and trusts your account right away — no pairing step.
 - **Server channels are supported.** Discord bots can also respond inside server channels, seeded with the `--group` flag (see [Step 4](#step-4--server-channels-with---group)). Telegram registration has no equivalent.
 
 ## Step 1 — Install the Discord plugin
@@ -82,29 +82,30 @@ Once the bot is in your server and you have its token, return to CCTG for Step 3
 ## Step 3 — Register the bot with `cctg add`
 
 ```bash
-cctg add <name> <working_dir> --channel discord
+cctg add <name> <working_dir> --channel discord --group <channelId>
 ```
 
 - `<name>` — an identifier for this bot. Use letters, digits, `_`, and `-` only. The names `telegram`, `discord`, `imessage`, and `fakechat` are **reserved** and will be refused.
 - `<working_dir>` — the project directory the bot's Claude Code session runs in (its working directory / cwd).
 - `--channel discord` — selects the Discord channel. (Without it, the channel defaults to Telegram.)
+- `--group <channelId>` — seeds a server channel the bot answers in. Since a Discord bot is normally used from a server channel, you will typically pass at least one. Repeatable, with modifier forms and a `jq` requirement — details in [Step 4](#step-4--server-channels-with---group). Omitting it gives a DM-only bot (see the note after the example below).
 
 ### Interactive registration
 
 Running `cctg add ... --channel discord` with no token flags prompts you for up to three things, in order:
 
 1. **Bot token** — pasted with masked input (your keystrokes are hidden).
-2. **Your Discord user snowflake** — *optional* for Discord. Press Enter to skip it (this selects pairing mode). If you do type one, it must be digits only (`^[0-9]+$`), or `add` refuses it.
+2. **Your Discord user ID** — *optional* for Discord. Press Enter to skip it (this selects pairing mode). If you do type one, it must be digits only (`^[0-9]+$`), or `add` refuses it.
 3. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
 
 Nothing is written to disk until all inputs validate, so a mistyped entry never leaves a half-created bot behind.
 
-Example session, skipping the ID (token masked):
+Example session, seeding one server channel and skipping the ID (token masked):
 
 ```console
-$ cctg add mybot ~/work/mybot --channel discord
+$ cctg add mybot ~/work/mybot --channel discord --group 846209781206941736
 Bot token: ********
-Discord user snowflake:
+Discord user ID:
 Permission mode — pick a number:
   1) bypassPermissions   2) acceptEdits   3) auto
   4) default             5) dontAsk       6) plan
@@ -112,6 +113,8 @@ Permission mode — pick a number:
 Number [1-7, Enter=follow shared]: 1
 Registered: mybot → cwd=/Users/you/work/mybot, state=/Users/you/.claude/channels/mybot
 ```
+
+> **Registered without `--group`?** The bot starts **DM-only** — it does not answer in any server channel until one is seeded. You don't need to re-register: add channels later from your terminal with the `/discord:access` skill (see [Managing access at runtime](#managing-access-at-runtime)).
 
 Registration scaffolds the state directory `~/.claude/channels/<name>/` and:
 
@@ -135,10 +138,10 @@ For Discord, the presence of the numeric ID decides the seeded DM policy:
   /discord:access pair <code>
   ```
 
-- **With `--id <your user snowflake>`**: `access.json` is seeded directly with allowlist mode, skipping pairing:
+- **With `--id <your user ID>`**: `access.json` is seeded directly with allowlist mode, skipping pairing:
 
   ```json
-  { "dmPolicy": "allowlist", "allowFrom": ["<your snowflake>"], "groups": {} }
+  { "dmPolicy": "allowlist", "allowFrom": ["<your user ID>"], "groups": {} }
   ```
 
 ### Non-interactive registration (CI / scripting)
@@ -148,7 +151,7 @@ Supplying a token flag switches `add` to non-interactive mode. The token is neve
 | Flag | Meaning |
 | --- | --- |
 | `--channel discord` | Channel type. Required to select Discord (the default is Telegram). |
-| `--id <num>` | Your Discord user snowflake. **Optional** for Discord — omit it for pairing, provide it for an immediate allowlist. Must match `^[0-9]+$`. |
+| `--id <num>` | Your Discord user ID. **Optional** for Discord — omit it for pairing, provide it for an immediate allowlist. Must match `^[0-9]+$`. |
 | `--token-env <VAR>` | Read the token from environment variable `<VAR>`. |
 | `--token-stdin` | Read the token from standard input. |
 | `--mode <m>` | Permission mode: one of `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`. Optional. |
@@ -168,17 +171,18 @@ secrets get discord-token | cctg add mybot ~/work/mybot --channel discord \
 
 ## Step 4 — Server channels with `--group`
 
-Besides DMs, a Discord bot can respond inside server channels. Each `--group` flag seeds one **channel snowflake** into the `groups` object of `access.json`. A compound token after the channel ID sets that channel's behavior:
+Besides DMs, a Discord bot can respond inside server channels. Each `--group` flag seeds one **channel ID** into the `groups` object of `access.json`. A compound token after the channel ID sets that channel's behavior:
 
 | `--group` form | Effect | Stored as |
 | --- | --- | --- |
 | `--group <channelId>` | Require an @mention; allow all members. | `{ "requireMention": true, "allowFrom": [] }` |
 | `--group <channelId>:nomention` | Respond without an @mention. | `{ "requireMention": false, ... }` |
-| `--group <channelId>:allow=<m1>,<m2>` | Only those member snowflakes can trigger the bot. | `{ ..., "allowFrom": ["<m1>","<m2>"] }` |
+| `--group <channelId>:allow=<m1>,<m2>` | Only those member IDs can trigger the bot. | `{ ..., "allowFrom": ["<m1>","<m2>"] }` |
 | `--group <id>:nomention:allow=<m1>,<m2>` | Combine both modifiers. | `{ "requireMention": false, "allowFrom": ["<m1>","<m2>"] }` |
 
 Notes:
 
+- **Finding the IDs**: enable **Developer Mode** in Discord (User Settings → Advanced → Developer Mode), then right-click a channel → **Copy Channel ID**, or right-click a user → **Copy User ID** (the same way you find your own ID for `--id`).
 - **Repeat `--group`** to seed multiple channels.
 - **All channel and member IDs must be numeric** (`^[0-9]+$`). A non-numeric value is refused and the bot is **not** registered (validation happens before the registry is written).
 - **`--group` requires `jq`** to be installed — it builds the variable-key JSON object with `jq`. If `jq` is missing, the command fails. (A plain `cctg add` without `--group` does not need `jq`.) Run `cctg doctor` to check whether `jq` is present.
