@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-07-02
+
 ### Changed
 - **Discord `add` prompt and docs now say "user ID" instead of "user snowflake"**: the interactive `--id` prompt label (`channel_spec discord id_label`) and the Discord setup guides use "Discord user ID" — the term Discord's own UI uses ("Copy User ID") — because "snowflake" confused users. The channel/member "snowflake" mentions in the `--group` docs were renamed to "ID" for the same reason. Behavior is unchanged; only wording moved. (`lib/channels.sh`, `docs/discord-setup.md`, `docs/discord-setup.ko.md`)
 
@@ -183,7 +185,8 @@ Initial release.
 - `install.sh` with copy and `--dev` (symlink) modes, bash/zsh completions, idempotent shell-rc managed block, and `uninstall.sh` cleanup.
 - `cctg update` driven by an install manifest, and `VERSION`-based `cctg version`.
 
-[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/qwertygeon/cctg/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/qwertygeon/cctg/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/qwertygeon/cctg/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/qwertygeon/cctg/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/qwertygeon/cctg/compare/v0.8.0...v0.8.1
