@@ -28,7 +28,7 @@ channel_spec() {
     discord:token_key)       printf 'DISCORD_BOT_TOKEN' ;;
     discord:token_required)  printf 'yes' ;;
     discord:display)         printf 'Discord' ;;
-    discord:id_label)        printf 'Discord user snowflake' ;;
+    discord:id_label)        printf 'Discord user ID' ;;
     discord:id_required)     printf 'no' ;;
     discord:seed_policy)     printf 'pairing' ;;
     *) return 1 ;;
