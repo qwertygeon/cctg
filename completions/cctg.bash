@@ -60,7 +60,7 @@ _cctg() {
       fi
       ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>] [--group <id>[:nomention][:allow=m1,m2]]
+      # add <name> <cwd> --channel <name> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
       if [ "$COMP_CWORD" -eq 3 ]; then
         COMPREPLY=( $(compgen -d -- "$cur") )
       elif [ "$COMP_CWORD" -ge 4 ]; then

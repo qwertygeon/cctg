@@ -4,9 +4,19 @@
 
 load test_helper
 
-@test "add: records the channel column (default telegram)" {
+@test "add: records the channel column (telegram)" {
   seed_bot mybot
   grep -qE "^mybot \| .* \| .* \| telegram$" "$REGISTRY"
+}
+
+# --channel is required with no default: a channelless non-interactive add must
+# be refused before anything is scaffolded (the old default-to-telegram is gone).
+@test "add without --channel (non-interactive): refused, nothing created" {
+  BOT_TOKEN=tok run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 5
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--channel <name> is required"* ]]
+  ! { [ -f "$REGISTRY" ] && grep -qE "^mybot \|" "$REGISTRY"; }
+  [ ! -d "$CC_CHANNELS_DIR/mybot" ]
 }
 
 @test "add --channel telegram: explicit channel is recorded" {
@@ -38,20 +48,20 @@ load test_helper
 # --- descriptor: IMPLEMENTED_CHANNELS + channel_spec fields (SC-001/004/005/006) ---
 # These source lib/channels.sh directly to assert the descriptor contract.
 
-@test "channel_spec: telegram exposes all 8 fields (SC-004)" {
+@test "channel_spec: telegram exposes all descriptor fields (SC-004)" {
   source "$REPO_ROOT/lib/channels.sh"
   local f
-  for f in plugin statedir_env token_key token_required display id_label id_required seed_policy; do
+  for f in plugin statedir_env token_key token_required token_hint display id_label id_required seed_policy group_prompt; do
     run channel_spec telegram "$f"
     [ "$status" -eq 0 ]
     [ -n "$output" ]
   done
 }
 
-@test "channel_spec: discord exposes all 8 fields (SC-005)" {
+@test "channel_spec: discord exposes all descriptor fields (SC-005)" {
   source "$REPO_ROOT/lib/channels.sh"
   local f
-  for f in plugin statedir_env token_key token_required display id_label id_required seed_policy; do
+  for f in plugin statedir_env token_key token_required token_hint display id_label id_required seed_policy group_prompt; do
     run channel_spec discord "$f"
     [ "$status" -eq 0 ]
     [ -n "$output" ]
@@ -63,6 +73,13 @@ load test_helper
   run channel_spec discord display;      [ "$output" = "Discord" ]
   run channel_spec discord id_required;  [ "$output" = "no" ]
   run channel_spec discord seed_policy;  [ "$output" = "pairing" ]
+}
+
+# The interactive group-seed loop is descriptor-gated: only discord opts in.
+@test "channel_spec: group_prompt is yes for discord, no for telegram" {
+  source "$REPO_ROOT/lib/channels.sh"
+  run channel_spec discord group_prompt;  [ "$output" = "yes" ]
+  run channel_spec telegram group_prompt; [ "$output" = "no" ]
 }
 
 @test "channel_spec: an unimplemented channel field returns non-zero" {

@@ -80,7 +80,7 @@ _cctg() {
         esac
       fi ;;
     add)
-      # add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <name>] [--group <id>[:nomention][:allow=m1,m2]]
+      # add <name> <cwd> --channel <name> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
       if (( CURRENT == 4 )); then
         _files -/
       elif (( CURRENT >= 5 )); then

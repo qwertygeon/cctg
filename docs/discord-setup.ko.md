@@ -87,31 +87,43 @@ cctg add <name> <working_dir> --channel discord --group <channelId>
 
 - `<name>` — 이 봇의 식별자. 문자, 숫자, `_`, `-` 만 사용한다. `telegram`, `discord`, `imessage`, `fakechat` 은 **예약어**이며 거부된다.
 - `<working_dir>` — 봇의 Claude Code 세션이 실행되는 프로젝트 디렉터리(작업 디렉터리 / cwd).
-- `--channel discord` — Discord 채널을 선택한다. (지정하지 않으면 채널은 Telegram 이 기본값이다.)
+- `--channel discord` — Discord 채널을 선택한다. **채널은 필수 입력이며 기본값이 없다.** 플래그를 생략하면 대화형 `add` 가 번호 메뉴로 채널을 묻고, 비대화형 `add`(토큰 플래그 지정)는 등록을 거부한다.
 - `--group <channelId>` — 봇이 응답할 서버 채널을 시드한다. Discord 봇은 보통 서버 채널에 추가해 사용하므로 일반적으로 최소 하나는 지정하게 된다. 반복 가능하며 수식어 형식·`jq` 요구사항이 있다 — 상세는 [4단계](#4단계--group-으로-서버-채널-추가). 생략하면 DM 전용 봇이 된다 (아래 예시 다음의 노트 참조).
 
 ### 대화형 등록
 
-토큰 플래그 없이 `cctg add ... --channel discord` 를 실행하면 최대 세 가지를 순서대로 묻는다.
+토큰 플래그 없이 `cctg add` 를 실행하면 최대 다섯 가지를 순서대로 묻는다.
 
-1. **봇 토큰** — 가려진 입력으로 붙여넣는다(입력한 키가 화면에 보이지 않는다).
-2. **본인 Discord user ID** — Discord 에서는 *선택 사항*이다. Enter 로 건너뛸 수 있다(이 경우 페어링 모드가 선택된다). 입력한다면 숫자만(`^[0-9]+$`) 가능하며, 아니면 `add` 가 거부한다.
-3. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
+1. **채널** — 번호 메뉴(필수, 기본값 없음). 번호나 채널명으로 `discord` 를 고른다. 명령줄에 `--channel discord` 를 주면 이 질문은 건너뛴다. 빈 입력은 필수임을 안내하고 다시 묻는다 — 채널 없이는 등록이 진행되지 않는다.
+2. **봇 토큰** — 가려진 입력으로 붙여넣는다(입력한 키가 화면에 보이지 않는다).
+3. **본인 Discord user ID** — Discord 에서는 *선택 사항*이다. Enter 로 건너뛸 수 있다(이 경우 페어링 모드가 선택된다). 입력한다면 숫자만(`^[0-9]+$`) 가능하며, 아니면 `add` 가 거부한다.
+4. **서버 채널** — 루프(Discord 전용): 채널 ID, @멘션됐을 때만 응답할지(`Y/n`), 허용 멤버 목록(쉼표 구분, 비우면 모든 멤버)을 차례로 입력한다. 채널 ID 에 빈 입력을 주면 루프가 끝난다. 명령줄에 `--group` 을 줬거나(플래그 우선) `jq` 가 없으면(안내 출력) 건너뛴다.
+5. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
 
 모든 입력이 검증되기 전에는 디스크에 아무것도 쓰지 않으므로, 잘못 입력해도 반쪽 생성된 봇이 남지 않는다.
 
-서버 채널 하나를 시드하고 ID 는 건너뛰는 예시 세션(토큰 가려짐):
+서버 채널 하나를 대화형으로 시드하고 ID 는 건너뛰는 예시 세션(토큰 가려짐):
 
 ```console
-$ cctg add mybot ~/work/mybot --channel discord --group 846209781206941736
-Bot token: ********
-Discord user ID:
-Permission mode — pick a number:
+$ cctg add mybot ~/work/mybot
+채널 — 번호를 고르세요 (필수):
+  1) telegram
+  2) discord
+번호 [1-2] 또는 채널명: 2
+봇 토큰 입력 (Discord Developer Portal, Bot tab): ********
+본인 Discord user ID:
+봇이 응답할 서버 채널 등록 (빈 줄 입력 시 종료; 나중에 /access 스킬로도 추가 가능):
+채널 ID (비우면 종료): 846209781206941736
+@멘션됐을 때만 응답할까요? [Y/n]:
+허용 멤버 ID (쉼표 구분, 비우면 모든 멤버):
+  채널 846209781206941736 추가됨
+채널 ID (비우면 종료):
+권한 모드 — 번호를 고르세요:
   1) bypassPermissions   2) acceptEdits   3) auto
   4) default             5) dontAsk       6) plan
-  7) (follow shared)
-Number [1-7, Enter=follow shared]: 1
-Registered: mybot → cwd=/Users/you/work/mybot, state=/Users/you/.claude/channels/mybot
+  7) (공통 따름)
+번호 [1-7, 엔터=공통 따름]: 1
+등록 완료: mybot → cwd=/Users/you/work/mybot, state=/Users/you/.claude/channels/mybot
 ```
 
 > **`--group` 없이 등록했다면?** 봇은 **DM 전용**으로 시작한다 — 서버 채널이 시드되기 전까지는 어떤 서버 채널에서도 응답하지 않는다. 재등록할 필요는 없다: 터미널에서 `/discord:access` 스킬로 나중에 채널을 추가할 수 있다 ([런타임 접근 관리](#런타임-접근-관리) 참조).
@@ -150,7 +162,7 @@ Discord 에서는 숫자 ID 의 제공 여부가 시드되는 DM 정책을 결�
 
 | 플래그 | 의미 |
 | --- | --- |
-| `--channel discord` | 채널 타입. Discord 를 선택하려면 필수다(기본값은 Telegram). |
+| `--channel discord` | 채널 타입. 비대화형에서는 필수 — 기본값이 없다. |
 | `--id <num>` | 본인 Discord user ID. Discord 에서는 **선택** — 페어링은 생략, 즉시 허용목록은 제공. `^[0-9]+$` 와 일치해야 한다. |
 | `--token-env <VAR>` | 환경 변수 `<VAR>` 에서 토큰을 읽는다. |
 | `--token-stdin` | 표준 입력에서 토큰을 읽는다. |

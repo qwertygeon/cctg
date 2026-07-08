@@ -4,7 +4,7 @@
 load test_helper
 
 @test "add: registers and scaffolds .env/access.json/launch.env/inbox" {
-  BOT_TOKEN="abc123" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 777
+  BOT_TOKEN="abc123" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 777
   [ "$status" -eq 0 ]
   [[ "$output" == *"Registered: mybot"* ]]
 
@@ -23,7 +23,7 @@ load test_helper
 }
 
 @test "add: access.json is valid JSON seeding the given id into the allowlist" {
-  BOT_TOKEN="abc" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 12345
+  BOT_TOKEN="abc" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 12345
   [ "$status" -eq 0 ]
   run jq -r '.allowFrom[0]' "$CC_CHANNELS_DIR/mybot/access.json"
   [ "$status" -eq 0 ]
@@ -51,31 +51,31 @@ load test_helper
 
 @test "add: refuses a duplicate registration" {
   seed_bot mybot
-  BOT_TOKEN="x" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 1
+  BOT_TOKEN="x" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 1
   [ "$status" -ne 0 ]
   [[ "$output" == *"already registered: mybot"* ]]
 }
 
 @test "add: refuses an invalid permission mode" {
-  BOT_TOKEN="x" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 1 --mode bogus
+  BOT_TOKEN="x" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 1 --mode bogus
   [ "$status" -ne 0 ]
   [[ "$output" == *"invalid permission mode"* ]]
 }
 
 @test "add: rejects an empty token" {
-  EMPTYTOK="" run cctg add mybot "$WORK" --token-env EMPTYTOK --id 1
+  EMPTYTOK="" run cctg add mybot "$WORK" --channel telegram --token-env EMPTYTOK --id 1
   [ "$status" -ne 0 ]
   [[ "$output" == *"token is empty"* ]]
 }
 
 @test "add: rejects a non-numeric telegram id" {
-  BOT_TOKEN="x" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id abc
+  BOT_TOKEN="x" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id abc
   [ "$status" -ne 0 ]
   [[ "$output" == *"not a numeric ID"* ]]
 }
 
 @test "add: non-interactive without --id is refused" {
-  BOT_TOKEN="x" run cctg add mybot "$WORK" --token-env BOT_TOKEN
+  BOT_TOKEN="x" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN
   [ "$status" -ne 0 ]
   [[ "$output" == *"requires --id"* ]]
 }
@@ -89,7 +89,7 @@ load test_helper
 @test "add: refuses a state dir already holding a foreign channel bot" {
   mkdir -p "$CC_CHANNELS_DIR/foo"
   printf 'X=1\n' > "$CC_CHANNELS_DIR/foo/.env"   # foreign: .env present, no launch.env
-  BOT_TOKEN="x" run cctg add foo "$WORK" --token-env BOT_TOKEN --id 1
+  BOT_TOKEN="x" run cctg add foo "$WORK" --channel telegram --token-env BOT_TOKEN --id 1
   [ "$status" -ne 0 ]
   [[ "$output" == *"another channel bot's state"* ]]
 }
@@ -208,45 +208,46 @@ load test_helper
 # ---------------------------------------------------------------------------
 # v0.5.1/001-add-flow-hardening: interactive permission-mode menu (DEC-002),
 # validate-before-write (DEC-003), and pre-registration cleanup (DEC-004).
-# Interactive add prompts in order: token (silent), channel id, mode menu.
-# Driven by piping those three lines into a fresh `bash cc-tg.sh add` process.
+# Interactive add prompts in order: channel menu (required, no default), token
+# (silent), channel id, [discord only: group loop], mode menu. Driven by piping
+# those lines into a fresh `bash cc-tg.sh add` process ('1' selects telegram).
 # ---------------------------------------------------------------------------
 
 @test "add: interactive mode menu choice 1 selects bypassPermissions (DEC-002 order)" {
-  printf 'tok\n555\n1\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\n1\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   grep -q "CCTG_PERMISSION_MODE='bypassPermissions'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu choice 2 selects acceptEdits (DEC-002 order)" {
-  printf 'tok\n555\n2\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\n2\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu Enter follows shared (no per-bot mode)" {
-  printf 'tok\n555\n\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\n\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   # template default left empty (set_env_kv not invoked)
   grep -q '^CCTG_PERMISSION_MODE=$' "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu choice 7 also follows shared" {
-  printf 'tok\n555\n7\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\n7\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   grep -q '^CCTG_PERMISSION_MODE=$' "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu accepts a typed mode name" {
-  printf 'tok\n555\nplan\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\nplan\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   grep -q "CCTG_PERMISSION_MODE='plan'" "$CC_CHANNELS_DIR/mybot/launch.env"
 }
 
 @test "add: interactive mode menu re-prompts on invalid choice then accepts a valid one" {
   # 99 (out of range) and bogus (unknown) are rejected; 2 finally selected.
-  printf 'tok\n555\n99\nbogus\n2\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\n99\nbogus\n2\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"
   grep -qE '^mybot \|' "$REGISTRY"
 }
 
 @test "add: invalid interactive id writes nothing — no half-state (DEC-003)" {
-  run bash -c "printf 'tok\nabc\n' | bash '$CCTG' add mybot '$WORK'"
+  run bash -c "printf '1\ntok\nabc\n' | bash '$CCTG' add mybot '$WORK'"
   [ "$status" -ne 0 ]
   [[ "$output" == *"not a numeric ID"* ]]
   # validate-before-write: the state dir was never created
@@ -262,7 +263,7 @@ load test_helper
 }
 
 @test "add: .env written atomically via write_token_env — content, 600, no temp residue" {
-  BOT_TOKEN="atomictok" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 1
+  BOT_TOKEN="atomictok" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 1
   [ "$status" -eq 0 ]
   grep -q "^TELEGRAM_BOT_TOKEN='atomictok'\$" "$CC_CHANNELS_DIR/mybot/.env"
   [ "$(file_mode "$CC_CHANNELS_DIR/mybot/.env")" = "600" ]
@@ -273,7 +274,7 @@ load test_helper
 
 @test "add: write_atomic leaves no .tmp residue and preserves prior registry lines" {
   seed_bot first
-  BOT_TOKEN=x run cctg add second "$WORK" --token-env BOT_TOKEN --id 1
+  BOT_TOKEN=x run cctg add second "$WORK" --channel telegram --token-env BOT_TOKEN --id 1
   [ "$status" -eq 0 ]
   # no .tmp.* staging residue in the channels dir or any state dir (access.json/launch.env/registry)
   run bash -c 'ls "$CC_CHANNELS_DIR"/.tmp.* "$CC_CHANNELS_DIR"/*/.tmp.* 2>/dev/null'
@@ -285,11 +286,90 @@ load test_helper
 
 @test "add: a failed attempt leaves no foreign-statedir dead-end — retry succeeds (DEC-004)" {
   # First attempt dies on a bad id (after token), creating no state dir.
-  run bash -c "printf 'tok\nabc\n' | bash '$CCTG' add mybot '$WORK'"
+  run bash -c "printf '1\ntok\nabc\n' | bash '$CCTG' add mybot '$WORK'"
   [ "$status" -ne 0 ]
   [ ! -e "$CC_CHANNELS_DIR/mybot" ]
   # Retry with the same name now registers cleanly (no ERR_FOREIGN_STATEDIR).
-  printf 'tok\n555\n1\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  printf '1\ntok\n555\n1\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
   grep -qE '^mybot \|' "$REGISTRY"
   [ -f "$CC_CHANNELS_DIR/mybot/launch.env" ]
+}
+
+# ---------------------------------------------------------------------------
+# Required channel (no default) + interactive channel menu + interactive
+# discord group loop. The channel is the first interactive prompt; entering
+# nothing re-prompts (it is mandatory), and non-interactive add without
+# --channel is refused before anything is written.
+# ---------------------------------------------------------------------------
+
+@test "add: non-interactive without --channel is refused, nothing registered" {
+  BOT_TOKEN="x" run cctg add mybot "$WORK" --token-env BOT_TOKEN --id 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--channel <name> is required"* ]]
+  [ ! -e "$CC_CHANNELS_DIR/mybot" ]
+  ! { [ -f "$REGISTRY" ] && grep -qE "^mybot \|" "$REGISTRY"; }
+}
+
+@test "add: interactive channel menu choice 2 selects discord" {
+  # channel=2 (discord), token, empty id (pairing), empty group id (done), mode Enter
+  printf '2\ntok\n\n\n\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  grep -qE "^mybot \| .* \| .* \| discord$" "$REGISTRY"
+  jq -e '.dmPolicy == "pairing"' "$CC_CHANNELS_DIR/mybot/access.json"
+}
+
+@test "add: interactive channel menu accepts a typed channel name" {
+  printf 'discord\ntok\n\n\n\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  grep -qE "^mybot \| .* \| .* \| discord$" "$REGISTRY"
+}
+
+@test "add: interactive empty/invalid channel re-prompts until a choice is made" {
+  # empty ("required" notice), 99 (out of range), bogus (unknown), then 1=telegram
+  run bash -c "printf '\n99\nbogus\n1\ntok\n555\n\n' | bash '$CCTG' add mybot '$WORK'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"required"* ]]
+  grep -qE "^mybot \| .* \| .* \| telegram$" "$REGISTRY"
+}
+
+@test "add: interactive channel EOF aborts — channel is mandatory, no half-state" {
+  run bash -c "printf '' | bash '$CCTG' add mybot '$WORK'"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--channel <name> is required"* ]]
+  [ ! -e "$CC_CHANNELS_DIR/mybot" ]
+}
+
+@test "add: interactive discord group loop seeds nomention + allow members" {
+  # channel=2, token, empty id, group id, mention=n, allow=111,222, done, mode Enter
+  printf '2\ntok\n\n846209781206941736\nn\n111,222\n\n\n' \
+    | bash "$CCTG" add mybot "$WORK" >/dev/null
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.groups["846209781206941736"].requireMention == false' "$aj"
+  jq -e '.groups["846209781206941736"].allowFrom == ["111","222"]' "$aj"
+}
+
+@test "add: interactive discord group defaults — mention required, all members" {
+  # group id, mention=Enter (default yes), allow=Enter (everyone)
+  printf '2\ntok\n\n846209781206941736\n\n\n\n\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  local aj="$CC_CHANNELS_DIR/mybot/access.json"
+  jq -e '.groups["846209781206941736"].requireMention == true' "$aj"
+  jq -e '.groups["846209781206941736"].allowFrom == []' "$aj"
+}
+
+@test "add: interactive discord non-numeric group id re-prompts, then accepts" {
+  printf '2\ntok\n\nabc\n846209781206941736\n\n\n\n\n' | bash "$CCTG" add mybot "$WORK" >/dev/null
+  jq -e '.groups | has("846209781206941736")' "$CC_CHANNELS_DIR/mybot/access.json"
+}
+
+@test "add: interactive telegram never prompts for groups" {
+  run bash -c "printf '1\ntok\n555\n\n' | bash '$CCTG' add mybot '$WORK'"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Channel ID"* ]]
+  jq -e '.groups == {}' "$CC_CHANNELS_DIR/mybot/access.json"
+}
+
+@test "add: --group flag suppresses the interactive discord group loop" {
+  # groups given on the CLI → no group prompts; stdin only needs channelless prompts
+  run bash -c "printf '2\ntok\n\n\n' | bash '$CCTG' add mybot '$WORK' --group 555000111"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Channel ID"* ]]
+  jq -e '.groups | has("555000111")' "$CC_CHANNELS_DIR/mybot/access.json"
 }

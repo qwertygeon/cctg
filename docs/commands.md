@@ -38,7 +38,7 @@
 
 ```
 cctg <command> [args]
-  add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
+  add <name> <cwd> --channel telegram|discord [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
   config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>|width <cols|clear>|cwd <path>|token]
   common [...]
@@ -66,19 +66,21 @@ Every subcommand accepts `--help` (or `-h`) to print a one-line usage summary an
 ### `add`
 
 ```
-cctg add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
+cctg add <name> <cwd> --channel telegram|discord [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
 ```
 
 Registers a new bot for the working directory `<cwd>` and scaffolds its state directory at `~/.claude/channels/<name>/`. The state directory holds the bot token (`.env`, mode `600`), the access policy (`access.json`), an `inbox/`, and per-bot options (`launch.env`).
 
 All inputs are validated **before anything is written**, so a mistyped entry never leaves a half-created bot behind. `add` refuses: a reserved name (`telegram`/`discord`/`imessage`/`fakechat`), a name that is already registered, and a **pre-existing state directory that looks like another channel bot's** — one that exists and has no CCTG `launch.env` but does contain a `.env` or `access.json`. An empty token, an unknown flag, or an invalid `--channel` value is also refused.
 
-`add` is **interactive by default** — it prompts for the token (masked), the channel ID, and the permission mode. Supplying either `--token-env` or `--token-stdin` switches it to **non-interactive mode**, where it never prompts: for Telegram you must then also pass `--id`, and the permission mode follows the shared policy unless `--mode` is given.
+`add` is **interactive by default** — it prompts for the channel (a numbered menu; also accepts the channel name), the token (masked), the channel ID, for Discord the server channels to answer in, and the permission mode. Supplying either `--token-env` or `--token-stdin` switches it to **non-interactive mode**, where it never prompts: you must then pass `--channel`, for Telegram also `--id`, and the permission mode follows the shared policy unless `--mode` is given.
 
-Channel behavior differs by `--channel` (default `telegram`):
+**The channel is required and has no default.** Interactively, an empty answer at the channel menu re-prompts until a channel is chosen; non-interactively, omitting `--channel` aborts the registration with an error before anything is written.
+
+Channel behavior differs by channel:
 
 - **Telegram** — an ID is required (non-interactively, via `--id`). The given ID seeds the allowlist (DM policy `allowlist`, `allowFrom: ["<id>"]`), so no pairing is needed.
-- **Discord** — the ID is optional. Without an ID the bot starts with the `pairing` DM policy and an empty allowlist; pair from the channel afterward.
+- **Discord** — the ID is optional. Without an ID the bot starts with the `pairing` DM policy and an empty allowlist; pair from the channel afterward. Interactive `add` also walks a **server-channel loop**: enter a channel ID, whether the bot answers only when @mentioned, and an optional comma-separated member allowlist; an empty channel ID finishes the loop. `--group` on the command line skips the loop (flags win), and without `jq` the loop is skipped with a notice. Channels can always be added later via the `/discord:access` skill.
 
 For full first-time setup walkthroughs see [telegram-setup.md](telegram-setup.md) and [discord-setup.md](discord-setup.md).
 
@@ -86,15 +88,15 @@ Flags:
 
 | Flag | Meaning |
 |---|---|
-| `--channel telegram\|discord` | Channel type. Default `telegram`. |
+| `--channel telegram\|discord` | Channel type. **Required in non-interactive mode; no default.** Interactive `add` asks via a menu when the flag is omitted. |
 | `--id <num>` | Numeric channel ID. Required for Telegram in non-interactive mode; optional for Discord. Must match `^[0-9]+$`. |
 | `--token-env <VAR>` | Read the bot token from environment variable `VAR`. Switches to non-interactive mode. The token is never passed on `argv` (it would leak in the process list). The `<VAR>` name must match `^[A-Za-z_][A-Za-z0-9_]*$` or `add` refuses it (same rule for `config <name> token --token-env`). |
 | `--token-stdin` | Read the bot token from stdin. Switches to non-interactive mode. |
 | `--mode <m>` | Permission mode: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, or `plan`. |
-| `--group <id>[:nomention][:allow=csv]` | Discord server-channel access (repeatable). `id` must be numeric; `:nomention` clears the mention requirement; `:allow=csv` is a comma-separated list of numeric member IDs. An **unrecognized modifier** (e.g. a typo like `nomeniton`) is rejected, not silently ignored, and every id/member is numeric-validated before any write. Requires `jq`. |
+| `--group <id>[:nomention][:allow=csv]` | Discord server-channel access (repeatable). `id` must be numeric; `:nomention` clears the mention requirement; `:allow=csv` is a comma-separated list of numeric member IDs. An **unrecognized modifier** (e.g. a typo like `nomeniton`) is rejected, not silently ignored, and every id/member is numeric-validated before any write. Requires `jq`. When omitted, interactive Discord `add` collects the same data via prompts. |
 
 ```console
-$ cctg add proj ~/code/proj                      # interactive: prompts for token, ID, and mode
+$ cctg add proj ~/code/proj                      # interactive: prompts for channel, token, ID, (discord: server channels,) and mode
 $ cctg add proj ~/code/proj --channel telegram --id 123456789 --token-env PROJ_BOT_TOKEN --mode acceptEdits
 $ cctg add mybot ~/code/mybot --channel discord --token-stdin              # no --id → Discord pairing
 $ cctg add mybot ~/code/mybot --channel discord --token-stdin --id 18469…  # --id → Discord allowlist

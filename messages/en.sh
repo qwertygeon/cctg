@@ -16,7 +16,7 @@ CCTG_MSG_ERR_BAD_LOG_N="ERROR: line count must be a number: '%s'\n"
 CCTG_MSG_WARN_SNAPSHOT_FAILED="warning: snapshot watcher did not start for '%s' (snapshots disabled this run)\n"
 CCTG_MSG_WARN_NO_TMUX="warning: tmux not found on PATH — running/live state unavailable (bots may show as stopped/broken)\n"
 
-CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n                         register a project bot (flags = non-interactive; telegram needs --id)\n                         --channel telegram|discord; --group seeds a discord server channel (repeatable)\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>|width <cols|clear>|cwd <path>|token]\n                         view/edit per-bot options (permission mode, extra args, log snapshot, width, cwd, token)\n  common [show|edit|mode <m>|width <cols|clear>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status [--json] [-a]   run status (default: running/dead/broken; -a/--all adds stopped + activity)\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
+CCTG_MSG_USAGE="Usage: %s <command> [args]\n  add <name> <cwd> --channel <ch> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=ids]]\n                         register a project bot (flags = non-interactive; telegram needs --id)\n                         --channel telegram|discord — required, no default (interactive add asks via a menu)\n                         --group seeds a discord server channel (repeatable; interactive discord add also asks)\n  rm  <name> [--purge]   unregister (--purge: also delete the state directory)\n  rename <old> <new> [--keep-dir]\n                         rename (default: also move the state directory.\n                         --keep-dir: keep the directory path, rename only)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <secs|off>|width <cols|clear>|cwd <path>|token]\n                         view/edit per-bot options (permission mode, extra args, log snapshot, width, cwd, token)\n  common [show|edit|mode <m>|width <cols|clear>|deny add|rm <rule>|allow add|rm <rule>]\n                         view/edit shared permission policy (applies to all bots)\n  up   <name|all>        start\n  down <name|all>        stop\n  restart <name|all>     restart (down + up)\n  status [--json] [-a]   run status (default: running/dead/broken; -a/--all adds stopped + activity)\n  logs <name> [N]        last N log lines (default 50, without attaching)\n  attach <name>          attach tmux session (detach: Ctrl-b d)\n  lang [show|en|ko|clear]  view/change CLI output language\n  doctor                 diagnose dependencies, PATH, registry\n  update                 git pull then re-install\n  version                print version\n  help                   this help\n\nName rules: letters/digits/_/- only. Global channel names (telegram/discord/imessage/fakechat) are reserved.\n"
 
 # Shared fragments
 CCTG_MSG_FOLLOW_SHARED="follow shared"
@@ -52,7 +52,13 @@ CCTG_MSG_MULTI_SUMMARY_OK="— %s: %d succeeded —\n"
 CCTG_MSG_MULTI_SUMMARY_FAIL="— %s: %d succeeded, %d failed (failed: %s) —\n"
 
 # add
-CCTG_MSG_ADD_PROMPT_TOKEN="Bot token (issued by @BotFather, must be a NEW bot): "
+CCTG_MSG_ADD_CHANNEL_MENU_HEADER="Channel — pick a number (required):\n"
+CCTG_MSG_ADD_CHANNEL_MENU_ITEM="  %d) %s\n"
+CCTG_MSG_ADD_PROMPT_CHANNEL_PS3="Number [1-%d] or channel name: "
+CCTG_MSG_ERR_ADD_CHANNEL_REQUIRED="The channel is required — enter a number or channel name to continue.\n"
+CCTG_MSG_ERR_ADD_CHANNEL_CHOICE="Invalid choice — enter a listed number or channel name (%s).\n"
+CCTG_MSG_ERR_ADD_NEED_CHANNEL="ERROR: --channel <name> is required (valid: %s) — no default is applied; registration aborted\n"
+CCTG_MSG_ADD_PROMPT_TOKEN="Bot token (%s): "
 CCTG_MSG_ERR_EMPTY_TOKEN="ERROR: token is empty\n"
 CCTG_MSG_ADD_PROMPT_TGID="Your %s: "
 CCTG_MSG_ERR_NOT_NUMERIC_ID="ERROR: not a numeric ID: '%s'\n"
@@ -68,6 +74,14 @@ CCTG_MSG_ERR_ADD_NEED_ID="ERROR: non-interactive add (--token-env/--token-stdin)
 CCTG_MSG_ERR_ADD_BAD_GROUP_ID="ERROR: --group channel id must be numeric: '%s'\n"
 CCTG_MSG_ERR_ADD_BAD_GROUP_MEMBER="ERROR: --group allow member must be numeric: '%s'\n"
 CCTG_MSG_ERR_ADD_BAD_GROUP_MOD="ERROR: unknown --group modifier '%s' (channel %s) — valid: nomention, allow=<ids>\n"
+CCTG_MSG_ADD_GROUP_INTRO="Server channels the bot should answer in (Enter on an empty line to finish; add more later via the /access skill):\n"
+CCTG_MSG_ADD_PROMPT_GROUP_ID="Channel ID (empty = done): "
+CCTG_MSG_ERR_ADD_GROUP_ID_RETRY="Channel ID must be numeric: '%s' — try again.\n"
+CCTG_MSG_ADD_PROMPT_GROUP_MENTION="Respond only when @mentioned? [Y/n]: "
+CCTG_MSG_ADD_PROMPT_GROUP_ALLOW="Allowed member IDs, comma-separated (empty = every member): "
+CCTG_MSG_ERR_ADD_GROUP_ALLOW_RETRY="Member IDs must be numeric, comma-separated — try again (empty = every member).\n"
+CCTG_MSG_ADD_GROUP_ADDED="  added channel %s\n"
+CCTG_MSG_ADD_GROUP_SKIP_NO_JQ="note: jq not found — skipping the server-channel prompts. Install jq and use --group, or add channels later via the /access skill.\n"
 CCTG_MSG_ERR_CHANNEL_UNSUPPORTED="ERROR: channel '%s' is not supported yet (implemented: %s)\n"
 CCTG_MSG_ADD_DONE="Registered: %s → cwd=%s, state=%s\n"
 CCTG_MSG_ADD_DONE_ALLOWLIST="  seeded %s into the allowlist (no pairing needed)\n"
@@ -218,7 +232,7 @@ CCTG_MSG_RESERVED_DOWN_NONE="No session: %s. Only tmux sessions started by cctg 
 CCTG_MSG_STATUS_RESERVED_HEADER="--- global channel bots ---\n"
 
 # sub-command usage (신규 — FR-005, 16개 서브커맨드)
-CCTG_MSG_USAGE_ADD="Usage: %s add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n"
+CCTG_MSG_USAGE_ADD="Usage: %s add <name> <cwd> --channel <ch> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=ids]]\n"
 CCTG_MSG_USAGE_RM="Usage: %s rm <name> [--purge]\n"
 CCTG_MSG_USAGE_RENAME="Usage: %s rename <old> <new> [--keep-dir]\n"
 CCTG_MSG_USAGE_CONFIG="Usage: %s config <name> [show | edit | mode <mode|clear> | args <string> | snapshot <seconds|off> | width <cols|clear> | cwd <path> | token [--token-env VAR|--token-stdin]]\n"

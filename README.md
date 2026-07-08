@@ -95,13 +95,18 @@ Now register the bot. `<name>` is any label (letters/digits/`_`/`-`); `<dir>` is
 cctg add myproject ~/work/myproject
 ```
 
-`add` prompts you for the token (masked), your numeric ID, and a permission mode. It scaffolds the state directory, stores the token with `600` permissions, and seeds the `access.json` allowlist with your ID — so **no separate pairing step is needed** for Telegram.
+`add` prompts you for the channel (required — there is no default), the token (masked), your numeric ID, and a permission mode. It scaffolds the state directory, stores the token with `600` permissions, and seeds the `access.json` allowlist with your ID — so **no separate pairing step is needed** for Telegram.
 
 ```console
 $ cctg add myproject ~/work/myproject
+Channel — pick a number (required):
+  1) telegram
+  2) discord
+Number [1-2] or channel name: 1
 Bot token (issued by @BotFather, must be a NEW bot): ********
 Your Telegram numeric ID: 123456789
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
+Permission mode — pick a number:
+  ...
 Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
   seeded 123456789 into the allowlist (no pairing needed)
 ```
@@ -139,7 +144,7 @@ That's it. Stop with `cctg down myproject`, restart with `cctg restart myproject
 
 ```text
 cctg <command> [args]
-  add <name> <cwd> [--channel telegram|discord] [--id <num>]
+  add <name> <cwd> --channel telegram|discord [--id <num>]
                    [--token-env <VAR>|--token-stdin] [--mode <m>] [--group ...]
   rm <name> [--purge]      rename <old> <new> [--keep-dir]
   up <name...|all>         down <name...|all>       restart <name...|all>

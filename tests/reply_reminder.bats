@@ -53,7 +53,7 @@ REMINDER() { printf '%s' "$CC_CHANNELS_DIR/cctg-reply-reminder.txt"; }
 }
 
 @test "add: seeds the reply-reminder and prints the ON notice" {
-  run env BOT_TOKEN=tok bash "$CCTG" add mybot "$WORK" --token-env BOT_TOKEN --id 555
+  run env BOT_TOKEN=tok bash "$CCTG" add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 555
   [ "$status" -eq 0 ]
   [ -s "$(REMINDER)" ]
   [[ "$output" == *"reply-reminder: ON"* ]]

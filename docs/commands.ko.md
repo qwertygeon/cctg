@@ -38,7 +38,7 @@
 
 ```
 cctg <command> [args]
-  add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
+  add <name> <cwd> --channel telegram|discord [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
   rm <name> [--purge]          rename <old> <new> [--keep-dir]
   config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|width <칼럼|clear>|cwd <경로>|token]
   common [...]
@@ -66,19 +66,21 @@ cctg <command> [args]
 ### `add`
 
 ```
-cctg add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
+cctg add <name> <cwd> --channel telegram|discord [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
 ```
 
 작업 디렉터리 `<cwd>` 에 대한 새 봇을 등록하고 상태 디렉터리를 `~/.claude/channels/<name>/` 에 스캐폴딩한다. 상태 디렉터리에는 봇 토큰(`.env`, 권한 `600`), 접근 정책(`access.json`), `inbox/`, 봇별 옵션(`launch.env`) 이 들어간다.
 
 모든 입력은 **디스크에 쓰기 전에** 검증되므로, 오타가 반쪽짜리 봇을 남기지 않는다. `add` 는 다음을 거부한다: 예약 이름(`telegram`/`discord`/`imessage`/`fakechat`), 이미 등록된 이름, 그리고 **다른 채널 봇처럼 보이는 기존 상태 디렉터리** — 디렉터리가 존재하고 CCTG `launch.env` 는 없으나 `.env` 또는 `access.json` 이 있는 경우. 빈 토큰·미지 플래그·잘못된 `--channel` 값도 거부한다.
 
-`add` 는 **기본적으로 대화형**이다 — 토큰(가림 입력), 채널 ID, 권한 모드를 프롬프트로 묻는다. `--token-env` 나 `--token-stdin` 을 주면 **비대화형 모드**로 전환되어 아무것도 묻지 않는다. 이때 Telegram 은 `--id` 도 함께 줘야 하며, 권한 모드는 `--mode` 를 주지 않으면 공통 정책을 따른다.
+`add` 는 **기본적으로 대화형**이다 — 채널(번호 메뉴, 채널명 직접 입력도 수용), 토큰(가림 입력), 채널 ID, Discord 는 응답할 서버 채널, 권한 모드를 프롬프트로 묻는다. `--token-env` 나 `--token-stdin` 을 주면 **비대화형 모드**로 전환되어 아무것도 묻지 않는다. 이때 `--channel` 이 필수이고, Telegram 은 `--id` 도 함께 줘야 하며, 권한 모드는 `--mode` 를 주지 않으면 공통 정책을 따른다.
 
-채널 동작은 `--channel`(기본 `telegram`) 에 따라 다르다.
+**채널은 필수 입력이며 기본값이 없다.** 대화형에서는 채널 메뉴에 빈 입력을 주면 필수임을 안내하고 다시 묻는다. 비대화형에서 `--channel` 을 생략하면 아무것도 쓰기 전에 오류로 등록을 중단한다.
+
+채널 동작은 채널에 따라 다르다.
 
 - **Telegram** — ID 가 필수다(비대화형에서는 `--id` 로). 준 ID 가 allowlist 를 시드하므로(DM 정책 `allowlist`, `allowFrom: ["<id>"]`) 페어링이 필요 없다.
-- **Discord** — ID 는 선택이다. ID 없이 추가하면 봇이 `pairing` DM 정책과 빈 allowlist 로 시작하므로, 이후 채널에서 페어링한다.
+- **Discord** — ID 는 선택이다. ID 없이 추가하면 봇이 `pairing` DM 정책과 빈 allowlist 로 시작하므로, 이후 채널에서 페어링한다. 대화형 `add` 는 **서버 채널 등록 루프**도 제공한다: 채널 ID, @멘션됐을 때만 응답할지, 허용 멤버 목록(쉼표 구분, 선택)을 차례로 묻고, 채널 ID 에 빈 입력을 주면 루프가 끝난다. 명령줄에 `--group` 을 주면 루프를 건너뛰며(플래그 우선), `jq` 가 없으면 안내 후 루프를 생략한다. 채널은 나중에 `/discord:access` 스킬로도 추가할 수 있다.
 
 최초 설정 전체 절차는 [telegram-setup.md](telegram-setup.md) 와 [discord-setup.md](discord-setup.md) 를 참조한다.
 
@@ -86,15 +88,15 @@ cctg add <name> <cwd> [--channel telegram|discord] [--id <num>] [--token-env <VA
 
 | 플래그 | 의미 |
 |---|---|
-| `--channel telegram\|discord` | 채널 타입. 기본 `telegram`. |
+| `--channel telegram\|discord` | 채널 타입. **비대화형에서는 필수 — 기본값 없음.** 대화형은 플래그를 생략하면 메뉴로 묻는다. |
 | `--id <num>` | 숫자 채널 ID. 비대화형 Telegram 에서는 필수, Discord 에서는 선택. `^[0-9]+$` 를 통과해야 한다. |
 | `--token-env <VAR>` | 환경 변수 `VAR` 에서 봇 토큰을 읽는다. 비대화형 모드로 전환된다. 토큰은 `argv` 로 전달하지 않는다(프로세스 목록에 노출되므로). `<VAR>` 이름 자체가 `^[A-Za-z_][A-Za-z0-9_]*$` 를 통과해야 하며, 아니면 `add` 가 거부한다(`config <name> token --token-env` 도 동일 규칙). |
 | `--token-stdin` | stdin 에서 봇 토큰을 읽는다. 비대화형 모드로 전환된다. |
 | `--mode <m>` | 권한 모드: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, `plan`. |
-| `--group <id>[:nomention][:allow=csv]` | Discord 서버 채널 접근(반복 가능). `id` 는 숫자여야 하고, `:nomention` 은 멘션 요구를 해제하며, `:allow=csv` 는 쉼표로 구분한 숫자 멤버 ID 목록이다. **미지의 수식어**(예: `nomeniton` 같은 오타)는 조용히 무시하지 않고 거부하며, 모든 id/멤버는 쓰기 전에 숫자 검증된다. `jq` 가 필요하다. |
+| `--group <id>[:nomention][:allow=csv]` | Discord 서버 채널 접근(반복 가능). `id` 는 숫자여야 하고, `:nomention` 은 멘션 요구를 해제하며, `:allow=csv` 는 쉼표로 구분한 숫자 멤버 ID 목록이다. **미지의 수식어**(예: `nomeniton` 같은 오타)는 조용히 무시하지 않고 거부하며, 모든 id/멤버는 쓰기 전에 숫자 검증된다. `jq` 가 필요하다. 생략 시 대화형 Discord `add` 가 같은 내용을 프롬프트로 수집한다. |
 
 ```console
-$ cctg add proj ~/code/proj                      # 대화형: 토큰·ID·모드를 순서대로 입력받음
+$ cctg add proj ~/code/proj                      # 대화형: 채널·토큰·ID·(discord: 서버 채널·)모드를 순서대로 입력받음
 $ cctg add proj ~/code/proj --channel telegram --id 123456789 --token-env PROJ_BOT_TOKEN --mode acceptEdits
 $ cctg add mybot ~/code/mybot --channel discord --token-stdin              # --id 없음 → Discord 페어링
 $ cctg add mybot ~/code/mybot --channel discord --token-stdin --id 18469…  # --id 지정 → Discord allowlist

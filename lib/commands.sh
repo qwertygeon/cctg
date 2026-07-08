@@ -23,8 +23,15 @@ cmd_add() {
         *)             die ERR_ADD_UNKNOWN_FLAG "$1" ;;
       esac
     done
-    local CH="${opt_channel:-$DEFAULT_CHANNEL}"
-    valid_channel "$CH" || die ERR_CHANNEL_UNSUPPORTED "$CH" "$IMPLEMENTED_CHANNELS"
+    # 채널은 필수 입력 — 기본값을 적용하지 않는다(암묵 telegram 등록 방지). 플래그가 있으면
+    # 즉시 검증(fail-fast)하고, 없으면 비대화형은 여기서 거부, 대화형은 아래 입력 수집 단계에서
+    # 메뉴로 받는다(빈 CH 가 그 신호).
+    local CH="$opt_channel"
+    if [ -n "$CH" ]; then
+      valid_channel "$CH" || die ERR_CHANNEL_UNSUPPORTED "$CH" "$IMPLEMENTED_CHANNELS"
+    elif [ "$noninteractive" = 1 ]; then
+      die ERR_ADD_NEED_CHANNEL "$IMPLEMENTED_CHANNELS"
+    fi
 
     valid_name "$NAME" || die ERR_BADNAME "$NAME"
     is_reserved_name "$NAME" && die ERR_RESERVED "$NAME" "$RESERVED_NAMES"
@@ -42,6 +49,34 @@ cmd_add() {
     # 빠진 반쪽 상태를 남겼다 — 그 반쪽 상태는 위의 foreign-statedir 가드에 걸려 같은 이름 재시도까지
     # 막았다. 검증을 선행시켜 반쪽 상태를 원천 제거한다.
 
+    # 0) 채널 — 필수(기본값 없음). 대화형 번호 메뉴: 메뉴는 IMPLEMENTED_CHANNELS 에서 동적
+    #    생성한다(서수 하드코딩 회피 — 채널 추가 시 descriptor 등재만으로 메뉴에 반영).
+    #    빈 입력은 필수임을 안내하고 재프롬프트, EOF(stdin 소진)는 진행 불가로 중단한다.
+    if [ -z "$CH" ]; then
+      local _choice _i _ch _n
+      _n=0; for _ch in $IMPLEMENTED_CHANNELS; do _n=$((_n+1)); done
+      while :; do
+        t ADD_CHANNEL_MENU_HEADER
+        _i=0
+        for _ch in $IMPLEMENTED_CHANNELS; do
+          _i=$((_i+1)); t ADD_CHANNEL_MENU_ITEM "$_i" "$_ch"
+        done
+        t ADD_PROMPT_CHANNEL_PS3 "$_n"
+        read -r _choice || die ERR_ADD_NEED_CHANNEL "$IMPLEMENTED_CHANNELS"
+        if [ -z "$_choice" ]; then te ERR_ADD_CHANNEL_REQUIRED; continue; fi
+        if valid_channel "$_choice"; then CH="$_choice"; break; fi
+        if printf '%s' "$_choice" | grep -qE '^[0-9]+$'; then
+          _i=0
+          for _ch in $IMPLEMENTED_CHANNELS; do
+            _i=$((_i+1))
+            [ "$_i" = "$_choice" ] && { CH="$_ch"; break; }
+          done
+          [ -n "$CH" ] && break
+        fi
+        te ERR_ADD_CHANNEL_CHOICE "$IMPLEMENTED_CHANNELS"
+      done
+    fi
+
     # 1) 봇 토큰 — stdin/env(비대화형) 또는 가려서 입력(대화형)
     if [ "$opt_token_stdin" = 1 ]; then
       IFS= read -r TOKEN || true
@@ -49,7 +84,7 @@ cmd_add() {
       printf '%s' "$opt_token_env" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$' || die ERR_ADD_BAD_ENVNAME "$opt_token_env"
       TOKEN="${!opt_token_env-}"
     else
-      t ADD_PROMPT_TOKEN
+      t ADD_PROMPT_TOKEN "$(channel_spec "$CH" token_hint)"
       read -rs TOKEN; echo
     fi
     [ -z "$TOKEN" ] && die ERR_EMPTY_TOKEN
@@ -68,6 +103,43 @@ cmd_add() {
       read -r TGID
     fi
     [ -n "$TGID" ] && { printf '%s' "$TGID" | grep -qE '^[0-9]+$' || die ERR_NOT_NUMERIC_ID "$TGID"; }
+
+    # 2.5) 그룹(서버 채널) 시드 — 대화형 + group_prompt=yes 채널(discord)에서만 제공.
+    #      --group 플래그가 이미 있으면 플래그 우선(중복 질문 안 함). 입력은 기존 --group
+    #      컴파운드 토큰(id[:nomention][:allow=csv]) 형식으로 opt_groups 에 조립해, 아래 3) 의
+    #      검증·jq JSON 구성 경로를 그대로 재사용한다. 오입력은 즉시 재프롬프트(DEC-002 정신)
+    #      하지만 최종 방어는 여전히 3) 이 담당한다. jq 가 없으면 루프 자체를 제공하지 않고
+    #      건너뛴다 — 프롬프트에 다 답한 뒤 need_jq 로 죽는 헛수고를 만들지 않기 위함.
+    if [ "$noninteractive" != 1 ] && [ -z "$opt_groups" ] \
+       && [ "$(channel_spec "$CH" group_prompt)" = yes ]; then
+      if command -v jq >/dev/null 2>&1; then
+        local g_id g_mention g_allow gtok
+        t ADD_GROUP_INTRO
+        while :; do
+          t ADD_PROMPT_GROUP_ID
+          read -r g_id || break
+          [ -z "$g_id" ] && break
+          printf '%s' "$g_id" | grep -qE '^[0-9]+$' || { te ERR_ADD_GROUP_ID_RETRY "$g_id"; continue; }
+          gtok="$g_id"
+          t ADD_PROMPT_GROUP_MENTION
+          read -r g_mention || g_mention=""
+          case "$g_mention" in n|N|no|NO) gtok="$gtok:nomention" ;; esac
+          while :; do
+            t ADD_PROMPT_GROUP_ALLOW
+            read -r g_allow || { g_allow=""; break; }
+            g_allow="$(printf '%s' "$g_allow" | tr -d '[:space:]')"
+            [ -z "$g_allow" ] && break
+            printf '%s' "$g_allow" | grep -qE '^[0-9]+(,[0-9]+)*$' && break
+            te ERR_ADD_GROUP_ALLOW_RETRY
+          done
+          [ -n "$g_allow" ] && gtok="$gtok:allow=$g_allow"
+          opt_groups="$opt_groups${opt_groups:+$GROUP_SEP}$gtok"
+          t ADD_GROUP_ADDED "$g_id"
+        done
+      else
+        te ADD_GROUP_SKIP_NO_JQ
+      fi
+    fi
 
     # 3) access.json 정책 + groups JSON 사전 구성(검증만). 실제 파일 쓰기는 커밋 구간으로 미룬다.
     #    dmPolicy/allowFrom: ID 제공 → allowlist + [<id>] / 미제공 → 채널 seed_policy(예: discord=pairing) + []
