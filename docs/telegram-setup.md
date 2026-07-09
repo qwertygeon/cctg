@@ -78,18 +78,23 @@ cctg add <name> <working_dir>
 
 ### Interactive registration
 
-Running `cctg add` with no token flags prompts you for three things, in order:
+Running `cctg add` with no token flags prompts you for four things, in order:
 
-1. **Bot token** — pasted with masked input (your keystrokes are hidden).
-2. **Your Telegram numeric ID** — must be digits only (`^[0-9]+$`), or `add` refuses it.
-3. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
+1. **Channel** — a numbered menu (required, no default). Pick `telegram` by number or type the name; passing `--channel telegram` on the command line skips this prompt. An empty answer re-prompts — registration cannot continue without a channel.
+2. **Bot token** — pasted with masked input (your keystrokes are hidden).
+3. **Your Telegram numeric ID** — must be digits only (`^[0-9]+$`), or `add` refuses it.
+4. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
 
-Nothing is written to disk until all three inputs validate, so a mistyped entry never leaves a half-created bot behind.
+Nothing is written to disk until all inputs validate, so a mistyped entry never leaves a half-created bot behind.
 
 Example session (token masked):
 
 ```console
 $ cctg add myproject ~/work/myproject
+Channel — pick a number (required):
+  1) telegram
+  2) discord
+Number [1-2] or channel name: 1
 Bot token (issued by @BotFather, must be a NEW bot): ********
 Your Telegram numeric ID: 123456789
 Permission mode — pick a number:
@@ -109,11 +114,11 @@ Registration scaffolds the state directory `~/.claude/channels/<name>/` and:
 
 ### Non-interactive registration (CI / scripting)
 
-Supplying a token flag switches `add` to non-interactive mode. In that mode, Telegram **requires** `--id <num>`; `--mode` is optional. The token is never passed as a command-line argument (that would leak it via the process list) — it comes from an environment variable or stdin instead.
+Supplying a token flag switches `add` to non-interactive mode. In that mode, `--channel telegram` and `--id <num>` are **required**; `--mode` is optional. The token is never passed as a command-line argument (that would leak it via the process list) — it comes from an environment variable or stdin instead.
 
 | Flag | Meaning |
 | --- | --- |
-| `--channel telegram` | Channel type (Telegram is the default, so this is optional). |
+| `--channel telegram` | Channel type. Required in non-interactive mode — there is no default channel. |
 | `--id <num>` | Your numeric Telegram ID. Required in non-interactive mode for Telegram; must match `^[0-9]+$`. |
 | `--token-env <VAR>` | Read the token from environment variable `<VAR>`. |
 | `--token-stdin` | Read the token from standard input. |
@@ -123,9 +128,9 @@ Examples:
 
 ```bash
 BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
-  --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
+  --channel telegram --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
 
-secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
+secrets get tg-token | cctg add myproject ~/work/myproject --channel telegram --token-stdin --id 123456789
 ```
 
 ## Step 5 — Start the bot

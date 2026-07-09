@@ -44,12 +44,14 @@ setup() {
 cctg() { bash "$CCTG" "$@"; }
 
 # Register a bot non-interactively. Extra args (e.g. --mode) are forwarded.
+# --channel is required (no default), so telegram is passed explicitly; a
+# trailing --channel in the extra args still wins (last flag occurrence wins).
 #   seed_bot <name> [cwd] [extra add args...]
 seed_bot() {
   local name="$1" cwd="${2:-$WORK}"
   shift || true; [ $# -gt 0 ] && shift || true
   BOT_TOKEN="tok-$name" bash "$CCTG" add "$name" "$cwd" \
-    --token-env BOT_TOKEN --id 555 "$@" >/dev/null
+    --channel telegram --token-env BOT_TOKEN --id 555 "$@" >/dev/null
 }
 
 # Append a raw registry line, bypassing add() — used to craft edge cases

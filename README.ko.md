@@ -95,15 +95,20 @@ Telegram은 두 가지가 필요하다 — **봇 토큰** 과 **본인의 숫자
 cctg add myproject ~/work/myproject
 ```
 
-`add` 는 토큰(가림 입력)·숫자 ID·권한 모드를 차례로 묻는다. 상태 디렉터리를 만들고, 토큰을 `600` 권한으로 저장하며, `access.json` allowlist에 본인 ID를 시드한다 — 그래서 Telegram은 **별도 페어링 단계가 필요 없다**.
+`add` 는 채널(필수 — 기본값 없음)·토큰(가림 입력)·숫자 ID·권한 모드를 차례로 묻는다. 상태 디렉터리를 만들고, 토큰을 `600` 권한으로 저장하며, `access.json` allowlist에 본인 ID를 시드한다 — 그래서 Telegram은 **별도 페어링 단계가 필요 없다**.
 
 ```console
 $ cctg add myproject ~/work/myproject
-Bot token (issued by @BotFather, must be a NEW bot): ********
-Your Telegram numeric ID: 123456789
-Permission mode [Enter=follow shared | acceptEdits auto bypassPermissions default dontAsk plan]:
-Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
-  seeded 123456789 into the allowlist (no pairing needed)
+채널 — 번호를 고르세요 (필수):
+  1) telegram
+  2) discord
+번호 [1-2] 또는 채널명: 1
+봇 토큰 입력 (issued by @BotFather, must be a NEW bot): ********
+본인 Telegram numeric ID: 123456789
+권한 모드 — 번호를 고르세요:
+  ...
+등록 완료: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
+  allowlist에 123456789 시드함 (페어링 불필요)
 ```
 
 > CI용 비대화형 등록을 포함한 전체 안내: **[docs/telegram-setup.ko.md](docs/telegram-setup.ko.md)** · **[docs/discord-setup.ko.md](docs/discord-setup.ko.md)**.
@@ -139,7 +144,7 @@ cctg attach myproject  # 라이브 세션 보기(Ctrl-b d 로 detach)
 
 ```text
 cctg <command> [args]
-  add <name> <cwd> [--channel telegram|discord] [--id <num>]
+  add <name> <cwd> --channel telegram|discord [--id <num>]
                    [--token-env <VAR>|--token-stdin] [--mode <m>] [--group ...]
   rm <name> [--purge]      rename <old> <new> [--keep-dir]
   up <name...|all>         down <name...|all>       restart <name...|all>

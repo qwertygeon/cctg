@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Interactive channel selection in `cctg add`**: when `--channel` is omitted, interactive `add` now opens with a numbered channel menu (built dynamically from `IMPLEMENTED_CHANNELS`; a typed channel name also works) instead of silently registering a Telegram bot. The token prompt now shows a channel-specific issuer hint (BotFather for Telegram, Developer Portal for Discord) via a new `token_hint` descriptor field. (`lib/commands.sh`, `lib/channels.sh`, `messages/*.sh`)
+- **Interactive Discord server-channel seeding in `cctg add`**: interactive Discord registration walks a group loop — channel ID, mention requirement (`Y/n`), optional member allowlist — until an empty channel ID finishes it. Entries are assembled into the existing `--group` compound-token path, so the same numeric validation and `jq` JSON construction apply; `--group` on the command line skips the loop (flags win), and a missing `jq` skips it with a notice instead of failing after the prompts. The loop is descriptor-gated (new `group_prompt` field: `discord` yes / `telegram` no). (`lib/commands.sh`, `lib/channels.sh`, `messages/*.sh`)
+
+### Changed
+- **BREAKING — `cctg add` requires a channel; the Telegram default is gone**: `--channel` no longer defaults to `telegram`. Non-interactive `add` (any token flag) without `--channel` aborts with an error before anything is written; interactive `add` re-prompts at the channel menu until a channel is chosen (EOF aborts). Update scripts to pass `--channel telegram|discord` explicitly. Legacy 3-column registry rows are still read as telegram (`channel_of` fallback unchanged). (`lib/commands.sh`, `messages/*.sh`, docs, completions, tests)
+
 ## [0.8.4] - 2026-07-02
 
 ### Changed

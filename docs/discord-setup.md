@@ -87,25 +87,37 @@ cctg add <name> <working_dir> --channel discord --group <channelId>
 
 - `<name>` — an identifier for this bot. Use letters, digits, `_`, and `-` only. The names `telegram`, `discord`, `imessage`, and `fakechat` are **reserved** and will be refused.
 - `<working_dir>` — the project directory the bot's Claude Code session runs in (its working directory / cwd).
-- `--channel discord` — selects the Discord channel. (Without it, the channel defaults to Telegram.)
+- `--channel discord` — selects the Discord channel. **The channel is required — there is no default.** Omit the flag and interactive `add` asks for the channel with a numbered menu; non-interactive `add` (a token flag present) refuses to register without it.
 - `--group <channelId>` — seeds a server channel the bot answers in. Since a Discord bot is normally used from a server channel, you will typically pass at least one. Repeatable, with modifier forms and a `jq` requirement — details in [Step 4](#step-4--server-channels-with---group). Omitting it gives a DM-only bot (see the note after the example below).
 
 ### Interactive registration
 
-Running `cctg add ... --channel discord` with no token flags prompts you for up to three things, in order:
+Running `cctg add` with no token flags prompts you for up to five things, in order:
 
-1. **Bot token** — pasted with masked input (your keystrokes are hidden).
-2. **Your Discord user ID** — *optional* for Discord. Press Enter to skip it (this selects pairing mode). If you do type one, it must be digits only (`^[0-9]+$`), or `add` refuses it.
-3. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
+1. **Channel** — a numbered menu (required, no default). Pick `discord` by number or type the name; passing `--channel discord` on the command line skips this prompt. An empty answer re-prompts — registration cannot continue without a channel.
+2. **Bot token** — pasted with masked input (your keystrokes are hidden).
+3. **Your Discord user ID** — *optional* for Discord. Press Enter to skip it (this selects pairing mode). If you do type one, it must be digits only (`^[0-9]+$`), or `add` refuses it.
+4. **Server channels** — a loop (Discord only): enter a channel ID, answer whether the bot responds only when @mentioned (`Y/n`), and optionally a comma-separated member allowlist (empty = every member). Press Enter on an empty channel ID to finish. Skipped when `--group` is given on the command line (flags win) or when `jq` is not installed (a notice is printed).
+5. **Permission mode** — pick a number from the menu (`1` = `bypassPermissions`, `2` = `acceptEdits`, …), or press Enter (or `7`) to follow the shared policy. A typed mode name also works; an invalid entry simply re-prompts.
 
 Nothing is written to disk until all inputs validate, so a mistyped entry never leaves a half-created bot behind.
 
-Example session, seeding one server channel and skipping the ID (token masked):
+Example session, seeding one server channel interactively and skipping the ID (token masked):
 
 ```console
-$ cctg add mybot ~/work/mybot --channel discord --group 846209781206941736
-Bot token: ********
-Discord user ID:
+$ cctg add mybot ~/work/mybot
+Channel — pick a number (required):
+  1) telegram
+  2) discord
+Number [1-2] or channel name: 2
+Bot token (Discord Developer Portal, Bot tab): ********
+Your Discord user ID:
+Server channels the bot should answer in (Enter on an empty line to finish; add more later via the /access skill):
+Channel ID (empty = done): 846209781206941736
+Respond only when @mentioned? [Y/n]:
+Allowed member IDs, comma-separated (empty = every member):
+  added channel 846209781206941736
+Channel ID (empty = done):
 Permission mode — pick a number:
   1) bypassPermissions   2) acceptEdits   3) auto
   4) default             5) dontAsk       6) plan
@@ -150,7 +162,7 @@ Supplying a token flag switches `add` to non-interactive mode. The token is neve
 
 | Flag | Meaning |
 | --- | --- |
-| `--channel discord` | Channel type. Required to select Discord (the default is Telegram). |
+| `--channel discord` | Channel type. Required in non-interactive mode — there is no default channel. |
 | `--id <num>` | Your Discord user ID. **Optional** for Discord — omit it for pairing, provide it for an immediate allowlist. Must match `^[0-9]+$`. |
 | `--token-env <VAR>` | Read the token from environment variable `<VAR>`. |
 | `--token-stdin` | Read the token from standard input. |
