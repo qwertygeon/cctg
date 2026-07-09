@@ -15,7 +15,7 @@ CCTG_MSG_ERR_BAD_LOG_N="ERROR: 줄 수는 숫자여야 합니다: '%s'\n"
 CCTG_MSG_WARN_SNAPSHOT_FAILED="warning: '%s' 의 스냅샷 watcher 가 기동되지 않았습니다 (이번 실행은 스냅샷 비활성)\n"
 CCTG_MSG_WARN_NO_TMUX="warning: PATH 에서 tmux 를 찾지 못했습니다 — 실행/라이브 상태를 알 수 없습니다 (봇이 stopped/broken 으로 보일 수 있음)\n"
 
-CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n                         프로젝트 봇 등록 (플래그 사용 시 비대화형, telegram 은 --id 필수)\n                         --channel telegram|discord; --group 은 discord 서버채널 시드(반복 가능)\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|width <칼럼|clear>|cwd <경로>|token]\n                         봇별 옵션(권한 모드·추가 인자·로그 스냅샷·폭·작업디렉터리·토큰) 보기·수정\n  common [show|edit|mode <m>|width <칼럼|clear>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status [--json] [-a]   실행 상태 (기본: running/dead/broken; -a/--all: stopped·활동 포함)\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
+CCTG_MSG_USAGE="사용법: %s <command> [args]\n  add <name> <cwd> --channel <ch> [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=ids]]\n                         프로젝트 봇 등록 (플래그 사용 시 비대화형, telegram 은 --id 필수)\n                         --channel telegram|discord — 필수, 기본값 없음 (대화형에서는 메뉴로 선택)\n                         --group 은 discord 서버채널 시드(반복 가능; discord 대화형 add 도 질문)\n  rm  <name> [--purge]   등록 해제 (--purge: 상태 디렉터리까지 삭제)\n  rename <old> <new> [--keep-dir]\n                         이름 변경 (기본: 상태 디렉터리도 함께 이동.\n                         --keep-dir: 디렉터리 경로 유지하고 이름만 변경)\n  config <name> [show|edit|mode <m|clear>|args <str>|snapshot <초|off>|width <칼럼|clear>|cwd <경로>|token]\n                         봇별 옵션(권한 모드·추가 인자·로그 스냅샷·폭·작업디렉터리·토큰) 보기·수정\n  common [show|edit|mode <m>|width <칼럼|clear>|deny add|rm <rule>|allow add|rm <rule>]\n                         공통 권한 정책(모든 봇에 적용) 보기·수정\n  up   <name|all>        기동\n  down <name|all>        정지\n  restart <name|all>     재기동 (down + up)\n  status [--json] [-a]   실행 상태 (기본: running/dead/broken; -a/--all: stopped·활동 포함)\n  logs <name> [N]        최근 로그 N줄 (기본 50, attach 없이)\n  attach <name>          tmux 세션 attach (분리: Ctrl-b d)\n  lang [show|en|ko|clear]  CLI 출력 언어 보기·변경\n  doctor                 의존성·PATH·레지스트리 환경 진단\n  update                 git pull 후 재설치\n  version                버전 출력\n  help                   이 도움말\n\n이름 규칙: 영문/숫자/_/- 만 허용. 전역 채널 이름(telegram/discord/imessage/fakechat)은 예약됨.\n"
 
 # 공용 조각
 CCTG_MSG_FOLLOW_SHARED="공통 따름"
@@ -51,7 +51,13 @@ CCTG_MSG_MULTI_SUMMARY_OK="— %s: %d개 성공 —\n"
 CCTG_MSG_MULTI_SUMMARY_FAIL="— %s: %d개 성공, %d개 실패 (실패: %s) —\n"
 
 # add
-CCTG_MSG_ADD_PROMPT_TOKEN="봇 토큰 입력 (@BotFather 발급, 새 봇이어야 함): "
+CCTG_MSG_ADD_CHANNEL_MENU_HEADER="채널 — 번호를 고르세요 (필수):\n"
+CCTG_MSG_ADD_CHANNEL_MENU_ITEM="  %d) %s\n"
+CCTG_MSG_ADD_PROMPT_CHANNEL_PS3="번호 [1-%d] 또는 채널명: "
+CCTG_MSG_ERR_ADD_CHANNEL_REQUIRED="채널은 필수 입력입니다 — 번호 또는 채널명을 입력해야 진행합니다.\n"
+CCTG_MSG_ERR_ADD_CHANNEL_CHOICE="잘못된 선택 — 목록의 번호 또는 채널명(%s)을 입력하세요.\n"
+CCTG_MSG_ERR_ADD_NEED_CHANNEL="ERROR: --channel <name> 은 필수입니다 (유효: %s) — 기본값을 적용하지 않으므로 등록을 진행하지 않습니다\n"
+CCTG_MSG_ADD_PROMPT_TOKEN="봇 토큰 입력 (%s): "
 CCTG_MSG_ERR_EMPTY_TOKEN="ERROR: 토큰이 비었습니다\n"
 CCTG_MSG_ADD_PROMPT_TGID="본인 %s: "
 CCTG_MSG_ERR_NOT_NUMERIC_ID="ERROR: 숫자 ID가 아닙니다: '%s'\n"
@@ -67,6 +73,14 @@ CCTG_MSG_ERR_ADD_NEED_ID="ERROR: 비대화형 add(--token-env/--token-stdin)에�
 CCTG_MSG_ERR_ADD_BAD_GROUP_ID="ERROR: --group 채널 id 는 숫자여야 합니다: '%s'\n"
 CCTG_MSG_ERR_ADD_BAD_GROUP_MEMBER="ERROR: --group allow 멤버는 숫자여야 합니다: '%s'\n"
 CCTG_MSG_ERR_ADD_BAD_GROUP_MOD="ERROR: 알 수 없는 --group 수식어 '%s' (채널 %s) — 가능: nomention, allow=<ids>\n"
+CCTG_MSG_ADD_GROUP_INTRO="봇이 응답할 서버 채널 등록 (빈 줄 입력 시 종료; 나중에 /access 스킬로도 추가 가능):\n"
+CCTG_MSG_ADD_PROMPT_GROUP_ID="채널 ID (비우면 종료): "
+CCTG_MSG_ERR_ADD_GROUP_ID_RETRY="채널 ID 는 숫자여야 합니다: '%s' — 다시 입력하세요.\n"
+CCTG_MSG_ADD_PROMPT_GROUP_MENTION="@멘션됐을 때만 응답할까요? [Y/n]: "
+CCTG_MSG_ADD_PROMPT_GROUP_ALLOW="허용 멤버 ID (쉼표 구분, 비우면 모든 멤버): "
+CCTG_MSG_ERR_ADD_GROUP_ALLOW_RETRY="멤버 ID 는 쉼표로 구분한 숫자여야 합니다 — 다시 입력하세요 (비우면 모든 멤버).\n"
+CCTG_MSG_ADD_GROUP_ADDED="  채널 %s 추가됨\n"
+CCTG_MSG_ADD_GROUP_SKIP_NO_JQ="참고: jq 가 없어 서버 채널 등록 질문을 건너뜁니다. jq 설치 후 --group 을 쓰거나, 나중에 /access 스킬로 추가하세요.\n"
 CCTG_MSG_ERR_CHANNEL_UNSUPPORTED="ERROR: 채널 '%s' 은(는) 아직 지원하지 않습니다 (구현됨: %s)\n"
 CCTG_MSG_ADD_DONE="등록 완료: %s → cwd=%s, state=%s\n"
 CCTG_MSG_ADD_DONE_ALLOWLIST="  allowlist에 %s 시드함 (페어링 불필요)\n"
@@ -217,7 +231,7 @@ CCTG_MSG_RESERVED_DOWN_NONE="%s 세션 없음. cctg 가 시작한 tmux 세션만
 CCTG_MSG_STATUS_RESERVED_HEADER="--- 전역 채널 봇 ---\n"
 
 # sub-command usage (신규 — FR-005, 16개 서브커맨드)
-CCTG_MSG_USAGE_ADD="사용법: %s add <이름> <cwd> [--id <번호>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--channel <ch>] [--group <id>[:nomention][:allow=ids]]\n"
+CCTG_MSG_USAGE_ADD="사용법: %s add <이름> <cwd> --channel <ch> [--id <번호>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=ids]]\n"
 CCTG_MSG_USAGE_RM="사용법: %s rm <이름> [--purge]\n"
 CCTG_MSG_USAGE_RENAME="사용법: %s rename <이전> <새이름> [--keep-dir]\n"
 CCTG_MSG_USAGE_CONFIG="사용법: %s config <이름> [show | edit | mode <모드|clear> | args <문자열> | snapshot <초|off> | width <칼럼|clear> | cwd <경로> | token [--token-env VAR|--token-stdin]]\n"

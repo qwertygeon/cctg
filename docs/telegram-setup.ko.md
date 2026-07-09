@@ -78,27 +78,32 @@ cctg add <name> <working_dir>
 
 ### 대화형 등록
 
-토큰 플래그 없이 `cctg add` 를 실행하면 다음 세 가지를 순서대로 입력받는다.
+토큰 플래그 없이 `cctg add` 를 실행하면 다음 네 가지를 순서대로 입력받는다.
 
-1. **봇 토큰** — 입력이 가려진 상태로 붙여넣는다 (키 입력이 표시되지 않는다).
-2. **본인의 숫자 Telegram ID** — 숫자만 가능하며 (`^[0-9]+$`), 아니면 `add` 가 거부한다.
-3. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
+1. **채널** — 번호 메뉴(필수, 기본값 없음). 번호나 채널명으로 `telegram` 을 고른다. 명령줄에 `--channel telegram` 을 주면 이 질문은 건너뛴다. 빈 입력은 필수임을 안내하고 다시 묻는다 — 채널 없이는 등록이 진행되지 않는다.
+2. **봇 토큰** — 입력이 가려진 상태로 붙여넣는다 (키 입력이 표시되지 않는다).
+3. **본인의 숫자 Telegram ID** — 숫자만 가능하며 (`^[0-9]+$`), 아니면 `add` 가 거부한다.
+4. **권한 모드** — 메뉴에서 번호를 고른다 (`1` = `bypassPermissions`, `2` = `acceptEdits`, …). Enter(또는 `7`)를 누르면 공통 정책을 따른다. 모드명을 직접 입력해도 되며, 잘못 입력하면 다시 묻는다.
 
-세 입력이 모두 검증되기 전에는 디스크에 아무것도 쓰지 않으므로, 잘못 입력해도 반쪽 생성된 봇이 남지 않는다.
+입력이 모두 검증되기 전에는 디스크에 아무것도 쓰지 않으므로, 잘못 입력해도 반쪽 생성된 봇이 남지 않는다.
 
 예시 세션 (토큰은 가려짐):
 
 ```console
 $ cctg add myproject ~/work/myproject
-Bot token (issued by @BotFather, must be a NEW bot): ********
-Your Telegram numeric ID: 123456789
-Permission mode — pick a number:
+채널 — 번호를 고르세요 (필수):
+  1) telegram
+  2) discord
+번호 [1-2] 또는 채널명: 1
+봇 토큰 입력 (issued by @BotFather, must be a NEW bot): ********
+본인 Telegram numeric ID: 123456789
+권한 모드 — 번호를 고르세요:
   1) bypassPermissions   2) acceptEdits   3) auto
   4) default             5) dontAsk       6) plan
-  7) (follow shared)
-Number [1-7, Enter=follow shared]: 1
-Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
-  seeded 123456789 into the allowlist (no pairing needed)
+  7) 공통 따름
+번호 [1-7, 엔터=공통 따름]: 1
+등록 완료: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claude/channels/myproject
+  allowlist에 123456789 시드함 (페어링 불필요)
 ```
 
 등록은 상태 디렉터리 `~/.claude/channels/<name>/` 를 만들고 다음을 수행한다.
@@ -109,11 +114,11 @@ Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claud
 
 ### 비대화형 등록 (CI / 스크립트)
 
-토큰 플래그를 지정하면 `add` 가 비대화형 모드로 전환된다. 이 모드에서 Telegram 은 `--id <num>` 이 **필수**이며 `--mode` 는 선택이다. 토큰은 명령줄 인자로 전달되지 않으며 (프로세스 목록으로 노출되므로) 환경 변수나 stdin 으로 받는다.
+토큰 플래그를 지정하면 `add` 가 비대화형 모드로 전환된다. 이 모드에서 `--channel telegram` 과 `--id <num>` 이 **필수**이며 `--mode` 는 선택이다. 토큰은 명령줄 인자로 전달되지 않으며 (프로세스 목록으로 노출되므로) 환경 변수나 stdin 으로 받는다.
 
 | 플래그 | 의미 |
 | --- | --- |
-| `--channel telegram` | 채널 타입 (Telegram 이 기본값이라 생략 가능). |
+| `--channel telegram` | 채널 타입. 비대화형에서는 필수 — 기본값이 없다. |
 | `--id <num>` | 본인의 숫자 Telegram ID. Telegram 비대화형 모드에서 필수이며 `^[0-9]+$` 를 만족해야 한다. |
 | `--token-env <VAR>` | 환경 변수 `<VAR>` 에서 토큰을 읽는다. |
 | `--token-stdin` | 표준 입력에서 토큰을 읽는다. |
@@ -123,9 +128,9 @@ Registered: myproject → cwd=/Users/you/work/myproject, state=/Users/you/.claud
 
 ```bash
 BOT_TOKEN="123:ABC..." cctg add myproject ~/work/myproject \
-  --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
+  --channel telegram --token-env BOT_TOKEN --id 123456789 --mode bypassPermissions
 
-secrets get tg-token | cctg add myproject ~/work/myproject --token-stdin --id 123456789
+secrets get tg-token | cctg add myproject ~/work/myproject --channel telegram --token-stdin --id 123456789
 ```
 
 ## 5단계 — 봇 시작

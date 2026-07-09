@@ -11,26 +11,32 @@ DEFAULT_CHANNEL="telegram"
 IMPLEMENTED_CHANNELS="telegram discord"
 
 # channel_spec <channel> <field> → 값 출력(미정의 시 비-0 반환).
-#   field: plugin | statedir_env | token_key | token_required
-#          | display | id_label | id_required | seed_policy
+#   field: plugin | statedir_env | token_key | token_required | token_hint
+#          | display | id_label | id_required | seed_policy | group_prompt
+#   group_prompt: add 대화형에서 그룹(서버 채널) 시드 루프를 제공할지 여부.
+#   token_hint: add 토큰 프롬프트에 붙는 발급처 안내(id_label 처럼 영문 고정).
 channel_spec() {
   case "$1:$2" in
     telegram:plugin)         printf 'plugin:telegram@claude-plugins-official' ;;
     telegram:statedir_env)   printf 'TELEGRAM_STATE_DIR' ;;
     telegram:token_key)      printf 'TELEGRAM_BOT_TOKEN' ;;
     telegram:token_required) printf 'yes' ;;
+    telegram:token_hint)     printf 'issued by @BotFather, must be a NEW bot' ;;
     telegram:display)        printf 'Telegram' ;;
     telegram:id_label)       printf 'Telegram numeric ID' ;;
     telegram:id_required)    printf 'yes' ;;
     telegram:seed_policy)    printf 'allowlist' ;;
+    telegram:group_prompt)   printf 'no' ;;
     discord:plugin)          printf 'plugin:discord@claude-plugins-official' ;;
     discord:statedir_env)    printf 'DISCORD_STATE_DIR' ;;
     discord:token_key)       printf 'DISCORD_BOT_TOKEN' ;;
     discord:token_required)  printf 'yes' ;;
+    discord:token_hint)      printf 'Discord Developer Portal, Bot tab' ;;
     discord:display)         printf 'Discord' ;;
     discord:id_label)        printf 'Discord user ID' ;;
     discord:id_required)     printf 'no' ;;
     discord:seed_policy)     printf 'pairing' ;;
+    discord:group_prompt)    printf 'yes' ;;
     *) return 1 ;;
   esac
 }
