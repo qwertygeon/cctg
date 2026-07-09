@@ -256,7 +256,8 @@ load test_helper
 }
 
 @test "add: empty interactive token writes nothing — no half-state (DEC-003)" {
-  run bash -c "printf '\n' | bash '$CCTG' add mybot '$WORK'"
+  # channel first (required, no default), then an empty token line → ERR_EMPTY_TOKEN.
+  run bash -c "printf 'telegram\n\n' | bash '$CCTG' add mybot '$WORK'"
   [ "$status" -ne 0 ]
   [[ "$output" == *"token is empty"* ]]
   [ ! -e "$CC_CHANNELS_DIR/mybot" ]
