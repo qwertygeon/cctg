@@ -69,7 +69,7 @@ cctg <command> [args]
 cctg add <name> <cwd> --channel telegram|discord [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
 ```
 
-작업 디렉터리 `<cwd>` 에 대한 새 봇을 등록하고 상태 디렉터리를 `~/.claude/channels/<name>/` 에 스캐폴딩한다. 상태 디렉터리에는 봇 토큰(`.env`, 권한 `600`), 접근 정책(`access.json`), `inbox/`, 봇별 옵션(`launch.env`) 이 들어간다.
+작업 디렉터리 `<cwd>` 에 대한 새 봇을 등록하고 상태 디렉터리를 `~/.claude/channels/<name>/` 에 스캐폴딩한다. 상태 디렉터리에는 봇 토큰(`.env`, 권한 `600`), 접근 정책(`access.json`), `inbox/`, 봇별 옵션(`launch.env`) 이 들어간다. 시드되는 `access.json` 에는 `chunkMode: "newline"` 도 설정되어, 채널 플러그인이 긴 응답을 플랫폼 글자 한도에서 그대로 자르는 대신(마크다운이 중간에서 깨짐) 문단·줄 경계 우선으로 분할한다. 플러그인 기본값으로 되돌리려면 봇의 `access.json` 에서 키를 제거하거나 `length` 로 바꾼다.
 
 모든 입력은 **디스크에 쓰기 전에** 검증되므로, 오타가 반쪽짜리 봇을 남기지 않는다. `add` 는 다음을 거부한다: 예약 이름(`telegram`/`discord`/`imessage`/`fakechat`), 이미 등록된 이름, 그리고 **다른 채널 봇처럼 보이는 기존 상태 디렉터리** — 디렉터리가 존재하고 CCTG `launch.env` 는 없으나 `.env` 또는 `access.json` 이 있는 경우. 빈 토큰·미지 플래그·잘못된 `--channel` 값도 거부한다.
 
