@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`cctg add` seeds `chunkMode: "newline"` into `access.json`**: the channel plugins (discord/telegram) read `chunkMode` from `access.json` and, when set to `newline`, split long replies at paragraph/line boundaries instead of hard-cutting at the platform's character limit — which used to break markdown mid-syntax. Newly registered bots now get this behavior by default on both write paths (heredoc and `--group`/`jq`). Remove the key or set it to `length` in a bot's `access.json` to restore the plugin default. (`lib/commands.sh`, `tests/add.bats`, docs)
+
 ## [1.0.0] - 2026-07-09
 
 ### Added
