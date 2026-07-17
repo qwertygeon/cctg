@@ -240,14 +240,16 @@ EOF
 
     # access.json — groups 미지정은 heredoc(jq 불요 — jq 없는 환경의 일반 add 동작 보존), 지정 시 사전 구성한 groups_json 으로 jq -n.
     # 최초 작성도 write_atomic(tmp→mv)으로 통일 — 중단 시 부분 파일을 남기지 않는다.
+    # chunkMode=newline: 플러그인이 긴 응답을 플랫폼 한도에서 자를 때 문단·줄 경계 우선으로
+    # 분할해 마크다운이 중간에서 깨지지 않는다(기본 length 는 한도 위치에서 그대로 절단).
     if [ -z "$opt_groups" ]; then
       write_atomic "$SD/access.json" <<JSON || die ERR_ADD_WRITE "$SD/access.json"
-{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {} }
+{ "dmPolicy": "$policy", "allowFrom": $af, "groups": {}, "chunkMode": "newline" }
 JSON
     else
       local _aj
       _aj="$(jq -n --arg dm "$policy" --argjson af "$af" --argjson gr "$groups_json" \
-        '{dmPolicy:$dm, allowFrom:$af, groups:$gr}')" || die ERR_ADD_WRITE "$SD/access.json"
+        '{dmPolicy:$dm, allowFrom:$af, groups:$gr, chunkMode:"newline"}')" || die ERR_ADD_WRITE "$SD/access.json"
       printf '%s\n' "$_aj" | write_atomic "$SD/access.json" || die ERR_ADD_WRITE "$SD/access.json"
     fi
 

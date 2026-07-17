@@ -30,6 +30,17 @@ load test_helper
   [ "$output" = "12345" ]
 }
 
+@test "add: access.json seeds chunkMode=newline on both write paths" {
+  # heredoc path (no --group)
+  BOT_TOKEN="abc" run cctg add mybot "$WORK" --channel telegram --token-env BOT_TOKEN --id 12345
+  [ "$status" -eq 0 ]
+  jq -e '.chunkMode == "newline"' "$CC_CHANNELS_DIR/mybot/access.json"
+  # jq path (--group)
+  BOT_TOKEN="abc" run cctg add gbot "$WORK" --channel discord --token-env BOT_TOKEN --group 555000111
+  [ "$status" -eq 0 ]
+  jq -e '.chunkMode == "newline"' "$CC_CHANNELS_DIR/gbot/access.json"
+}
+
 @test "add: --mode writes CCTG_PERMISSION_MODE into launch.env" {
   seed_bot mybot "$WORK" --mode acceptEdits
   grep -q "CCTG_PERMISSION_MODE='acceptEdits'" "$CC_CHANNELS_DIR/mybot/launch.env"

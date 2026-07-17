@@ -69,7 +69,7 @@ Every subcommand accepts `--help` (or `-h`) to print a one-line usage summary an
 cctg add <name> <cwd> --channel telegram|discord [--id <num>] [--token-env <VAR>|--token-stdin] [--mode <m>] [--group <id>[:nomention][:allow=m1,m2]]
 ```
 
-Registers a new bot for the working directory `<cwd>` and scaffolds its state directory at `~/.claude/channels/<name>/`. The state directory holds the bot token (`.env`, mode `600`), the access policy (`access.json`), an `inbox/`, and per-bot options (`launch.env`).
+Registers a new bot for the working directory `<cwd>` and scaffolds its state directory at `~/.claude/channels/<name>/`. The state directory holds the bot token (`.env`, mode `600`), the access policy (`access.json`), an `inbox/`, and per-bot options (`launch.env`). The seeded `access.json` also sets `chunkMode: "newline"`, so the channel plugin splits long replies at paragraph/line boundaries instead of hard-cutting at the platform's character limit (which breaks markdown mid-syntax); remove or set the key to `length` in the bot's `access.json` to restore the plugin default.
 
 All inputs are validated **before anything is written**, so a mistyped entry never leaves a half-created bot behind. `add` refuses: a reserved name (`telegram`/`discord`/`imessage`/`fakechat`), a name that is already registered, and a **pre-existing state directory that looks like another channel bot's** — one that exists and has no CCTG `launch.env` but does contain a `.env` or `access.json`. An empty token, an unknown flag, or an invalid `--channel` value is also refused.
 
